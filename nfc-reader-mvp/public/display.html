@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>「な」しかないカルタ</title>
+<link rel="stylesheet" href="display.css">
+</head>
+<body class="phase-idle">
+<div class="wrap">
+  <header>
+    <div class="brand">「な」しかないカルタ</div>
+    <div id="timer">0:00.0</div>
+    <div class="actions">
+      <button id="endBtn" class="btn secondary">終了</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <!-- 待機中 -->
+    <div class="only-idle">
+      <div id="idleMsg">全8問。お題の「書体名」が出ます。<br>その書体の『な』の札を探してスキャンしてください。</div>
+    </div>
+
+    <!-- モード選択（待機・終了の両方で表示。プレイ中は隠す） -->
+    <div id="chooser">
+      <div id="modeSelect" role="group" aria-label="モード選択">
+        <button class="mode-btn" data-mode="hint">ヒントあり<small>その書体の「な」を表示</small></button>
+        <button class="mode-btn" data-mode="nohint">ヒントなし<small>書体名だけで挑戦</small></button>
+      </div>
+      <button id="startBtn" class="btn primary">スタート</button>
+      <div class="idle-hint">モードを選んで「スタート」</div>
+    </div>
+
+    <!-- プレイ中 -->
+    <div class="only-playing">
+      <div id="progress">問 <b id="qNo">1</b> / <span id="qTotal">8</span></div>
+      <!-- ヒントあり時のみ表示：その書体で描いた「な」 -->
+      <div id="hintChar">な</div>
+      <div id="odaiLabel">お題（この書体の「な」を探す）</div>
+      <div id="odai">—</div>
+      <div id="feedback"></div>
+    </div>
+
+    <!-- 終了 -->
+    <div class="only-finished">
+      <div id="resultLabel" style="color:var(--color-gray-600);font-size:16px;">クリアタイム</div>
+      <div id="resultTime">0:00.0</div>
+      <div id="resultMsg"></div>
+    </div>
+  </main>
+
+  <footer id="panel">
+    <div id="bleRow">
+      <button id="bleBtn" class="btn secondary">🔵 Bluetooth接続</button>
+      <span id="bleStat">未接続</span>
+    </div>
+    <div id="connUrl" title="スマホ/タグからのアクセス先。IPが変わったらここも自動で変わります">接続先: —</div>
+    <h3>テスト用：札をスキャン（タグなし確認）／太字＝いまのお題</h3>
+    <div id="simBtns"></div>
+  </footer>
+
+  <!-- 設定（テスト欄の表示切替）。展示中は目立たないよう右下に小さく置く -->
+  <button id="panelToggle" title="テスト欄の表示/非表示（Dキーでも切替）">⚙</button>
+</div>
+
+<script src="display.js"></script>
+<script src="ble.js"></script>
+</body>
+</html>

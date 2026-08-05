@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>文字を積む</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div class="controls" id="controls">
+      <div class="control control--fontmenu fontmenu" id="font-menu">
+        <button class="fontmenu__button" id="font-menu-button" type="button"
+                aria-haspopup="listbox" aria-expanded="false" aria-label="書体">
+          <span class="fontmenu__current" id="font-menu-current"></span>
+          <span class="fontmenu__caret" aria-hidden="true">▾</span>
+        </button>
+        <ul class="fontmenu__list" id="font-menu-list" role="listbox" hidden></ul>
+      </div>
+      <label class="control control--select">
+        <select id="weight-select" aria-label="ウェイト"></select>
+      </label>
+      <label class="control control--check" title="落とすたびに書体をランダムに変える">
+        <input type="checkbox" id="random-font" />
+        <span>書体ランダム</span>
+      </label>
+      <label class="control control--check" title="落とすたびに文字色をランダムに変える">
+        <input type="checkbox" id="random-color" />
+        <span>文字色ランダム</span>
+      </label>
+      <button id="voice-btn" class="control control--button" type="button" title="音声入力（Chrome / Edge）">
+        マイク
+      </button>
+      <button id="align-btn" class="control control--button" type="button" title="出た文字を順に整列して表示">
+        整列
+      </button>
+
+      <label class="control control--color" title="背景色">
+        <span class="control--color-label">背景</span>
+        <input id="bg-color" type="color" aria-label="背景色" />
+      </label>
+      <label class="control control--color" title="文字色">
+        <span class="control--color-label">文字</span>
+        <input id="ink-color" type="color" aria-label="文字色" />
+      </label>
+
+      <label class="control control--size" title="文字サイズ">
+        <span class="control--size-label">サイズ</span>
+        <input id="size-range" type="range" aria-label="文字サイズ" />
+      </label>
+
+      <button id="reset-btn" class="control control--button" type="button">リセット</button>
+    </div>
+
+    <!-- 書体アクセス許可オーバーレイ（初回アクセス時に前面表示） -->
+    <div class="overlay" id="font-permission" hidden>
+      <div class="overlay__card">
+        <p class="overlay__title">デスクトップの書体を読み込みます</p>
+        <p class="overlay__text">クリックすると、ブラウザの許可ダイアログが表示されます。<br />「許可」を選ぶと書体メニューが使えます。</p>
+        <button class="overlay__btn" id="font-permission-btn" type="button">書体を読み込む</button>
+        <p class="overlay__note">Chrome / Edge のみ対応。Safari・Firefox では使えません。</p>
+      </div>
+    </div>
+
+    <!-- 整列モード（これまで出た文字を書体・色・サイズそのままで順に表示） -->
+    <div class="modal" id="align-modal" hidden>
+      <div class="modal__bar">
+        <span class="modal__title">整列</span>
+        <button class="modal__close" id="align-close" type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal__body" id="align-body"></div>
+    </div>
+
+    <!-- IME 対応のため実 input は残すが画面外に配置 -->
+    <input
+      id="char-input"
+      type="text"
+      maxlength="4"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      aria-label="一文字入力"
+      style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;"
+    />
+
+    <p class="hint" id="hint"></p>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

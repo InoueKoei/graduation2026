@@ -6,6 +6,8 @@ node_modules/
 
 # ビルド生成物（ソースから再生成できる）
 dist/
+build/
+.vite/
 out/
 .next/
 .vinext/

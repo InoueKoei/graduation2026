@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>空中文字ペインティング - カスタマイズ版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: sans-serif;
+        }
+        #webcam {
+            display: none;
+        }
+        #canvas_container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #output_canvas {
+            background-color: #000;
+        }
+        /* メニュー開閉ボタン */
+        #menu-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 101;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00FFCC;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        #control-panel.hidden {
+            display: none;
+        }
+        /* コントロールパネルのスタイル */
+        #control-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px 12px;
+            align-items: center;
+            max-width: 320px;
+            font-size: 13px;
+        }
+        #control-panel input[type="text"],
+        #control-panel input[type="range"],
+        #control-panel select {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #control-panel .full {
+            grid-column: 1 / -1;
+        }
+        #control-panel button {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 5px;
+            background: #00FFCC;
+            color: #003;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #control-panel button.secondary {
+            background: #444;
+            color: #fff;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .row label { white-space: nowrap; }
+        #fontStatus {
+            font-size: 11px;
+            color: #9f9;
+            min-height: 14px;
+        }
+        input[type="color"] {
+            width: 40px;
+            height: 28px;
+            padding: 0;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+        .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+        .swatches span {
+            width: 20px; height: 20px; border-radius: 50%;
+            cursor: pointer; border: 2px solid #fff2;
+        }
+        .toggle-group { display: flex; gap: 6px; }
+        .toggle-group button.active { outline: 2px solid #fff; }
+    </style>
+</head>
+<body>
+
+    <button id="menu-toggle" type="button" title="メニュー表示/非表示">⚙</button>
+
+    <div id="control-panel">
+        <label>ビデオ:</label>
+        <div class="row">
+            <label><input type="checkbox" id="showVideo" checked> カメラ映像を表示</label>
+        </div>
+
+        <label>表示する文字:</label>
+        <input type="text" id="textSequence" value="寿限無、寿限無 五劫の擦り切れ 海砂利水魚の 水行末 雲来末 風来末 食う寝る処に住む処 藪ら柑子の藪柑子 パイポパイポパイポのシューリンガンシューリンガンのグーリンダイ グーリンダイのポンポコピーのポンポコナーの長久命の長助">
+
+        <!-- フォント選択 -->
+        <label>フォント:</label>
+        <select id="fontFamily">
+            <option value="sans-serif">sans-serif（既定）</option>
+            <option value="serif">serif（明朝系）</option>
+            <option value="monospace">monospace</option>
+        </select>
+
+        <div class="full row">
+            <button id="loadLocalFonts" type="button">インストール済みフォントを読み込む</button>
+            <button id="uploadFontBtn" class="secondary" type="button">フォントファイル…</button>
+            <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" style="display:none" multiple>
+        </div>
+        <div class="full" id="fontStatus"></div>
+
+        <label>文字サイズ:</label>
+        <input type="range" id="fontSize" min="20" max="150" value="60">
+
+        <label>文字の間隔 (px):</label>
+        <input type="range" id="minDistance" min="10" max="150" value="45">
+
+        <label>消える遅さ (残像):</label>
+        <input type="range" id="fadeSpeed" min="0" max="50" value="5">
+
+        <!-- 文字の色（自由に選べる） -->
+        <label>文字の色:</label>
+        <div class="row">
+            <input type="color" id="textColor" value="#00FFCC">
+            <div class="swatches" id="swatches">
+                <span data-c="#00FFCC" style="background:#00FFCC"></span>
+                <span data-c="#FF007F" style="background:#FF007F"></span>
+                <span data-c="#FFFF00" style="background:#FFFF00"></span>
+                <span data-c="#00FF00" style="background:#00FF00"></span>
+                <span data-c="#FFFFFF" style="background:#FFFFFF"></span>
+            </div>
+        </div>
+
+        <!-- スタイリング -->
+        <label>スタイル:</label>
+        <div class="toggle-group">
+            <button type="button" id="boldBtn" class="active">Bold</button>
+            <button type="button" id="italicBtn">Italic</button>
+        </div>
+
+        <label>グロー(発光):</label>
+        <input type="range" id="glow" min="0" max="40" value="15">
+
+        <label>フチ取り:</label>
+        <input type="range" id="outline" min="0" max="12" value="0">
+
+        <label>フチの色:</label>
+        <input type="color" id="outlineColor" value="#000000">
+    </div>
+
+    <div id="canvas_container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        canvasElement.width = 1280;
+        canvasElement.height = 720;
+
+        // --- 軌跡データ管理 ---
+        let textIndex = 0;
+        let drawnLetters = [];
+
+        // UI要素の取得
+        const uiText = document.getElementById('textSequence');
+        const uiFontSize = document.getElementById('fontSize');
+        const uiMinDistance = document.getElementById('minDistance');
+        const uiFadeSpeed = document.getElementById('fadeSpeed');
+        const uiTextColor = document.getElementById('textColor');
+        const uiFontFamily = document.getElementById('fontFamily');
+        const uiGlow = document.getElementById('glow');
+        const uiOutline = document.getElementById('outline');
+        const uiOutlineColor = document.getElementById('outlineColor');
+        const uiBold = document.getElementById('boldBtn');
+        const uiItalic = document.getElementById('italicBtn');
+        const fontStatus = document.getElementById('fontStatus');
+        const uiShowVideo = document.getElementById('showVideo');
+        const controlPanel = document.getElementById('control-panel');
+        const menuToggle = document.getElementById('menu-toggle');
+
+        // メニューの表示/非表示（ボタン or キー "h"）
+        menuToggle.addEventListener('click', () => controlPanel.classList.toggle('hidden'));
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'h' && e.target.tagName !== 'INPUT') {
+                controlPanel.classList.toggle('hidden');
+            }
+        });
+
+        // 文字列が変更されたらインデックスをリセット
+        uiText.addEventListener('input', () => { textIndex = 0; });
+
+        // --- 色プリセットのスウォッチ ---
+        document.getElementById('swatches').addEventListener('click', (e) => {
+            const c = e.target.dataset.c;
+            if (c) uiTextColor.value = c;
+        });
+
+        // --- スタイルのトグル ---
+        uiBold.addEventListener('click', () => uiBold.classList.toggle('active'));
+        uiItalic.addEventListener('click', () => uiItalic.classList.toggle('active'));
+
+        // --- ① インストール済みローカルフォントを読み込む (Local Font Access API) ---
+        document.getElementById('loadLocalFonts').addEventListener('click', async () => {
+            if (!('queryLocalFonts' in window)) {
+                fontStatus.textContent = 'このブラウザは非対応です（Chrome/Edge の https か localhost で利用可）';
+                return;
+            }
+            try {
+                fontStatus.textContent = 'フォントを読み込み中…';
+                const fonts = await window.queryLocalFonts();
+                // family 名で重複排除
+                const families = [...new Set(fonts.map(f => f.family))].sort((a, b) =>
+                    a.localeCompare(b, 'ja'));
+                for (const fam of families) {
+                    // 既に追加済みならスキップ
+                    if ([...uiFontFamily.options].some(o => o.value === fam)) continue;
+                    const opt = document.createElement('option');
+                    opt.value = fam;
+                    opt.textContent = fam;
+                    uiFontFamily.appendChild(opt);
+                }
+                fontStatus.textContent = `${families.length} 種類のフォントを追加しました`;
+            } catch (err) {
+                fontStatus.textContent = '読み込みが許可されませんでした: ' + err.message;
+            }
+        });
+
+        // --- ② フォントファイル(.ttf/.otf/.woff)をアップロードして使う (FontFace API) ---
+        const fontFileInput = document.getElementById('fontFile');
+        document.getElementById('uploadFontBtn').addEventListener('click', () => fontFileInput.click());
+        fontFileInput.addEventListener('change', async () => {
+            for (const file of fontFileInput.files) {
+                const family = file.name.replace(/\.(ttf|otf|woff2?|woff)$/i, '');
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const fontFace = new FontFace(family, buffer);
+                    await fontFace.load();
+                    document.fonts.add(fontFace);
+                    if (![...uiFontFamily.options].some(o => o.value === family)) {
+                        const opt = document.createElement('option');
+                        opt.value = family;
+                        opt.textContent = '📁 ' + family;
+                        uiFontFamily.appendChild(opt);
+                    }
+                    uiFontFamily.value = family;
+                    fontStatus.textContent = `読み込み: ${family}`;
+                } catch (err) {
+                    fontStatus.textContent = `${file.name} の読み込みに失敗: ${err.message}`;
+                }
+            }
+        });
+
+        // canvas の font 文字列を組み立てる
+        function buildFontString(size) {
+            const weight = uiBold.classList.contains('active') ? 'bold' : 'normal';
+            const style = uiItalic.classList.contains('active') ? 'italic' : 'normal';
+            // フォント名にスペースが含まれる場合に備えて引用符で囲む
+            const family = uiFontFamily.value;
+            const quoted = /["',]/.test(family) ? family : `"${family}"`;
+            return `${style} ${weight} ${size}px ${quoted}`;
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults((results) => {
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // カメラ映像の描画（ミラー）— チェックが入っている時だけ描く。
+            // オフでも手の追跡・指の軌跡・文字はそのまま動作する。
+            if (uiShowVideo.checked) {
+                canvasCtx.save();
+                canvasCtx.translate(canvasElement.width, 0);
+                canvasCtx.scale(-1, 1);
+                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                canvasCtx.restore();
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexFingerTip = landmarks[8];
+
+                const x = (1 - indexFingerTip.x) * canvasElement.width;
+                const y = indexFingerTip.y * canvasElement.height;
+
+                const currentTextSpace = uiText.value || " ";
+                const configMinDist = parseInt(uiMinDistance.value);
+
+                if (drawnLetters.length === 0) {
+                    addLetter(x, y, currentTextSpace);
+                } else {
+                    const lastLetter = drawnLetters[drawnLetters.length - 1];
+                    const dist = Math.hypot(x - lastLetter.x, y - lastLetter.y);
+
+                    if (dist > configMinDist) {
+                        addLetter(x, y, currentTextSpace);
+                    }
+                }
+
+                // 指先のポインター
+                canvasCtx.beginPath();
+                canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
+                canvasCtx.fillStyle = uiTextColor.value;
+                canvasCtx.fill();
+            }
+
+            drawAndUpdateLetters();
+        });
+
+        function addLetter(x, y, textSpace) {
+            drawnLetters.push({
+                x: x,
+                y: y,
+                char: textSpace[textIndex],
+                alpha: 1.0,
+                size: parseInt(uiFontSize.value),
+                color: uiTextColor.value,
+                font: buildFontString(parseInt(uiFontSize.value)),
+                glow: parseInt(uiGlow.value),
+                outline: parseInt(uiOutline.value),
+                outlineColor: uiOutlineColor.value
+            });
+            textIndex = (textIndex + 1) % textSpace.length;
+        }
+
+        function drawAndUpdateLetters() {
+            const fadeValue = parseInt(uiFadeSpeed.value) / 1000; // スライダーの値を計算用に変換
+
+            for (let i = drawnLetters.length - 1; i >= 0; i--) {
+                const letter = drawnLetters[i];
+
+                canvasCtx.font = letter.font;
+                canvasCtx.textBaseline = 'alphabetic';
+                canvasCtx.shadowBlur = letter.glow;
+
+                const px = letter.x - (letter.size / 2);
+                const py = letter.y + (letter.size / 3);
+
+                // フチ取り（先に描いて塗りの下地にする）
+                if (letter.outline > 0) {
+                    canvasCtx.lineWidth = letter.outline;
+                    canvasCtx.lineJoin = 'round';
+                    canvasCtx.strokeStyle = convertHexToRgba(letter.outlineColor, letter.alpha);
+                    canvasCtx.shadowColor = convertHexToRgba(letter.outlineColor, letter.alpha);
+                    canvasCtx.strokeText(letter.char, px, py);
+                }
+
+                // 塗り
+                canvasCtx.fillStyle = convertHexToRgba(letter.color, letter.alpha);
+                canvasCtx.shadowColor = convertHexToRgba(letter.color, letter.alpha);
+                canvasCtx.fillText(letter.char, px, py);
+
+                // スライダーで設定した速度で透明化
+                letter.alpha -= fadeValue;
+
+                if (letter.alpha <= 0) {
+                    drawnLetters.splice(i, 1);
+                }
+            }
+            canvasCtx.shadowBlur = 0;
+        }
+
+        // 16進数カラーをrgba文字列に変換するヘルパー関数
+        function convertHexToRgba(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
+    </script>
+</body>
+</html>

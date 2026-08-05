@@ -1,0 +1,149 @@
+/* ============================================================
+   sumi design system をベースにしたスタイル（モノクロ基調・ZEN Interface）
+   - カラー / スペーシングは sumi のセマンティックトークンに合わせて定義
+   - 生HEX直書きを避け、var(--color-*) / var(--space-*) を使う
+   ============================================================ */
+:root {
+  /* Color（Light固定） */
+  --color-0: #ffffff;
+  --color-1000: #000000;
+  --color-gray-900: #1a1a1a;
+  --color-gray-800: #333333;
+  --color-gray-700: #4d4d4d;
+  --color-gray-600: #666666;
+  --color-gray-536: #767676;
+  --color-gray-420: #949494;
+  --color-gray-300: #b3b3b3;
+  --color-gray-200: #cccccc;
+  --color-gray-100: #e6e6e6;
+  --color-gray-50: #f2f2f2;
+  /* Spacing */
+  --space-025: 4px;
+  --space-050: 8px;
+  --space-075: 12px;
+  --space-100: 16px;
+  --space-150: 24px;
+  --space-200: 32px;
+  --space-300: 48px;
+  --space-400: 64px;
+  --radius-pill: 999px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--color-0);
+  color: var(--color-gray-900);
+  font-family: "ZEN Interface", system-ui, -apple-system, "Hiragino Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { height: 100%; display: flex; flex-direction: column; }
+
+/* ---- ヘッダー（タイトル・タイマー・操作） ---- */
+header {
+  display: flex; align-items: center; gap: var(--space-150);
+  padding: var(--space-100) var(--space-150);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+.brand { font-size: 16px; font-weight: 700; letter-spacing: .02em; }
+#timer {
+  margin-left: auto;
+  font-size: 40px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.actions { display: flex; gap: var(--space-050); }
+
+/* ---- ボタン（sumi: Primary=塗り1000 / Secondary=線） ---- */
+.btn {
+  font: inherit; font-size: 15px; font-weight: 700;
+  padding: var(--space-075) var(--space-150);
+  border-radius: var(--radius-pill); cursor: pointer;
+  border: 1px solid var(--color-1000); transition: opacity .15s, background .15s;
+}
+.btn.primary { background: var(--color-1000); color: var(--color-0); }
+.btn.secondary { background: var(--color-0); color: var(--color-1000); }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .35; cursor: default; }
+
+/* ヘッダーの終了ボタンはプレイ中だけ。スタートは #chooser 内（モード選択の下）にある */
+body:not(.phase-playing) #endBtn { display: none; }
+
+/* ---- ステージ（中央） ---- */
+#stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: var(--space-200); gap: var(--space-100); }
+
+#progress { font-size: 14px; color: var(--color-gray-600); letter-spacing: .08em; }
+#progress b { color: var(--color-gray-900); font-size: 16px; }
+
+#odaiLabel { font-size: 14px; color: var(--color-gray-600); }
+#odai { font-size: clamp(40px, 9vw, 96px); font-weight: 700; line-height: 1.1; }
+
+/* ヒントあり：その書体で描いた大きな「な」（font-family は JS で差し込む） */
+#hintChar { font-size: clamp(120px, 26vh, 280px); line-height: 1; font-weight: 400; margin-bottom: var(--space-050); }
+body.mode-nohint #hintChar { display: none; } /* ヒントなしは隠す */
+
+/* ---- モード選択（待機・終了で表示、プレイ中は隠す） ---- */
+#chooser { order: 10; display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-100); margin-top: var(--space-150); }
+body.phase-playing #chooser { display: none; }
+#modeSelect { display: flex; gap: var(--space-100); margin-top: var(--space-050); }
+.mode-btn {
+  font: inherit; cursor: pointer; text-align: center;
+  display: flex; flex-direction: column; gap: var(--space-025);
+  padding: var(--space-150) var(--space-200);
+  border: 1px solid var(--color-gray-420); border-radius: var(--space-075);
+  background: var(--color-0); color: var(--color-gray-900);
+  font-size: 18px; font-weight: 700; transition: border-color .15s, background .15s;
+}
+.mode-btn small { font-size: 12px; font-weight: 400; color: var(--color-gray-600); }
+.mode-btn:hover { border-color: var(--color-gray-900); }
+.mode-btn.active { border-color: var(--color-1000); background: var(--color-1000); color: var(--color-0); }
+.mode-btn.active small { color: var(--color-gray-200); }
+/* スタートはモード選択の直下に大きめで */
+#chooser #startBtn { font-size: 18px; padding: var(--space-100) var(--space-300); }
+.idle-hint { font-size: 13px; color: var(--color-gray-536); }
+
+/* スキャンのフィードバック（○/×＋メッセージ） */
+#feedback { min-height: 2.2em; font-size: 20px; color: var(--color-gray-700);
+  display: flex; align-items: center; gap: var(--space-050); transition: opacity .2s; }
+#feedback .fbmark { font-size: 28px; font-weight: 700; color: var(--color-gray-900); }
+#feedback.miss { color: var(--color-gray-900); }
+
+/* idle / finished のメッセージ */
+#idleMsg, #resultMsg { color: var(--color-gray-600); font-size: 16px; line-height: 1.7; max-width: 24em; }
+#resultTime { font-size: clamp(44px, 10vw, 104px); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* フェーズごとの表示切替 */
+.only-idle, .only-playing, .only-finished { display: none; }
+body.phase-idle .only-idle { display: flex; flex-direction: column; align-items: center; gap: var(--space-100); }
+body.phase-playing .only-playing { display: flex; flex-direction: column; align-items: center; gap: var(--space-100); }
+body.phase-finished .only-finished { display: flex; flex-direction: column; align-items: center; gap: var(--space-075); }
+
+/* ---- フッター（テスト用シミュレート） ---- */
+#panel { border-top: 1px solid var(--color-gray-200); padding: var(--space-075) var(--space-150);
+  background: var(--color-gray-50); }
+/* 下のテスト欄の表示/非表示（展示中は隠す）。設定ボタンは右下に控えめに常駐 */
+#panelToggle {
+  position: fixed; right: var(--space-050); bottom: var(--space-050); z-index: 10;
+  border: none; background: transparent; color: var(--color-gray-300);
+  font: inherit; font-size: 14px; line-height: 1; padding: var(--space-050);
+  cursor: pointer; opacity: .45; transition: opacity .15s, color .15s;
+}
+#panelToggle:hover { opacity: 1; color: var(--color-gray-700); }
+body.hide-panel #panel { display: none; }
+/* パネル表示中に右下の設定ボタンと重ならないよう余白を確保 */
+#panel { padding-right: var(--space-300); }
+
+#bleRow { display: flex; align-items: center; gap: var(--space-075); margin: 0 0 var(--space-075); }
+#bleBtn { font-size: 13px; padding: var(--space-050) var(--space-100); }
+#bleStat { font-size: 12px; color: var(--color-gray-600); }
+#bleStat.on { color: var(--color-1000); font-weight: 700; }
+#connUrl { margin: 0 0 var(--space-050); font-size: 12px; color: var(--color-gray-700);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+#panel h3 { margin: 0 0 var(--space-050); font-size: 12px; color: var(--color-gray-600); font-weight: 700; }
+#simBtns { display: flex; flex-wrap: wrap; gap: var(--space-050); }
+.chip { font: inherit; font-size: 13px; padding: var(--space-025) var(--space-075);
+  border: 1px solid var(--color-gray-420); border-radius: var(--radius-pill);
+  background: var(--color-0); color: var(--color-gray-800); cursor: pointer; }
+.chip:hover { background: var(--color-gray-100); }
+.chip.isPrompt { border-color: var(--color-1000); color: var(--color-1000); font-weight: 700; }

@@ -1,0 +1,18 @@
+{
+  "_comment": "「な」しかないカルタの札一覧。id=タグの card= 値（札番号）、title=書体名（お題＆表示テキスト）、font=CSSの font-family（PostScript名など）。ヒントありモードでは font を使って『な』をその書体で大きく描画する（表示端末にその書体があるか、Webフォント読込が必要）。正解/不正解はお題との一致で動的判定。",
+  "cards": [
+    { "id": "01", "title": "UD新ゴ", "font": "PUDShinGoPr6N-Regular" },
+    { "id": "04", "title": "筑紫オールドゴシック", "font": "TsukuOldGothicStd-R" },
+    { "id": "05", "title": "築地", "font": "RoTJStd-GM" },
+    { "id": "06", "title": "TBゴシック", "font": "TBGoStdR-Normal" },
+    { "id": "07", "title": "筑紫ゴシック", "font": "TsukuGoPro-R" },
+    { "id": "08", "title": "秀英角ゴシック金", "font": "PShueiGoKinStd-L" },
+    { "id": "09", "title": "游ゴシック", "font": "YuGoPr6N-Medium" },
+    { "id": "10", "title": "A1ゴシック", "font": "PA1GothicStdN-Regular" },
+    { "id": "11", "title": "石井ゴシック", "font": "PIshiiGothicStdN-R" },
+    { "id": "12", "title": "メイリオ", "font": "Meiryo" },
+    { "id": "13", "title": "百千鳥", "font": "Momochidori VF" },
+    { "id": "14", "title": "秀英角ゴシック銀", "font": "PShueiGoGinStd-L" },
+    { "id": "15", "title": "ヒラギノ角ゴシック", "font": "HiraKakuStdN-W3" }
+  ]
+}
