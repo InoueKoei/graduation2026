@@ -1,0 +1,82 @@
+:root {
+  --paper: #f4f1ea;
+  --ink: #2b2a33;
+  --rock: #a9a292;   /* 避ける対象なので、紙よりはっきり沈ませる */
+  --muted: #b3afa3;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  user-select: none;
+  cursor: none;
+}
+
+#stage { position: fixed; inset: 0; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+#hud {
+  position: fixed;
+  top: 16px; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 5;
+  color: var(--ink);
+}
+.stat { display: flex; align-items: baseline; gap: 5px; }
+.stat b { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat i { font-style: normal; font-size: 11px; color: var(--muted); letter-spacing: 0.2em; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.ok  { background: #7aa874; }
+.dot.sim { background: #cfa75a; }
+
+#hint {
+  position: fixed;
+  bottom: 26px;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  z-index: 5;
+  transition: opacity 1s;
+}
+#hint.hide { opacity: 0; }
+
+#over[hidden] { display: none; }
+#over {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(244, 241, 234, 0.82);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+}
+#over .big { font-size: 40px; letter-spacing: 0.32em; color: var(--ink); }
+#over .sub { font-size: 13px; color: var(--muted); letter-spacing: 0.1em; }
+#over .sub b { color: var(--ink); font-size: 26px; font-variant-numeric: tabular-nums; }
+#best { margin-left: 12px; }
+#again {
+  margin-top: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  padding: 9px 26px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+#again:hover { background: var(--ink); color: var(--paper); }

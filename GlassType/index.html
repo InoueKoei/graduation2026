@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GlassType — 呼気の窓</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="fog"></canvas>
+  <div id="cursor"></div>
+
+  <header id="hud">
+    <span id="dot" class="dot"></span>
+    <span id="stats">--</span>
+  </header>
+  <select id="bgSelect" title="背景の切り替え"></select>
+  <p id="hint">センサーに息を吹きかけるとガラスが曇る。曇ったらドラッグで描ける。</p>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

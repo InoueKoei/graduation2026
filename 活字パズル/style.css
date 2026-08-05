@@ -1,0 +1,111 @@
+/* ── 活字パズル ゲーム版スタイル（sumi 基調） ──
+   UI は sumi（ZEN Interface）、活字そのもの（出題語・読み取り語）は Mincho serif。
+   デザイントークンは sumi-tokens.css を先に読み込むこと。 */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0; padding: 24px 16px 48px; max-width: 900px; margin-inline: auto;
+  background: var(--color-background); color: var(--color-text-primary);
+  font-family: "ZEN Interface", system-ui, -apple-system, sans-serif; line-height: 1.6;
+}
+
+/* 活字（出題語・検出語）は明朝で */
+.kana { font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", serif; }
+
+/* トップバー */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.topbar h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+
+/* sumi アイコンボタン（ピル） */
+.icon-btn {
+  width: 40px; height: 40px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 18px; line-height: 1;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 999px;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+
+/* 状態バナー（opencv 読み込み） */
+.status-bar {
+  padding: 10px 14px; margin-top: 16px; border-radius: 10px;
+  background: var(--color-muted); color: var(--color-text-secondary);
+  border: 1px solid transparent; font-size: 14px;
+}
+.status-bar.ready { border-color: var(--color-border); color: var(--color-text-primary); }
+.status-bar.error { border-color: var(--color-accent-strong); color: var(--color-text-primary); font-weight: 700; }
+
+/* エラーバナー（sumi 準拠でモノクロ・強い枠で注意喚起） */
+#errorBanner {
+  margin: 12px 0; padding: 10px 14px; border-radius: 10px;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-accent-strong); font-weight: 700;
+}
+
+/* ツールバーとボタン（sumi Button） */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.toolbar button {
+  font: inherit; font-weight: 700; height: 44px; padding: 0 18px;
+  border-radius: 999px; cursor: pointer;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); transition: background .15s, border-color .15s;
+}
+.toolbar button:hover:not(:disabled) { background: var(--color-muted); border-color: var(--color-accent-strong); }
+.toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+/* Primary（塗り） */
+#startGameBtn, #checkBtn {
+  background: var(--color-accent-strong); color: var(--primitive-0); border-color: var(--color-accent-strong);
+}
+#startGameBtn:hover:not(:disabled), #checkBtn:hover:not(:disabled) {
+  background: var(--color-accent-default); border-color: var(--color-accent-default);
+}
+
+/* 正誤表示（モノクロのチップ。正解=塗り／不正解=線） */
+#resultStatus { text-align: center; min-height: 88px; margin: 8px 0; }
+#resultStatus:not(:empty) {
+  display: flex; align-items: center; justify-content: center;
+}
+#resultStatus.ok, #resultStatus.ng {
+  font-size: 44px; font-weight: 700; line-height: 1;
+}
+#resultStatus.ok span, #resultStatus.ng span {
+  display: inline-block; padding: 10px 28px; border-radius: 999px;
+}
+#resultStatus.ok span { background: var(--color-accent-strong); color: var(--primitive-0); }
+#resultStatus.ng span { border: 2px solid var(--color-accent-strong); color: var(--color-text-primary); }
+
+#timerDisplay { font-family: ui-monospace, monospace; font-size: 20px; color: var(--color-text-secondary); margin: 6px 0; }
+
+/* 出題語の大表示 */
+#targetDisplay {
+  text-align: center; padding: 40px 20px; margin: 16px 0;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+}
+#targetWordText { font-size: 76px; font-weight: 700; letter-spacing: .12em; color: var(--color-text-primary); }
+
+/* カメラビュー */
+#viewContainer { position: relative; margin-top: 16px; }
+#output { max-width: 100%; display: block; border: 1px solid var(--color-border); border-radius: 12px; }
+
+/* セクション見出し */
+h2 { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--color-text-placeholder); margin: 24px 0 8px; }
+hr { border: none; border-top: 1px solid var(--color-border); margin: 24px 0; }
+
+/* ステータス */
+.status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.status-grid div {
+  background: var(--color-muted); border-radius: 10px; padding: 10px; text-align: center;
+  font-size: 13px; color: var(--color-text-secondary);
+}
+.status-grid b { display: block; margin-top: 4px; font-size: 18px; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+
+#idsList { font-size: 30px; min-height: 44px; color: var(--color-text-primary); }
+
+#log {
+  height: 150px; overflow-y: auto; padding: 8px 10px;
+  border: 1px solid var(--color-border); border-radius: 10px;
+  background: var(--color-surface); color: var(--color-text-secondary);
+  font-family: ui-monospace, monospace; font-size: 12px;
+}

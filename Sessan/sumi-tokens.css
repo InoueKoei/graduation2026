@@ -1,0 +1,59 @@
+/* =========================================
+   sumi デザイントークン（同梱コピー）
+   出典: CLdev/sumi-ui/src/styles/tokens.css
+   墨のモノクロ2層トークン。data-theme="dark" で反転。
+========================================= */
+
+/* --- PRIMITIVE 層（モードで反転） --- */
+:root {
+  --primitive-0:    #ffffff;
+  --primitive-50:   #f7f7f7;
+  --primitive-100:  #f0f0f0;
+  --primitive-200:  #e0e0e0;
+  --primitive-300:  #cccccc;
+  --primitive-420:  #a0a0a0;
+  --primitive-500:  #888888;
+  --primitive-536:  #7a7a7a;
+  --primitive-600:  #606060;
+  --primitive-700:  #404040;
+  --primitive-800:  #282828;
+  --primitive-900:  #181818;
+  --primitive-1000: #000000;
+  --primitive-opacity-150: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="dark"] {
+  --primitive-0:    #000000;
+  --primitive-50:   #0a0a0a;
+  --primitive-100:  #181818;
+  --primitive-200:  #282828;
+  --primitive-300:  #404040;
+  --primitive-420:  #606060;
+  --primitive-500:  #888888;
+  --primitive-536:  #909090;
+  --primitive-600:  #a0a0a0;
+  --primitive-700:  #cccccc;
+  --primitive-800:  #f0f0f0;
+  --primitive-900:  #f7f7f7;
+  --primitive-1000: #ffffff;
+  --primitive-opacity-150: rgba(255, 255, 255, 0.06);
+}
+
+/* --- SEMANTIC 層（用途で命名。反転しない） --- */
+:root {
+  --color-background: var(--primitive-50);
+  --color-surface:    var(--primitive-50);
+
+  --color-text-primary:     var(--primitive-800);
+  --color-text-secondary:   var(--primitive-600);
+  --color-text-placeholder: var(--primitive-536);
+
+  --color-border:   var(--primitive-420);
+  --color-muted:    var(--primitive-200);
+  --color-column:   var(--primitive-100);
+  --color-disabled: var(--primitive-300);
+
+  --color-accent-overlay: var(--primitive-opacity-150);
+  --color-accent-default: var(--primitive-800);
+  --color-accent-strong:  var(--primitive-1000);
+}

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SensorDeck — ESP32計器盤</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>SensorDeck</h1>
+    <div id="chips">
+      <span class="chip"><span id="dot" class="dot"></span><span id="endpoint">--</span></span>
+      <span class="chip">応答 <b id="latency">--</b></span>
+      <span class="chip">成功率 <b id="rate">--</b></span>
+      <span class="chip">SHT <b id="shtFlag">--</b></span>
+      <span class="chip">MPU <b id="mpuFlag">--</b></span>
+    </div>
+    <button id="recBtn" title="CSV記録の開始/停止">● REC</button>
+  </header>
+
+  <main>
+    <section id="tiles">
+      <div class="tile">
+        <div class="tile-label">温度</div>
+        <div class="tile-value"><span id="tTemp">--</span><span class="unit">°C</span></div>
+        <div class="tile-sub" id="tTempSub">min -- / max --</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">湿度</div>
+        <div class="tile-value"><span id="tHum">--</span><span class="unit">%</span></div>
+        <div class="tile-sub" id="tHumSub">min -- / max --</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">傾き</div>
+        <div class="tile-value"><span id="tTilt">--</span><span class="unit">°</span></div>
+        <div class="tile-sub" id="tTiltSub">x -- / y --</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">揺れ</div>
+        <div class="tile-value"><span id="tShake">--</span><span class="unit">g</span></div>
+        <div class="tile-sub">|a|の1gからのズレ</div>
+      </div>
+    </section>
+
+    <section id="charts">
+      <div class="panel">
+        <h2>温度 <span class="h-unit">°C・直近2分</span></h2>
+        <div class="chart-holder" id="chartTemp"></div>
+      </div>
+      <div class="panel">
+        <h2>湿度 <span class="h-unit">%・直近2分</span></h2>
+        <div class="chart-holder" id="chartHum"></div>
+      </div>
+      <div class="panel">
+        <h2>加速度 <span class="h-unit">g・3軸</span></h2>
+        <div class="chart-holder" id="chartAcc"></div>
+      </div>
+      <div class="panel">
+        <h2>水準器 <span class="h-unit">傾きベクトル</span></h2>
+        <div class="chart-holder" id="levelHolder"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

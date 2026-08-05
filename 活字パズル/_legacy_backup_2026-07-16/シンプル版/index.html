@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AR Realtime Sync - Dynamic Text</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            background-color: #000; color: white;
+            font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", serif;
+        }
+        #container { display: flex; flex-direction: column; height: 100vh; }
+
+        /* 上部：テキスト・情報エリア */
+        #upper-area {
+            flex: 1; background-color: #1a1a1a;
+            display: flex; justify-content: center; align-items: center;
+            border-bottom: 2px solid #333;
+            overflow: hidden;
+        }
+
+        /* 文字を並べるコンテナ */
+        #current-string-container {
+            display: flex;
+            gap: 40px; /* 文字同士の間隔 */
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 一文字ずつのスタイル */
+        .sync-char-span {
+            display: inline-block; /* 回転（transform）を有効にするために必須 */
+            font-size: 5rem;
+            font-weight: bold;
+            transition: transform 0.1s ease-out; /* 動きを滑らかに */
+        }
+
+        /* 下部：スクリーンエリア */
+        #lower-area {
+            height: 50vh; background-color: #000;
+            display: flex; justify-content: center; align-items: flex-end;
+        }
+        .screen-container {
+            width: 100%; max-width: 100vh; /* 2:1比率 */
+            aspect-ratio: 2 / 1; position: relative; background: #050505;
+        }
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* 開始オーバーレイ */
+        #start-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+        }
+        #start-btn { padding: 20px 40px; font-size: 1.2rem; cursor: pointer; font-weight: bold; border-radius: 8px; border: none; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div id="upper-area">
+        <div id="current-string-container">
+            <span style="color:#444;">--- READY ---</span>
+        </div>
+    </div>
+
+    <div id="lower-area">
+        <div class="screen-container">
+            <div id="start-overlay">
+                <button id="start-btn">START AR SYSTEM</button>
+            </div>
+            <canvas id="output"></canvas>
+        </div>
+    </div>
+</div>
+
+<video id="video" playsinline style="display:none;"></video>
+<canvas id="hiddenCanvas" style="display:none;"></canvas>
+
+<script src="config.js"></script>
+<script>
+    let cvReady = false;
+    function onOpenCvReady() { cvReady = true; }
+</script>
+<script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="onOpenCvReady();"></script>
+<script src="script.js"></script>
+</body>
+</html>

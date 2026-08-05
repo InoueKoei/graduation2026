@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI空中タイピング - 修正版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #container { position: relative; width: 640px; height: 480px; }
+        video { display: none; } /* ビデオ本体は隠してCanvasに描画する */
+        canvas { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        
+        #toggle-hud-btn {
+            position: absolute; top: 20px; left: 20px; z-index: 20;
+            background: rgba(0,0,0,0.8); color: #00FFCC; border: 1px solid #00FFCC;
+            border-radius: 50%; width: 40px; height: 40px; cursor: pointer;
+        }
+        #hud {
+            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.85);
+            padding: 15px; padding-top: 55px; border-radius: 12px; font-size: 15px;
+            width: 240px; z-index: 10; border: 1px solid #444; backdrop-filter: blur(4px);
+            transition: all 0.4s ease;
+        }
+        #hud.hidden { transform: translateX(-290px); opacity: 0; }
+        #current-char {
+            position: absolute; bottom: 20px; right: 20px; font-size: 80px;
+            font-weight: bold; color: #00FFCC; text-shadow: 0 0 20px rgba(0,255,204,0.6);
+        }
+        #output-area {
+            margin-top: 20px; width: 620px; background: #222; border: 2px solid #444;
+            border-radius: 8px; padding: 15px; font-size: 24px; min-height: 50px; color: #FFF;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas" width="640" height="480"></canvas>
+        <button id="toggle-hud-btn" onclick="toggleHUD()">⚙️</button>
+        <div id="hud">
+            <div>指: <span id="hud-fingers">0</span>本 (<span id="hud-row">待機</span>)</div>
+            <div>母音: <span id="hud-vowel">ー</span></div>
+            <div style="color:#00FFCC;">確定: <span id="hud-gauge">0</span>%</div>
+            <div style="color:#FFBB00;">修飾: <span id="hud-mod-gauge">0</span>% <span id="hud-mod-type"></span></div>
+            <div style="border-top:1px solid #555; margin-top:5px; padding-top:5px;">目: <span id="hud-eye">開</span></div>
+        </div>
+        <div id="current-char">ー</div>
+    </div>
+    <div id="output-area">入力された文字: <span id="text-buffer"></span></div>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        const hudFingers = document.getElementById('hud-fingers');
+        const hudRow = document.getElementById('hud-row');
+        const hudVowel = document.getElementById('hud-vowel');
+        const hudGauge = document.getElementById('hud-gauge');
+        const hudModGauge = document.getElementById('hud-mod-gauge');
+        const hudModType = document.getElementById('hud-mod-type');
+        const hudEye = document.getElementById('hud-eye');
+        const currentCharDisp = document.getElementById('current-char');
+        const textBufferDisp = document.getElementById('text-buffer');
+
+        window.toggleHUD = function() { document.getElementById('hud').classList.toggle('hidden'); };
+
+        const gojuonTable = [
+            ["あ", "い", "う", "え", "お"], ["か", "き", "く", "け", "こ"], 
+            ["さ", "し", "す", "せ", "そ"], ["た", "ち", "つ", "て", "と"], 
+            ["な", "に", "ぬ", "ね", "の"], ["は", "ひ", "ふ", "へ", "ほ"], 
+            ["ま", "み", "む", "め", "も"], ["や", "（い）", "ゆ", "（え）", "よ"], 
+            ["ら", "り", "る", "れ", "ろ"], ["わ", "を", "ん", "ー", " "], 
+        ];
+        const gyoNames = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ"];
+        const dakutenMap = { 'か':'が','き':'ぎ','く':'ぐ','け':'げ','こ':'ご','さ':'ざ','し':'じ','す':'ず','せ':'ぜ','そ':'ぞ','た':'だ','ち':'ぢ','つ':'づ','て':'で','と':'ど','は':'ば','ひ':'び','ふ':'ぶ','へ':'べ','ほ':'ぼ' };
+        const handakutenMap = { 'は':'ぱ','ひ':'ぴ','ふ':'ぷ','へ':'ぺ','ほ':'ぽ' };
+
+        let typedText = "", lastSelectedChar = "";
+        let charDurationCounter = 0, bsDurationCounter = 0, modDurationCounter = 0;
+        const REQUIRED_FRAMES = 22, BS_REQUIRED_FRAMES = 25, MOD_REQUIRED_FRAMES = 30;
+        let isLock = false, isBsLock = false, isModLock = false;
+
+        let vowelTargets = {
+            "close": { v: 0.05, h: 0.50 }, "あ": { v: 0.25, h: 0.50 }, "い": { v: 0.05, h: 0.65 },
+            "う": { v: 0.06, h: 0.35 }, "え": { v: 0.13, h: 0.60 }, "お": { v: 0.18, h: 0.42 }
+        };
+        let eyeTargets = { "open": 0.30, "close": 0.15 };
+
+        const holistic = new Holistic({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}` });
+        holistic.setOptions({ modelComplexity: 1, refineFaceLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+        holistic.onResults((results) => {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.translate(canvasElement.width, 0);
+            canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.restore();
+
+            let leftF = results.leftHandLandmarks ? countFingers(results.leftHandLandmarks) : -1;
+            let rightF = results.rightHandLandmarks ? countFingers(results.rightHandLandmarks) : -1;
+            let totalF = (leftF > 0 ? leftF : 0) + (rightF > 0 ? rightF : 0);
+            let fistCount = (leftF === 0 ? 1 : 0) + (rightF === 0 ? 1 : 0);
+
+            if (results.faceLandmarks) {
+                const face = results.faceLandmarks;
+                const vMouth = Math.hypot(face[13].x - face[14].x, face[13].y - face[14].y);
+                const hMouth = Math.hypot(face[61].x - face[291].x, face[61].y - face[291].y);
+                const faceSize = Math.hypot(face[33].x - face[263].x, face[33].y - face[263].y);
+                const vEye = Math.hypot(face[159].x - face[145].x, face[159].y - face[145].y);
+                const hEye = Math.hypot(face[33].x - face[133].x, face[33].y - face[133].y);
+                
+                const curVR = vMouth / faceSize, curHR = hMouth / faceSize, curER = vEye / hEye;
+
+                let minDist = Infinity, bestM = "close";
+                for (const [key, t] of Object.entries(vowelTargets)) {
+                    const d = Math.hypot(curVR - t.v, curHR - t.h);
+                    if (d < minDist) { minDist = d; bestM = key; }
+                }
+
+                let vowelIdx = -1;
+                if (bestM !== "close") {
+                    hudVowel.innerText = bestM;
+                    vowelIdx = {"あ":0, "い":1, "う":2, "え":3, "お":4}[bestM];
+                } else { hudVowel.innerText = "ー"; }
+
+                const isClose = Math.abs(curER - eyeTargets.close) < Math.abs(curER - eyeTargets.open);
+                hudEye.innerText = isClose ? "閉" : "開";
+
+                // Backspace
+                if (isClose) {
+                    if (!isBsLock) {
+                        bsDurationCounter++;
+                        if (bsDurationCounter >= BS_REQUIRED_FRAMES) {
+                            typedText = typedText.slice(0, -1);
+                            textBufferDisp.innerText = typedText;
+                            bsDurationCounter = 0; isBsLock = true;
+                        }
+                    }
+                } else { bsDurationCounter = 0; isBsLock = false; }
+
+                // 濁点・半濁点 (グー保持)
+                if (!isClose && totalF === 0 && fistCount > 0) {
+                    if (!isModLock) {
+                        modDurationCounter++;
+                        hudModGauge.innerText = Math.floor((modDurationCounter / MOD_REQUIRED_FRAMES) * 100);
+                        hudModType.innerText = fistCount === 1 ? "[濁点]" : "[半濁点]";
+                        if (modDurationCounter >= MOD_REQUIRED_FRAMES) {
+                            applyModifier(fistCount === 1 ? 'd' : 'h');
+                            modDurationCounter = 0; isModLock = true;
+                        }
+                    }
+                } else {
+                    modDurationCounter = 0; hudModGauge.innerText = 0; hudModType.innerText = "";
+                    if (totalF === 0 && fistCount === 0) isModLock = false;
+                }
+
+                // 文字入力
+                if (!isClose && totalF > 0 && vowelIdx !== -1) {
+                    const char = gojuonTable[totalF - 1][vowelIdx];
+                    currentCharDisp.innerText = char;
+                    if (char === lastSelectedChar) {
+                        if (!isLock) {
+                            charDurationCounter++;
+                            hudGauge.innerText = Math.floor((charDurationCounter / REQUIRED_FRAMES) * 100);
+                            if (charDurationCounter >= REQUIRED_FRAMES) {
+                                typedText += char; textBufferDisp.innerText = typedText;
+                                charDurationCounter = 0; isLock = true;
+                            }
+                        }
+                    } else { lastSelectedChar = char; charDurationCounter = 0; isLock = false; }
+                } else {
+                    currentCharDisp.innerText = isClose ? "消" : "ー";
+                    charDurationCounter = 0; hudGauge.innerText = 0;
+                    if (!isClose) lastSelectedChar = "";
+                }
+            }
+            hudFingers.innerText = totalF;
+            hudRow.innerText = totalF > 0 ? gyoNames[totalF - 1] + "行" : "待機";
+        });
+
+        function countFingers(ld) {
+            let c = 0; [8, 12, 16, 20].forEach(t => { if (ld[t].y < ld[t - 2].y) c++; });
+            if (ld[4].y < ld[2].y - 0.02) c++; return c;
+        }
+
+        function applyModifier(type) {
+            if (typedText.length === 0) return;
+            const last = typedText.slice(-1);
+            let next = (type === 'd') ? dakutenMap[last] : handakutenMap[last];
+            if (next) { typedText = typedText.slice(0, -1) + next; textBufferDisp.innerText = typedText; }
+        }
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await holistic.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        camera.start();
+    </script>
+</body>
+</html>

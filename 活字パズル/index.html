@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>活字パズル — ことばづくり</title>
+  <link rel="stylesheet" href="sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <h1>活字パズル<span style="font-size:13px;font-weight:400;color:var(--color-text-secondary);margin-left:8px;">ことばづくり</span></h1>
+    <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+  </div>
+
+  <div id="cvStatus" class="status-bar">opencv.js を読み込み中…</div>
+  <div id="errorBanner" role="alert" hidden></div>
+
+  <div class="toolbar">
+    <button id="setupCamBtn" disabled>1. カメラを準備する</button>
+    <button id="startGameBtn" disabled>2. ゲーム開始</button>
+    <button id="toggleVidBtn" disabled>カメラ / 出題 切替</button>
+    <button id="checkBtn" disabled>決定</button>
+    <button id="restartBtn" hidden>もう一度</button>
+  </div>
+
+  <div id="resultStatus"><span id="resultChip"></span></div>
+  <div id="timerDisplay">Time: 00:00</div>
+
+  <div id="targetDisplay" hidden>
+    <div id="targetWordText" class="kana">---</div>
+  </div>
+
+  <div id="viewContainer" hidden>
+    <video id="video" playsinline autoplay muted hidden></video>
+    <canvas id="output"></canvas>
+  </div>
+
+  <hr />
+
+  <h2>ステータス</h2>
+  <div class="status-grid">
+    <div>検出数<b id="countVal">—</b></div>
+    <div>FPS<b id="fpsVal">—</b></div>
+    <div>解像度<b id="resVal">—</b></div>
+  </div>
+  <h2>読み取り中のことば</h2>
+  <div id="idsList" class="kana">— none —</div>
+  <h2>ログ</h2>
+  <div id="log"></div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

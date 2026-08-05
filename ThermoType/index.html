@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThermoType — 気候で変わる活字</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="ink">
+    <div id="editor" contenteditable="true" spellcheck="false"
+         data-placeholder="ここに入力"></div>
+  </div>
+
+  <header id="hud">
+    <span id="dot" class="dot"></span>
+    <span id="stats">--</span>
+  </header>
+
+  <button id="micBtn" title="音声入力 ON/OFF">🎤</button>
+
+  <!-- センサー切断時の手動操作（自動で出現） -->
+  <div id="simPanel" hidden>
+    <label>🌡 <input type="range" id="simTemp" min="10" max="40" step="0.1" value="25">
+      <span id="simTempVal">25.0°C</span></label>
+    <label>💧 <input type="range" id="simHum" min="20" max="95" step="0.5" value="55">
+      <span id="simHumVal">55.0%</span></label>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>活字パズル — 投影表示</title>
+  <link rel="stylesheet" href="../sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="container">
+    <div id="upper-area">
+      <div id="current-string-container"><span class="placeholder">--- READY ---</span></div>
+    </div>
+    <div id="lower-area">
+      <div class="screen-container">
+        <div id="start-overlay">
+          <button id="start-btn" disabled>START AR SYSTEM</button>
+          <div id="start-status">opencv.js 読み込み中…</div>
+        </div>
+        <canvas id="output"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <video id="video" playsinline muted hidden></video>
+  <canvas id="hiddenCanvas" hidden></canvas>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

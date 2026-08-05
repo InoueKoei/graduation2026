@@ -1,0 +1,60 @@
+:root {
+  --paper: #f4f1ea;
+  --ink: #2b2a33;
+  --hairline: #ddd9cf;
+  --muted: #b3afa3;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  user-select: none;
+}
+
+#grid {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  background: var(--hairline);   /* gapがヘアラインになる */
+}
+
+.cell {
+  position: relative;
+  background: var(--paper);
+  overflow: hidden;
+}
+.cell canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cap {
+  position: absolute;
+  left: 14px;
+  bottom: 10px;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  z-index: 2;
+}
+
+.dot {
+  position: fixed;
+  top: 12px; right: 12px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  z-index: 3;
+}
+.dot.ok  { background: #7aa874; }
+.dot.sim { background: #cfa75a; }

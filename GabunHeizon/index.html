@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>からだと組版</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <video  id="cam" playsinline muted></video>
+  <canvas id="backdrop"></canvas>
+  <svg id="glyphs" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<canvas id="maskcv" hidden></canvas>
+
+<!-- 操作パネル -->
+<div id="panel">
+  <label>フォント
+    <select id="fontSelect">
+      <option value='"Hiragino Mincho ProN","Yu Mincho",serif'>明朝（既定）</option>
+      <option value='"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif'>ゴシック</option>
+      <option value='"Hiragino Maru Gothic ProN",sans-serif'>丸ゴシック</option>
+      <option value='serif'>serif</option>
+      <option value='sans-serif'>sans-serif</option>
+      <option value='monospace'>monospace</option>
+    </select>
+  </label>
+  <button id="loadFonts" title="この端末のフォント一覧を読み込む">端末のフォント…</button>
+  <label>文字サイズ <input id="sizeRange" type="range" min="28" max="120" value="64"></label>
+</div>
+
+<div id="note">からだが　もじを　よける</div>
+<div id="status"></div>
+
+<div id="intro">
+  <h1>からだと組版</h1>
+  <p>カメラのまえに　たつと　あなたの　かたちに　もじが　みちをゆずります</p>
+  <button id="start">はじめる</button>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

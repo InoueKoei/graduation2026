@@ -1,0 +1,87 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #0b1026;
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+}
+
+#fog { cursor: none; touch-action: none; }
+
+/* ブラシの当たりを示すカーソル円（直径 = ブラシ径と揃える） */
+#cursor {
+  position: fixed;
+  left: 0; top: 0;
+  width: 68px; height: 68px;
+  margin: -34px 0 0 -34px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+#hud {
+  position: fixed;
+  top: 14px; left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #888;
+  display: inline-block;
+}
+.dot.ok  { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
+.dot.sim { background: #ffb84d; box-shadow: 0 0 8px #ffb84d; }
+.dot.ng  { background: #ff4455; }
+
+#bgSelect {
+  position: fixed;
+  top: 12px; right: 14px;
+  z-index: 10;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+#bgSelect:hover { background: rgba(255, 255, 255, 0.16); }
+#bgSelect option { color: #222; }
+
+#hint {
+  position: fixed;
+  bottom: 26px;
+  width: 100%;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  transition: opacity 1.2s;
+  pointer-events: none;
+}
+#hint.hide { opacity: 0; }

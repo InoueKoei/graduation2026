@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KanaDance — 身体でつくるかな</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: sans-serif; margin: 0; padding: 16px; }
+    #canvas-container {
+      position: relative; margin: 0 auto; background: #eee; border-radius: 12px; overflow: hidden;
+    }
+    video, canvas {
+      position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+      transform: scaleX(-1); /* 鏡像表示 */
+    }
+    .controls { text-align: center; margin-top: 20px; }
+    .mode-switch { margin-bottom: 15px; }
+    .mode-switch label { font-size: 20px; margin: 0 12px; cursor: pointer; }
+    #kana-input { font-size: 20px; padding: 8px; width: 150px; }
+    #register-btn { font-size: 20px; padding: 8px 20px; cursor: pointer; }
+    #register-btn:disabled { opacity: .5; cursor: progress; }
+    #result {
+      font-size: 20px; font-weight: bold; margin-top: 20px; color: #333; text-align: center; min-height: 28px;
+    }
+    #result.error { color: #c0392b; }
+    .threshold { margin-top: 14px; font-size: 15px; color: #555; }
+    .threshold input[type="range"] { width: 220px; vertical-align: middle; }
+    .threshold code { font-size: 16px; color: #111; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="output_canvas"></canvas>
+  </div>
+
+  <div class="controls">
+    <div class="mode-switch">
+      <label><input type="radio" name="app-mode" value="register" checked /> ✍️ 登録モード</label>
+      <label><input type="radio" name="app-mode" value="detect" /> 🔍 判別モード</label>
+    </div>
+
+    <div id="register-ui">
+      <input type="text" id="kana-input" placeholder="文字 (例: サ)" />
+      <button id="register-btn">DB に登録</button>
+    </div>
+
+    <div class="threshold">
+      一致しやすさ（しきい値）:
+      <input type="range" id="threshold-input" min="0.1" max="2.0" step="0.01" value="1.0" />
+      <code id="threshold-value">1.00</code>
+      <div style="font-size:13px;color:#888;margin-top:4px;">大きいほど一致しやすい（線が出やすい）。判別モードで「最も近い…誤差」を見ながら調整</div>
+    </div>
+  </div>
+
+  <div id="result">カメラを許可して、ポーズをとってください…</div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

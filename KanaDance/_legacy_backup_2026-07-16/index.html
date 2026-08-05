@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Pose to DB</title>
+    <style>
+        body { font-family: sans-serif; }
+        /* ▼ widthとaspect-ratioを削除しました ▼ */
+        #canvas-container { position: relative; margin: 0 auto; background: #eee; }
+        video, canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+        .controls { text-align: center; margin-top: 20px; }
+        #result { font-size: 20px; font-weight: bold; margin-top: 20px; color: #333; text-align: center; }
+    </style>
+</head>
+<body>    
+    <input type="date" name="birthday">
+<input type="datetime-local" name="appointment">
+    <div id="canvas-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 20px; margin-right: 20px; cursor: pointer;">
+                <input type="radio" name="app-mode" value="register" checked> ✍️ 登録モード
+            </label>
+            <label style="font-size: 20px; cursor: pointer;">
+                <input type="radio" name="app-mode" value="detect"> 🔍 判別モード
+            </label>
+        </div>
+        
+        <div id="register-ui">
+            <input type="text" id="kana-input" placeholder="文字 (例: サ)" style="font-size: 20px; padding: 8px; width: 150px;">
+            <button id="register-btn" style="font-size: 20px; padding: 8px 20px; cursor: pointer;">DBに登録</button>
+        </div>
+    </div>
+
+    <div id="result">カメラを許可して、ポーズをとってください...</div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

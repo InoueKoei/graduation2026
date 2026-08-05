@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_レイヤー_2" data-name="レイヤー_2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 85.04 85.04">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+      }
+
+      .cls-2 {
+        fill: #231815;
+      }
+    </style>
+  </defs>
+  <g id="_レイヤー_1-2" data-name="レイヤー_1">
+    <path class="cls-2" d="M8.5,8.51v68.03h68.03V8.51H8.5ZM65.19,65.2h-11.33v-11.34h-11.34v-11.34h-11.34v11.34h-11.34v-11.34h11.34v-11.34h11.34v-11.33h11.34v11.33h-11.34v11.34h22.67v22.68Z"/>
+  </g>
+  <g id="_レイヤー_2-2" data-name="レイヤー_2">
+    <polygon class="cls-1" points="65.19 42.52 65.19 65.2 53.86 65.2 53.86 53.86 42.52 53.86 42.52 42.52 65.19 42.52"/>
+    <path class="cls-1" d="M0,0v85.04h85.04V0H0ZM65.19,65.2h-11.33v-11.34h-11.34v-11.34h-11.34v11.34h-11.34v-11.34h11.34v-11.34h11.34v-11.33h11.34v11.33h-11.34v11.34h22.67v22.68Z"/>
+    <rect class="cls-1" x="42.52" y="19.85" width="11.34" height="11.33"/>
+    <rect class="cls-1" x="31.18" y="31.18" width="11.34" height="11.34"/>
+    <rect class="cls-1" x="19.84" y="42.52" width="11.34" height="11.34"/>
+  </g>
+</svg>

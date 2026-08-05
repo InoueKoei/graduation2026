@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>渓 — 傾けて下る</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="river"></canvas>
+  </div>
+
+  <header id="hud">
+    <span class="stat"><b id="dist">0</b><i>すん</i></span>
+    <span id="dot" class="dot"></span>
+  </header>
+
+  <p id="hint">傾けて岩を避ける。通った跡が線になる。</p>
+
+  <div id="over" hidden>
+    <p class="big">とまった</p>
+    <p class="sub"><b id="finalDist">0</b> すん<span id="best"></span></p>
+    <button id="again">もう一度</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

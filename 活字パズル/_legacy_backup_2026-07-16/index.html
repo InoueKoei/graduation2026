@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArUco 4×4 Detector</title>
+    <style>
+        * { font-family: serif; }
+        #log { font-family: monospace; }
+        #viewContainer { position: relative; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>ARUCO 4×4 DETECTOR</h1>
+    <div id="cvStatus" style="padding: 10px; background: #eee;">opencv.js loading...</div>
+
+    <div style="margin: 10px 0;">
+        <button id="setupCamBtn">1. カメラを準備する</button>
+        <button id="startGameBtn" disabled style="background: #e6f7ff;">2. ゲーム開始</button>
+        <button id="toggleVidBtn" disabled>表示/非表示</button>
+        <button id="checkBtn" disabled style="padding: 10px 20px; font-weight: bold;">決定</button>
+        <button id="restartBtn" style="display:none;">もう一度</button>
+    </div>
+
+    <div id="resultStatus" style="font-size: 60px; font-weight: bold; text-align: center; height: 80px;"></div>
+    <div id="timerDisplay" style="font-size: 24px; font-family: monospace; margin: 10px 0; color: #666;">Time: 00:00</div>
+
+    <div id="targetDisplay" style="display:none; text-align:center; padding: 40px; background: #fffbe6; border: 4px dashed #ffec3d; margin: 20px 0;">
+        <div id="targetWordText" style="font-size: 80px; font-weight: bold; color: #333;">---</div>
+    </div>
+
+    <div id="viewContainer">
+        <video id="video" width="640" height="480" playsinline autoplay muted style="display:none;"></video>
+        <canvas id="output" style="max-width: 100%; border: 1px solid #000;"></canvas>
+    </div>
+    
+    <hr>
+
+    <div>
+        <h2>Status</h2>
+        <p>検出数: <span id="countVal">—</span></p>
+        <p>FPS: <span id="fpsVal">—</span></p>
+        <p>解像度: <span id="resVal">—</span></p>
+        <h2>Detected IDs</h2>
+        <div id="idsList">— none —</div>
+        <h2>Log</h2>
+        <div id="log" style="height: 150px; overflow-y: auto; border: 1px solid #ccc; font-family: monospace; font-size: 12px; padding: 8px;"></div>
+    </div>
+
+    <script src="config.js"></script>
+    
+    <script>
+        // OpenCVの読み込み状態を管理する関数
+        function onOpenCvReady() {
+            console.log('OpenCV.js ready.');
+            document.getElementById('cvStatus').textContent = '✅ OpenCV.js Loaded!';
+            document.getElementById('cvStatus').style.background = '#d4edda';
+        }
+
+        function onOpenCvError() {
+            console.error('OpenCV.js load failed.');
+            document.getElementById('cvStatus').textContent = '❌ Failed to load OpenCV.js! (Network Error)';
+            document.getElementById('cvStatus').style.background = '#f8d7da';
+        }
+    </script>
+
+    <script async 
+        src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js" 
+        onload="onOpenCvReady();" 
+        onerror="onOpenCvError();">
+    </script>
+    
+    <script src="script.js"></script>
+</body>
+</html>

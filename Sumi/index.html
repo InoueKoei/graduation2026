@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>墨 — こぼさず運ぶ</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="dish"></canvas>
+  </div>
+
+  <header id="hud">
+    <span class="stat"><b id="score">0</b><i>すくい</i></span>
+    <span class="gauge" title="残りの墨">
+      <span id="inkBar"></span>
+    </span>
+    <span class="stat"><b id="calm">静</b><i id="calmLabel">波</i></span>
+    <span id="dot" class="dot"></span>
+  </header>
+
+  <p id="hint">傾けて墨を運ぶ。輪の中で静かに待てば一杯。<br>急ぐとこぼれる。</p>
+
+  <div id="over" hidden>
+    <p class="big">こぼれた</p>
+    <p class="sub"><b id="finalScore">0</b> すくい ／ <b id="finalTime">0</b> 秒</p>
+    <button id="again">もう一度</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

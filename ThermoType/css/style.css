@@ -1,0 +1,125 @@
+:root {
+  /* JSが毎フレーム更新する変数（初期値は常温・乾き気味） */
+  --paper: #f4f1ea;
+  --ink: hsl(215 30% 24%);
+  --wght: 400;
+  --bleed: 0px;
+  --ct: 1;
+  --ls: 0.04em;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  font-family: "M PLUS 1", "Hiragino Sans", sans-serif;
+}
+
+/* 滲みの仕掛け:
+   外側(#ink)の contrast と内側(#editor)の blur の合わせ技で
+   濡れた紙にインクが滲むような縁の溶け方をつくる */
+#ink {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  filter: contrast(var(--ct));
+}
+
+#editor {
+  width: min(86vw, 1100px);
+  max-height: 80vh;
+  overflow-y: auto;
+  outline: none;
+  text-align: center;
+  font-size: clamp(2.5rem, 9vw, 7rem);
+  line-height: 1.3;
+  font-weight: var(--wght);
+  letter-spacing: var(--ls);
+  color: var(--ink);
+  caret-color: var(--ink);
+  filter: blur(var(--bleed));
+  word-break: break-word;
+  scrollbar-width: none;      /* スクロールバーがフィルタに写り込むため隠す */
+}
+#editor::-webkit-scrollbar { display: none; }
+
+/* プレースホルダ */
+#editor:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.25;
+}
+
+#hud {
+  position: fixed;
+  top: 14px; left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(40, 40, 45, 0.75);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  z-index: 10;
+  font-weight: 400;
+}
+
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #999;
+  display: inline-block;
+}
+.dot.ok  { background: #2aa860; box-shadow: 0 0 6px rgba(42, 168, 96, 0.6); }
+.dot.sim { background: #e69a2e; box-shadow: 0 0 6px rgba(230, 154, 46, 0.6); }
+.dot.ng  { background: #d4404f; }
+
+/* 認識中の未確定テキスト: 声の揺らぎがそのまま見える */
+#interim { opacity: 0.35; }
+
+#micBtn {
+  position: fixed;
+  left: 16px; bottom: 14px;
+  z-index: 10;
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+#micBtn:hover { background: rgba(255, 255, 255, 0.9); }
+#micBtn.listening {
+  background: #e8524a;
+  border-color: #e8524a;
+  animation: micPulse 1.6s ease-out infinite;
+}
+#micBtn.disabled { opacity: 0.35; cursor: not-allowed; }
+@keyframes micPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(232, 82, 74, 0.45); }
+  100% { box-shadow: 0 0 0 18px rgba(232, 82, 74, 0); }
+}
+
+#simPanel {
+  position: fixed;
+  right: 16px; bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+  color: rgba(40, 40, 45, 0.8);
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
+  backdrop-filter: blur(6px);
+}
+#simPanel label { display: flex; align-items: center; gap: 8px; }
+#simPanel input[type="range"] { width: 150px; accent-color: #5a6b8c; }
+#simPanel span { min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; }

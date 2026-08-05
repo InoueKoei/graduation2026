@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>金魚すくい</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="pond"></canvas>
+  </div>
+
+  <header id="hud">
+    <span class="stat"><b id="score">0</b><i>ひき</i></span>
+    <span class="poi-left" id="poiLeft"></span>
+    <span class="meter" title="紙の濡れ具合"><i>紙</i><span class="bar"><span id="wetBar"></span></span></span>
+    <span id="state" class="state">水中</span>
+    <span id="dot" class="dot"></span>
+  </header>
+
+  <p id="msg"></p>
+
+  <p id="hint">
+    <b>①</b> 傾けて、金魚の下へポイを沈める<br>
+    <b>②</b> ぐいっと<b>上へ振る</b>とすくい上がる<span class="alt">（<span class="key">スペース</span>でも可）</span><br>
+    <b>③</b> そのまま器まで運ぶ。焦ると紙が破れる
+  </p>
+
+  <div id="over" hidden>
+    <p class="big" id="overTitle">おわり</p>
+    <p class="sub"><b id="finalScore">0</b> ひき ／ <b id="finalTime">0</b> 秒</p>
+    <button id="again">もう一度</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

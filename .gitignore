@@ -1,0 +1,28 @@
+# 依存パッケージ（package.json から npm install で復元できる）
+node_modules/
+
+# macOS
+.DS_Store
+
+# ビルド生成物（ソースから再生成できる）
+dist/
+out/
+.next/
+.vinext/
+.wrangler/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# 環境変数・秘密情報
+.env
+.env.*
+
+# ログ
+*-debug.log*
+npm-debug.log*
+
+# 作業用
+outputs/
+work/
+coverage/

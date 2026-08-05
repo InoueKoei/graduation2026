@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sessan — 空中タイピング</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="stage" role="img" aria-label="カメラ映像">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="output_canvas" width="640" height="480"></canvas>
+
+    <div class="stage-controls">
+      <button id="toggle-hud-btn" class="icon-btn" title="HUD 表示切替" aria-label="HUD切替">⚙</button>
+      <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+    </div>
+
+    <div id="hud" class="hud">
+      <div class="row"><span class="k">指</span><span><b id="hud-fingers">0</b> 本 · <span id="hud-row">待機</span></span></div>
+      <div class="row"><span class="k">母音</span><b id="hud-vowel">ー</b></div>
+      <div class="meter-row"><span class="k">確定</span><span class="meter"><i id="hud-gauge-bar"></i></span><span class="pct"><span id="hud-gauge">0</span>%</span></div>
+      <div class="meter-row"><span class="k">修飾</span><span class="meter"><i id="hud-mod-bar"></i></span><span class="pct"><span id="hud-mod-gauge">0</span>%</span></div>
+      <div class="row"><span class="modtype" id="hud-mod-type"></span></div>
+      <div class="row div"><span class="k">目</span><b id="hud-eye">開</b></div>
+    </div>
+
+    <div id="current-char" class="current-char">ー</div>
+    <div id="status" class="status">カメラを準備中…</div>
+  </main>
+
+  <section class="panel">
+    <div class="panel-label">入力された文字</div>
+    <div id="text-buffer" class="text-buffer"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-label">記録 — 文字 ＋ 顔スナップ（このセッションのみ）</div>
+    <div id="filmstrip" class="filmstrip" aria-live="polite"></div>
+  </section>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
