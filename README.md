@@ -2,6 +2,8 @@
 
 文字入力と身体をめぐる制作群。`works/` が本題、`experiments/` が技術検証。
 
+ブランチ運用・コミット・本番前の確認事項は [DEVELOPMENT.md](DEVELOPMENT.md) にまとめてある。
+
 ## works — 本題
 
 | プロジェクト | 内容 |
