@@ -68,11 +68,29 @@ npx --yes http-server experiments/GamepadProbe -p 8990 -c-1
 
 ### 結果
 
-（実測したら書く）
+**2026-09-20 / Raspberry Pi 3 + Raspbian (Buster) / Chromium 74.0.3729.157 / armv7l**
 
-| デバイス | 環境 | mapping | 備考 |
-|---|---|---|---|
-|  |  |  |  |
+| 項目 | 実測 |
+|---|---|
+| `id` | `Microntek USB Joystick` + `Vendor: 0079 Product: 0006` |
+| `mapping` | `standard` |
+| ボタン | ← 0 / ↓ 1 / ↑ 2 / → 3 / □ 4 / △ 5 / × 6 / ○ 7 / SELECT 8 / START 9 |
+| 中央 | `axes[1]` |
+| 2台接続 | 両方とも同じ番号。区別は `index` のみ |
+
+**macOS / Chrome の実測値（`works/DanceToggle/usb-dance-mat-knowledge.md`）と完全に一致。**
+`works/DanceToggle/config.js` の `BUTTON` / `CENTER_AXIS` / `PAD_HINTS` は変更不要。
+
+`mapping` が `standard` なので、番号はデバイス固有の推測ではなく Standard Gamepad 仕様から来ている。
+OS やブラウザのバージョンが変わっても崩れにくい。ただし Chromium 74 での測定なので、
+現行版に焼き直したあとに一度確認はする。
+
+#### 分かったこと
+
+- **Linux は物理的にマットを認識する。** udev ルールも権限設定も追加不要だった
+- Gamepad のセキュアコンテキスト制限は Chromium 86 前後で入ったもので、74 では平文 HTTP でも読める。
+  **焼き直し後は `localhost` か HTTPS が必須になる**（Pi の構成では `http://localhost:8987` なので問題ない）
+- LAN 越しに Mac のサーバーを Pi の Chromium から開けば、rsync なしで開発ループが回る
 
 ## 既知の制約
 
