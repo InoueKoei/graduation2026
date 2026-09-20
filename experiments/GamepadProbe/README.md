@@ -58,10 +58,13 @@ npx --yes http-server experiments/GamepadProbe -p 8990 -c-1
 
 ## 検証したいこと
 
-- [ ] 一般的なゲームコントローラー（PS / Xbox 系）が Gamepad API で読めるか
+主対象は USB ダンスマット（Microntek, VID `0x0079` / PID `0x0006`）。
+
+- [ ] macOS で `usb-dance-mat-knowledge.md` の実測表（`buttons[0..9]` + `axes[1]`）を再現できるか
 - [ ] `mapping` が `"standard"` になるか、空になるか
-- [ ] ダンスマットと同時に挿したとき index がどう振られるか
-- [ ] Raspberry Pi の Chromium で、macOS と同じ番号になるか
+- [ ] マット2台を同時に挿したとき `index` がどう振られるか（二人モードのスロット割り当て）
+- [ ] Raspberry Pi の Chromium で、macOS と同じ番号になるか ← **本番の関門**
+- [ ] （余力があれば）一般的なゲームコントローラーでも同じ手順が通るか
 
 ### 結果
 
