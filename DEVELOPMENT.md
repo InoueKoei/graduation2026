@@ -118,9 +118,32 @@ git push --tags
 ## public リポジトリなので
 
 - **入れないもの**：有償素材、他人が写った映像、被験者データ、`.env`
-- フォントを同梱するときは、ライセンス文（OFL 系なら `OFL.txt`）も一緒に置く
-- 2026-09-20 時点で、リポジトリにメディアファイル（画像・動画・音声）は1件も無い。
-  この状態を保てるうちは権利面を考えなくて済む
+
+### 同梱しているアセット（2026-09-20 時点）
+
+| 種別 | 件数 |
+|---|---|
+| `.ttf`（Zen Maru Gothic） | 9 |
+| `.svg` | 39 |
+| `.png` | 27 |
+| `.stl` / `.3mf`（3Dプリント用） | 9 / 6 |
+| `.pdf` / `.ai` | 2 / 2 |
+
+**フォントのライセンス文が置かれていない。** Zen Maru Gothic は SIL Open Font License 1.1 で、
+OFL は再配布時にライセンス文を添えることを求める。public リポジトリに置いている以上これは再配布にあたるので、
+Google Fonts の配布物に入っている `OFL.txt` を各 `fonts/` にコピーする
+（またはリポジトリ直下に1つ置き、README から参照する）。
+
+対象：
+
+```
+experiments/TsumamiJi/public/fonts/
+works/moji-korogashi/public/fonts/
+works/moji-stack/public/fonts/
+```
+
+`.svg` / `.png` / `.stl` / `.ai` は自作でないものが混じっていないか一度確認しておく。
+自作であれば問題ない。
 
 ## 入れないもの
 
