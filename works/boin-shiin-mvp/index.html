@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>母音子音 — 二人分担かな入力 MVP</title>
+<style>
+  :root {
+    --bg:      #0b0b0c;
+    --ink:     #f2f0ec;
+    --dim:     #6a6a70;
+    --dimmer:  #3a3a40;
+    --line:    #1e1e22;
+    --alert:   #c96a5a;
+    --ok:      #7fa88a;
+    --stage-font: clamp(56px, 10vw, 132px);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+    font-feature-settings: "palt";
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 表示面 ───────────────────────────────── */
+
+  #stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 6vw;
+    overflow: hidden;
+  }
+
+  #text {
+    font-size: var(--stage-font);
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    text-align: center;
+    max-height: 100%;
+    overflow-y: auto;
+    scrollbar-width: none;
+    word-break: break-all;
+  }
+  #text::-webkit-scrollbar { display: none; }
+
+  #text .k {
+    display: inline-block;
+    padding: 0 .06em;
+    animation: appear .18s ease-out both;
+  }
+
+  @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+
+  #hint {
+    color: var(--dimmer);
+    font-size: 15px;
+    line-height: 2.1;
+    letter-spacing: .06em;
+    text-align: center;
+  }
+  #hint b { color: var(--dim); font-weight: 600; }
+
+  /* ── 待機インジケータ ─────────────────────── */
+
+  #pending {
+    height: 46px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    letter-spacing: .1em;
+    color: var(--dim);
+  }
+
+  #pendingLabel {
+    flex: none;
+    width: 12em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  #pendingLabel.on { opacity: 1; color: var(--ink); }
+
+  /* 待機中だけ、右から消えていく線が出る。待っていないときは何も見えない */
+  #bar {
+    flex: 1;
+    height: 2px;
+    overflow: hidden;
+  }
+  #bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--ink);
+  }
+
+  /* ── ステータスバー ───────────────────────── */
+
+  #status {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    padding: 14px 20px 16px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    letter-spacing: .08em;
+    color: var(--dim);
+    flex-wrap: wrap;
+  }
+
+  #status .f { display: flex; align-items: baseline; gap: 8px; }
+  #status .l { color: var(--dimmer); }
+  #status .v { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #status .v.warn { color: var(--alert); }
+
+  #keys { margin-left: auto; color: var(--dimmer); }
+  #keys kbd {
+    font: inherit;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 2px 5px;
+  }
+
+  /* #status .f より詳細度を上げないと display:flex に負ける */
+  #status #focusWarn,
+  #status #testBadge { display: none; }
+  body.unfocused #status #focusWarn { display: flex; }
+  body.test      #status #testBadge { display: flex; }
+</style>
+</head>
+<body>
+
+<main id="stage">
+  <div id="hint">
+    <b>子音</b> = PCキーボード　K S T N H M Y R W G Z D B P<br>
+    <b>母音</b> = マクロパッド　あ い う え お<br>
+    ふたつが 1500ms 以内にそろうと、ずれの分だけぼやけて出る
+  </div>
+  <div id="text" hidden></div>
+</main>
+
+<div id="pending">
+  <span id="pendingLabel"></span>
+  <div id="bar"><i></i></div>
+</div>
+
+<footer id="status">
+  <div class="f"><span class="l">直前のずれ</span><span class="v" id="lastGap">—</span></div>
+  <div class="f"><span class="l">成立</span><span class="v" id="okCount">0</span></div>
+  <div class="f"><span class="l">記録</span><span class="v" id="logCount">0</span></div>
+  <div class="f" id="testBadge"><span class="v warn">テストモード</span></div>
+  <div class="f" id="focusWarn"><span class="v warn">画面をクリックしてください</span></div>
+  <div id="keys">
+    <kbd>⌘S</kbd> CSV保存　<kbd>BS</kbd> 1字消し　<kbd>⌘BS</kbd> 全消し　<kbd>⌘L</kbd> ログ消去　<kbd>⌘D</kbd> テスト
+  </div>
+</footer>
+
+<script>
+"use strict";
+
+/* ══ 設定 ═══════════════════════════════════════════════════════
+   ここだけ触れば挙動を調整できる。 */
+
+const MAX_GAP_MS  = 1500;   // 母音と子音の許容時間差。これを超えたら不成立
+const MAX_BLUR_EM = 0.22;   // 時間差 MAX_GAP_MS のときのぼかし量（文字サイズ比）
+const STORE_KEY   = "boin-shiin-mvp/log/v1";
+
+/* マクロパッド（RP2040）が送るキー → 母音。
+   firmware/code.py の割り当てと対で変更すること。 */
+const VOWEL_KEYS = {
+  F13: "a", F14: "i", F15: "u", F16: "e", F17: "o",
+};
+
+/* テストモード時だけ有効になる、PCキーボード上の母音キー。
+   マクロパッドなしで動作確認するための逃げ道。 */
+const TEST_VOWEL_KEYS = {
+  KeyA: "a", KeyI: "i", KeyU: "u", KeyE: "e", KeyO: "o",
+};
+
+/* PCキーボード → 子音。ここに無い文字キーはすべて無視される
+   （＝子音しか打てないキーボードとして振る舞う）。 */
+const CONSONANT_KEYS = {
+  KeyK: "k", KeyS: "s", KeyT: "t", KeyN: "n", KeyH: "h",
+  KeyM: "m", KeyY: "y", KeyR: "r", KeyW: "w",
+  KeyG: "g", KeyZ: "z", KeyD: "d", KeyB: "b", KeyP: "p",
+};
+
+/* 子音 × 母音 → かな。表に無い組み合わせ（yi, ye, wi, wu, we）は無効。 */
+const KANA = {
+  k: { a:"か", i:"き", u:"く", e:"け", o:"こ" },
+  s: { a:"さ", i:"し", u:"す", e:"せ", o:"そ" },
+  t: { a:"た", i:"ち", u:"つ", e:"て", o:"と" },
+  n: { a:"な", i:"に", u:"ぬ", e:"ね", o:"の" },
+  h: { a:"は", i:"ひ", u:"ふ", e:"へ", o:"ほ" },
+  m: { a:"ま", i:"み", u:"む", e:"め", o:"も" },
+  y: { a:"や",         u:"ゆ",         o:"よ" },
+  r: { a:"ら", i:"り", u:"る", e:"れ", o:"ろ" },
+  w: { a:"わ",                         o:"を" },
+  g: { a:"が", i:"ぎ", u:"ぐ", e:"げ", o:"ご" },
+  z: { a:"ざ", i:"じ", u:"ず", e:"ぜ", o:"ぞ" },
+  d: { a:"だ", i:"ぢ", u:"づ", e:"で", o:"ど" },
+  b: { a:"ば", i:"び", u:"ぶ", e:"べ", o:"ぼ" },
+  p: { a:"ぱ", i:"ぴ", u:"ぷ", e:"ぺ", o:"ぽ" },
+};
+
+/* ══ 状態 ═══════════════════════════════════════════════════════ */
+
+const el = (id) => document.getElementById(id);
+const $stage = el("stage"), $text = el("text"), $hint = el("hint");
+const $pendingLabel = el("pendingLabel"), $bar = el("bar").firstElementChild;
+const $lastGap = el("lastGap"), $okCount = el("okCount"), $logCount = el("logCount");
+
+/** 相方を待っている片割れ。母音・子音のどちらか一方しか同時に存在しない
+    （逆側が来た瞬間にペアとして消費されるため）。 */
+let pending = null;   // { kind:"consonant"|"vowel", key, t, wall, timer }
+
+let chars = [];       // 画面に出ている文字 [{ kana, blurEm, gapMs }]
+let log = [];         // 記録（成立・不成立すべて）
+let okCount = 0;
+let testMode = false;
+
+/* ══ 入力 ═══════════════════════════════════════════════════════ */
+
+window.addEventListener("keydown", (e) => {
+  // 修飾キー付きはアプリ操作。入力としては扱わない。
+  if (e.metaKey || e.ctrlKey || e.altKey) return handleCommand(e);
+
+  if (e.code === "Backspace") { e.preventDefault(); backspace(); return; }
+  if (e.repeat) return;
+
+  const vowel = VOWEL_KEYS[e.code] || (testMode ? TEST_VOWEL_KEYS[e.code] : null);
+  if (vowel) { e.preventDefault(); input("vowel", vowel); return; }
+
+  const consonant = CONSONANT_KEYS[e.code];
+  if (consonant) { e.preventDefault(); input("consonant", consonant); return; }
+
+  // それ以外の文字キーは黙って捨てる（子音しか打てないキーボード）
+  if (/^(Key|Digit)/.test(e.code)) e.preventDefault();
+});
+
+function input(kind, key) {
+  const t = performance.now();
+
+  // 相方が待っている → ペア成立の可能性
+  if (pending && pending.kind !== kind) {
+    const gap = t - pending.t;
+    if (gap <= MAX_GAP_MS) {
+      const first = pending.kind;
+      const c = kind === "consonant" ? key : pending.key;
+      const v = kind === "vowel"     ? key : pending.key;
+      clearPending();
+      commit(c, v, gap, first);
+      return;
+    }
+    // タイマー遅延などで 1500ms を超えていた場合は不成立として畳む
+    expire();
+  }
+
+  // 同種が続いた → 前の片割れは上書きで捨てる
+  if (pending) {
+    record({ result: "不成立(上書き)", kind: pending.kind, key: pending.key });
+    clearPending();
+  }
+
+  pending = {
+    kind, key, t, wall: new Date(),
+    timer: setTimeout(expire, MAX_GAP_MS),
+  };
+  showPending();
+}
+
+function expire() {
+  if (!pending) return;
+  record({ result: "不成立(時間切れ)", kind: pending.kind, key: pending.key });
+  clearPending();
+  flash("不成立");
+}
+
+function clearPending() {
+  if (pending) clearTimeout(pending.timer);
+  pending = null;
+  hidePending();
+}
+
+function commit(c, v, gap, first) {
+  const kana = (KANA[c] || {})[v];
+
+  if (!kana) {
+    record({ result: "無効(組み合わせ)", consonant: c, vowel: v, gap, first });
+    flash(`${c}${v} は無し`);
+    return;
+  }
+
+  const ratio  = Math.min(gap / MAX_GAP_MS, 1);
+  const blurEm = ratio * MAX_BLUR_EM;
+
+  chars.push({ kana, blurEm, gapMs: gap });
+  draw(kana, blurEm);
+
+  okCount++;
+  $okCount.textContent = okCount;
+  $lastGap.textContent = `${Math.round(gap)} ms`;
+  $lastGap.classList.remove("warn");
+
+  record({ result: "成立", consonant: c, vowel: v, kana, gap, first, ratio, blurEm });
+}
+
+/* ══ 描画 ═══════════════════════════════════════════════════════ */
+
+function draw(kana, blurEm) {
+  if ($text.hidden) { $hint.hidden = true; $text.hidden = false; }
+
+  const span = document.createElement("span");
+  span.className = "k";
+  span.textContent = kana;
+  span.style.filter = `blur(${blurEm.toFixed(4)}em)`;
+  $text.appendChild(span);
+  $text.scrollTop = $text.scrollHeight;
+}
+
+function redraw() {
+  $text.textContent = "";
+  chars.forEach((c) => draw(c.kana, c.blurEm));
+  if (chars.length === 0) { $text.hidden = true; $hint.hidden = false; }
+}
+
+function backspace() {
+  if (chars.length === 0) return;
+  chars.pop();
+  $text.lastElementChild?.remove();
+  if (chars.length === 0) { $text.hidden = true; $hint.hidden = false; }
+}
+
+function clearAll() {
+  chars = [];
+  redraw();
+}
+
+function showPending() {
+  const label = pending.kind === "consonant"
+    ? `子音 ${pending.key.toUpperCase()} → 母音待ち`
+    : `母音 ${pending.key} → 子音待ち`;
+  $pendingLabel.textContent = label;
+  $pendingLabel.classList.add("on");
+
+  // 1500ms かけて右から消えていく線
+  $bar.style.transition = "none";
+  $bar.style.width = "100%";
+  void $bar.offsetWidth;                       // reflow で transition をリセット
+  $bar.style.transition = `width ${MAX_GAP_MS}ms linear`;
+  $bar.style.width = "0%";
+}
+
+function hidePending() {
+  $pendingLabel.classList.remove("on");
+  $bar.style.transition = "none";
+  $bar.style.width = "0%";
+}
+
+let flashTimer = null;
+function flash(msg) {
+  $lastGap.textContent = msg;
+  $lastGap.classList.add("warn");
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    $lastGap.textContent = "—";
+    $lastGap.classList.remove("warn");
+  }, 1200);
+}
+
+/* ══ ログ ═══════════════════════════════════════════════════════ */
+
+/** signed_gap_ms は「母音時刻 − 子音時刻」。正なら子音が先、負なら母音が先。 */
+function record(ev) {
+  const first = ev.first ?? (ev.kind === "consonant" ? "consonant" : ev.kind === "vowel" ? "vowel" : "");
+  const gap = ev.gap == null ? "" : Math.round(ev.gap * 10) / 10;
+  const signed = gap === "" ? "" : (first === "consonant" ? gap : -gap);
+
+  log.push({
+    no:            log.length + 1,
+    wall_time:     new Date().toISOString(),
+    result:        ev.result,
+    consonant:     ev.consonant ?? (ev.kind === "consonant" ? ev.key : ""),
+    vowel:         ev.vowel     ?? (ev.kind === "vowel"     ? ev.key : ""),
+    kana:          ev.kana ?? "",
+    first:         first === "consonant" ? "子音" : first === "vowel" ? "母音" : "",
+    gap_ms:        gap,
+    signed_gap_ms: signed,
+    blur_ratio:    ev.ratio  != null ? Math.round(ev.ratio * 1000) / 1000 : "",
+    blur_em:       ev.blurEm != null ? Math.round(ev.blurEm * 10000) / 10000 : "",
+    test_mode:     testMode ? "1" : "0",
+  });
+
+  $logCount.textContent = log.length;
+  save();
+}
+
+const COLUMNS = ["no","wall_time","result","consonant","vowel","kana","first",
+                 "gap_ms","signed_gap_ms","blur_ratio","blur_em","test_mode"];
+
+function toCSV() {
+  const esc = (s) => /[",\n]/.test(String(s)) ? `"${String(s).replace(/"/g, '""')}"` : String(s);
+  const rows = log.map((r) => COLUMNS.map((c) => esc(r[c])).join(","));
+  return "﻿" + [COLUMNS.join(","), ...rows].join("\r\n") + "\r\n";  // BOM 付き＝Excel でも文字化けしない
+}
+
+function download() {
+  if (log.length === 0) { flash("記録なし"); return; }
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([toCSV()], { type: "text/csv" }));
+  a.download = `boin-shiin_${stamp}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// リロードで実験データが消えないよう控えを取る。file:// で弾かれても致命傷にしない。
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(log)); } catch (_) {}
+}
+function restore() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    log = JSON.parse(raw);
+    okCount = log.filter((r) => r.result === "成立").length;
+    $logCount.textContent = log.length;
+    $okCount.textContent = okCount;
+  } catch (_) {}
+}
+
+/* ══ コマンド ═══════════════════════════════════════════════════ */
+
+function handleCommand(e) {
+  if (!(e.metaKey || e.ctrlKey)) return;
+  switch (e.code) {
+    case "KeyS":      e.preventDefault(); download(); break;
+    case "Backspace": e.preventDefault(); clearAll(); break;
+    case "KeyD":
+      e.preventDefault();
+      testMode = !testMode;
+      document.body.classList.toggle("test", testMode);
+      break;
+    case "KeyL":
+      e.preventDefault();
+      if (log.length && confirm(`記録 ${log.length} 件を消去します。CSV は保存済みですか？`)) {
+        log = []; okCount = 0;
+        $logCount.textContent = "0"; $okCount.textContent = "0";
+        save();
+      }
+      break;
+  }
+}
+
+/* ══ 起動 ═══════════════════════════════════════════════════════ */
+
+// キー入力を取りこぼさないよう、フォーカスが外れていることを見せる
+const setFocus = () => document.body.classList.toggle("unfocused", !document.hasFocus());
+window.addEventListener("focus", setFocus);
+window.addEventListener("blur", setFocus);
+$stage.addEventListener("mousedown", () => window.focus());
+
+restore();
+setFocus();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "tsumami-ji",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "文字の辺や丸みをつまむとゴムのように伸び、離すともどる",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "opentype.js": "^1.3.4"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

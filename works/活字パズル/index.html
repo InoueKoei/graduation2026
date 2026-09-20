@@ -8,12 +8,15 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="topbar">
-    <h1>活字パズル<span style="font-size:13px;font-weight:400;color:var(--color-text-secondary);margin-left:8px;">ことばづくり</span></h1>
+  <header class="topbar">
+    <div>
+      <h1>活字パズル</h1>
+      <p class="sub">ことばづくり — 並べた活字を読み取る</p>
+    </div>
     <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
-  </div>
+  </header>
 
-  <div id="cvStatus" class="status-bar">opencv.js を読み込み中…</div>
+  <div id="cvStatus" class="status-bar">opencv.js を準備中…</div>
   <div id="errorBanner" role="alert" hidden></div>
 
   <div class="toolbar">
@@ -24,8 +27,10 @@
     <button id="restartBtn" hidden>もう一度</button>
   </div>
 
-  <div id="resultStatus"><span id="resultChip"></span></div>
-  <div id="timerDisplay">Time: 00:00</div>
+  <div class="run-row">
+    <div id="resultStatus"><span id="resultChip"></span></div>
+    <div id="timerDisplay">Time: 00:00</div>
+  </div>
 
   <div id="targetDisplay" hidden>
     <div id="targetWordText" class="kana">---</div>
@@ -36,18 +41,25 @@
     <canvas id="output"></canvas>
   </div>
 
-  <hr />
+  <section class="panel">
+    <div class="panel-label">読み取り中のことば</div>
+    <div id="idsList" class="kana word-readout">— none —</div>
 
-  <h2>ステータス</h2>
-  <div class="status-grid">
-    <div>検出数<b id="countVal">—</b></div>
-    <div>FPS<b id="fpsVal">—</b></div>
-    <div>解像度<b id="resVal">—</b></div>
-  </div>
-  <h2>読み取り中のことば</h2>
-  <div id="idsList" class="kana">— none —</div>
-  <h2>ログ</h2>
-  <div id="log"></div>
+    <div class="panel-label div">ステータス</div>
+    <div class="status-grid">
+      <div><span class="k">検出数</span><b id="countVal">—</b></div>
+      <div><span class="k">FPS</span><b id="fpsVal">—</b></div>
+      <div><span class="k">解像度</span><b id="resVal">—</b></div>
+      <div><span class="k">組版の乱れ</span><b id="disorderVal">—</b></div>
+    </div>
+    <p class="note">
+      「組版の乱れ」は、出題語を理想の組版（水平・等間隔・角度ゼロ）としたときの平均のずれ。
+      0 に近いほど揃っていて、字はくっきり刷られる。ずれるほど版が重なってにじむ。
+    </p>
+
+    <div class="panel-label div">ログ</div>
+    <div id="log"></div>
+  </section>
 
   <script type="module" src="script.js"></script>
 </body>

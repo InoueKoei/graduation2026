@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>文字ころがし — 字の中をころがる</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="panel">
+    <div class="modes" role="group" aria-label="モード">
+      <button id="mode-edit" type="button" class="mode is-on">編集</button>
+      <button id="mode-play" type="button" class="mode">操作</button>
+    </div>
+
+    <div class="edit-only">
+      <input id="text" type="text" value="" autocomplete="off" spellcheck="false"
+             placeholder="文字を入力して Enter" aria-label="文字">
+
+      <div class="fontmenu" id="font-menu">
+        <button class="fontmenu__button" id="font-menu-button" type="button"
+                aria-haspopup="listbox" aria-expanded="false" aria-label="書体">
+          <span class="fontmenu__current" id="font-menu-current"></span>
+          <span class="fontmenu__caret" aria-hidden="true">▾</span>
+        </button>
+        <ul class="fontmenu__list" id="font-menu-list" role="listbox" hidden></ul>
+      </div>
+
+      <button id="local-fonts" type="button" class="ghost"
+              title="OS に入っている書体から、かなを持つものを一覧に足す">＋ローカル書体</button>
+
+      <label class="slider">大きさ
+        <input id="size" type="range" min="100" max="460" step="1" value="260">
+      </label>
+
+      <button id="clear" type="button" class="ghost">全消去</button>
+    </div>
+  </div>
+
+  <p id="hint"></p>
+  <p id="status" role="status"></p>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>制作ポータル</title>
+  <link rel="stylesheet" href="sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>制作ポータル</h1>
+      <p class="sub">卒業制作 ─ works の作品をここから開く</p>
+    </div>
+    <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+  </header>
+
+  <main id="grid" class="grid" aria-live="polite">
+    <p class="loading">読み込み中…</p>
+  </main>
+
+  <dialog id="readme-dialog" class="readme-dialog">
+    <div class="readme-head">
+      <strong id="readme-title"></strong>
+      <button id="readme-close" class="icon-btn" aria-label="閉じる">✕</button>
+    </div>
+    <pre id="readme-body" class="readme-body"></pre>
+  </dialog>
+
+  <script type="module" src="portal.js"></script>
+</body>
+</html>

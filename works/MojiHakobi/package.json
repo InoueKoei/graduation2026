@@ -1,0 +1,10 @@
+{
+  "name": "moji-hakobi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "共同運搬型かな文字入力 ─ 重い文字は二人で掴まないと運べない",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}

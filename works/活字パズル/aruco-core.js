@@ -26,49 +26,98 @@ export const KANA_BY_MARKER_ID = Object.freeze({
 export const DEFAULT_OPENCV_URL =
   'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js';
 
+/** 一度読み込んだら使い回す。二重に呼ばれても 10MB を二度取りに行かない */
+let opencvPromise = null;
+
+/**
+ * Emscripten のモジュールが持つ自己参照の `then` を外す。
+ * これが残っていると、await や Promise の解決に渡した瞬間に無限ループになる。
+ */
+function detachThen(cv) {
+  if (typeof cv?.then !== 'function') return;
+  try {
+    delete cv.then;
+  } catch {
+    cv.then = undefined; // 消せないビルドもあるので上書きで無効化する
+  }
+}
+
 /**
  * OpenCV.js を動的に読み込み、WASM ランタイムの初期化完了を待つ。
  * 二重読み込み・初期化タイミングのズレ・ビルドごとの差（Promise 型 / onRuntimeInitialized 型）・
  * ネットワーク失敗をすべて吸収する。
+ *
+ * このビルドは WASM を base64 で内蔵していて、初期化は
+ * `WebAssembly.instantiate` の完了待ちになる。ここは環境によっては
+ * **返ってこないことがある**（WASM を許さないサンドボックス、埋め込みブラウザなど）。
+ * 黙って「読み込み中…」のまま止まると原因が分からないので、
+ * 段階を onProgress で伝え、timeoutMs を過ぎたらどの段で止まったかを添えて失敗させる。
+ *
  * @param {string} [scriptUrl]
+ * @param {{timeoutMs?:number, onProgress?:(stage:string)=>void}} [opts]
  * @returns {Promise<object>} 初期化済みの `cv` オブジェクト
  */
-export function loadOpenCv(scriptUrl = DEFAULT_OPENCV_URL) {
-  return new Promise((resolve, reject) => {
-    // 既に初期化済みなら即座に返す
+export function loadOpenCv(scriptUrl = DEFAULT_OPENCV_URL, { timeoutMs = 60000, onProgress } = {}) {
+  if (opencvPromise) return opencvPromise;
+
+  opencvPromise = new Promise((resolve, reject) => {
+    let stage = 'ダウンロード';
+    const report = (next) => { stage = next; onProgress?.(next); };
+
+    const timer = setTimeout(() => {
+      reject(new Error(
+        `OpenCV.js の「${stage}」が ${Math.round(timeoutMs / 1000)} 秒で終わりませんでした。` +
+        'WASM を実行できない環境の可能性があります（通常のブラウザで開き直してください）',
+      ));
+    }, timeoutMs);
+
+    const succeed = (cv) => { clearTimeout(timer); resolve(cv); };
+    const fail = (err) => { clearTimeout(timer); opencvPromise = null; reject(err); };
+
+    // 既に初期化済みなら即座に返す（ここでも then を外してから返す）
     if (window.cv?.Mat) {
-      resolve(window.cv);
+      detachThen(window.cv);
+      succeed(window.cv);
       return;
     }
+
+    onProgress?.(stage);
     const script = document.createElement('script');
     script.src = scriptUrl;
     script.async = true;
-    script.onload = async () => {
-      let cv = window.cv;
-      if (!cv) {
-        reject(new Error('OpenCV.js を読み込みましたが cv が見つかりません'));
+
+    script.onload = () => {
+      report('初期化');
+      const loaded = window.cv;
+      if (!loaded) {
+        fail(new Error('OpenCV.js を読み込みましたが cv が見つかりません'));
         return;
       }
-      // techstark ビルドは window.cv に Promise を載せることがある
-      if (typeof cv.then === 'function') {
-        try {
-          cv = await cv;
-        } catch (err) {
-          reject(err);
-          return;
-        }
-      }
-      // スクリプト実行直後は WASM ランタイム未初期化のことがある
-      if (cv.Mat) {
-        resolve(cv);
-      } else {
-        cv.onRuntimeInitialized = () => resolve(cv);
-      }
+
+      const ready = (cv) => {
+        // ここで then を外してから返す。外さないと、呼び出し側が
+        // await したり Promise に渡したりした時点で同じ無限ループに落ちる
+        detachThen(cv);
+        // スクリプト実行直後は WASM ランタイム未初期化のことがある
+        if (cv.Mat) succeed(cv);
+        else cv.onRuntimeInitialized = () => succeed(cv);
+      };
+
+      // techstark ビルドは window.cv に Emscripten のモジュールを載せる。
+      // これは thenable だが、**解決値が自分自身**（しかも then を持ったまま）なので、
+      // `await cv` や `resolve(cv)` に渡すと Promise の解決手続きが延々と繰り返され、
+      // メインスレッドが固まって二度と返らない。必ず .then() のコールバックで受けること。
+      if (typeof loaded.then === 'function') loaded.then(ready, fail);
+      else ready(loaded);
     };
+
     script.onerror = () =>
-      reject(new Error('OpenCV.js の読み込みに失敗しました（ネットワーク接続を確認してください）'));
+      fail(new Error('OpenCV.js の読み込みに失敗しました（ネットワーク接続を確認してください）'));
+
     document.head.appendChild(script);
   });
+
+  return opencvPromise;
 }
 
 /**

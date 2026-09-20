@@ -68,6 +68,16 @@ body {
 .hud .meter > i { display: block; height: 100%; width: 0; background: var(--color-accent-default); transition: width .1s linear; }
 .hud .pct { font-variant-numeric: tabular-nums; min-width: 2.8em; text-align: right; color: var(--color-text-primary); }
 .hud .modtype { color: var(--color-text-placeholder); min-height: 1em; }
+/* 心拍（合成波）— 点が脈に合わせてふくらむ */
+.hud .beat-row { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.hud .beat {
+  width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px;
+  background: var(--color-accent-default);
+}
+
+/* 確認用ページの値で動いているときだけ出る印 */
+.hud .tuned { border-top: 1px solid var(--color-border); margin-top: 2px; padding-top: 6px; font-size: 11px; }
+.hud .tuned .k { color: var(--color-accent-default); }
 
 /* 現在字（半透明チップに墨文字） */
 .current-char {
@@ -76,7 +86,8 @@ body {
   padding: 2px 16px; border-radius: 12px;
   background: color-mix(in srgb, var(--color-surface) 82%, transparent);
   border: 1px solid var(--color-border); backdrop-filter: blur(6px);
-  font-size: 60px; font-weight: 700; line-height: 1.15; color: var(--color-accent-strong);
+  font-size: 40px; font-weight: 700; line-height: 1.15; color: var(--color-accent-strong);
+  opacity: .85; /* 中央に重ねた大きな字が主役。ここは状態表示に退く */
 }
 
 /* 状態オーバレイ（hidden 属性で隠す＝[hidden] ルールで確実に消える） */
@@ -90,6 +101,24 @@ body {
 /* パネル共通 */
 .panel { width: var(--content-w); }
 .panel-label { font-size: 11px; color: var(--color-text-placeholder); margin-bottom: 6px; letter-spacing: .04em; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+/* 見出しは詰まったら省略。切替ピルのほうを優先して残す */
+.panel-head .panel-label { margin-bottom: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 記録の見せ方を選ぶピル（sumi の Secondary 相当を横に連ねたもの） */
+.seg {
+  display: inline-flex; flex: 0 0 auto; overflow: hidden;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px;
+}
+.seg-btn {
+  font: inherit; font-size: 11px; line-height: 1; height: 24px; padding: 0 11px;
+  border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--color-border); }
+.seg-btn:hover { background: var(--color-muted); }
+.seg-btn[aria-pressed="true"] { background: var(--color-muted); color: var(--color-text-primary); font-weight: 700; }
+.seg-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-accent-strong); }
 
 /* 入力テキスト */
 .text-buffer {
@@ -105,7 +134,7 @@ body {
   scroll-behavior: smooth;
 }
 .filmstrip:empty::before {
-  content: "文字を確定すると、その瞬間の顔がここに記録されます";
+  content: "文字を確定すると、その瞬間の字形と顔がここに記録されます";
   color: var(--color-text-placeholder); font-size: 12px; padding: 6px 0;
 }
 .frame {
@@ -114,8 +143,52 @@ body {
   border-radius: 8px; overflow: hidden;
 }
 /* サムネもカメラ比に合わせる（object-fit は保険） */
-.frame img { display: block; width: 100%; aspect-ratio: var(--cam-ar); height: auto; object-fit: cover; background: var(--color-muted); }
+.frame .thumb { display: block; width: 100%; aspect-ratio: var(--cam-ar); height: auto; object-fit: cover; background: var(--color-muted); }
+.frame .thumb.glyph { object-fit: contain; } /* 字形は切らずに全部入れる */
+.frame .thumb + .thumb { border-top: 1px solid var(--color-border); }
+
+/* ビュー切替は出し分けるだけ。記録そのものは常に両方持っている */
+.filmstrip[data-view="glyph"] .thumb.face { display: none; }
+.filmstrip[data-view="face"] .thumb.glyph { display: none; }
+
 .frame figcaption {
-  text-align: center; font-size: 20px; font-weight: 700; padding: 3px 4px 5px;
-  color: var(--color-text-primary); border-top: 1px solid var(--color-border);
+  display: flex; align-items: baseline; justify-content: center; gap: 6px;
+  padding: 3px 4px 5px; border-top: 1px solid var(--color-border);
 }
+.frame figcaption .ch { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+.frame figcaption .hb {
+  font-size: 10px; color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+.frame figcaption .hb:not(:empty)::after { content: " bpm"; }
+
+/* 較正オーバーレイ（口形のターゲットを取り直す） */
+.calibration {
+  position: absolute; inset: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: color-mix(in srgb, var(--color-background) 82%, transparent);
+  backdrop-filter: blur(4px);
+}
+.calibration .cal-step {
+  font-size: 11px; letter-spacing: .1em; color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+.calibration .cal-vowel {
+  font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", serif;
+  font-size: 120px; font-weight: 700; line-height: 1.1; color: var(--color-accent-strong);
+}
+.calibration .cal-phase { font-size: 13px; color: var(--color-text-secondary); }
+.calibration .cal-meter {
+  width: 200px; height: 5px; border-radius: 999px; background: var(--color-muted); overflow: hidden;
+}
+.calibration .cal-meter > i {
+  display: block; height: 100%; width: 0; background: var(--color-accent-default);
+  transition: width .1s linear;
+}
+.btn-ghost {
+  margin-top: 6px; font: inherit; font-size: 13px; height: 34px; padding: 0 18px;
+  border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--color-text-secondary);
+  border: 1px solid var(--color-border); transition: background .15s, border-color .15s;
+}
+.btn-ghost:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }

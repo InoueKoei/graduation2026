@@ -15,6 +15,8 @@
     <canvas id="output_canvas" width="640" height="480"></canvas>
 
     <div class="stage-controls">
+      <button id="calibrate-btn" class="icon-btn" title="口形を較正する" aria-label="較正">◎</button>
+      <button id="reset-cal-btn" class="icon-btn" title="較正を初期値に戻す" aria-label="較正を戻す" hidden>↺</button>
       <button id="toggle-hud-btn" class="icon-btn" title="HUD 表示切替" aria-label="HUD切替">⚙</button>
       <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
     </div>
@@ -26,9 +28,20 @@
       <div class="meter-row"><span class="k">修飾</span><span class="meter"><i id="hud-mod-bar"></i></span><span class="pct"><span id="hud-mod-gauge">0</span>%</span></div>
       <div class="row"><span class="modtype" id="hud-mod-type"></span></div>
       <div class="row div"><span class="k">目</span><b id="hud-eye">開</b></div>
+      <div class="row"><span class="k">心拍</span><span class="beat-row"><i id="hud-beat" class="beat"></i><b id="hud-bpm">–</b> bpm</span></div>
+      <div class="row tuned" id="hud-tuned" hidden><span class="k">調整中</span><span>_preview-glyph の値</span></div>
     </div>
 
     <div id="current-char" class="current-char">ー</div>
+
+    <div id="calibration" class="calibration" hidden>
+      <div class="cal-step" id="cal-step">1 / 5</div>
+      <div class="cal-vowel" id="cal-vowel">あ</div>
+      <div class="cal-phase" id="cal-phase">この口の形をつくって…</div>
+      <div class="cal-meter"><i id="cal-bar"></i></div>
+      <button id="cal-cancel-btn" class="btn-ghost">やめる</button>
+    </div>
+
     <div id="status" class="status">カメラを準備中…</div>
   </main>
 
@@ -38,8 +51,15 @@
   </section>
 
   <section class="panel">
-    <div class="panel-label">記録 — 文字 ＋ 顔スナップ（このセッションのみ）</div>
-    <div id="filmstrip" class="filmstrip" aria-live="polite"></div>
+    <div class="panel-head">
+      <div class="panel-label">記録 — 確定した瞬間（このセッションのみ）</div>
+      <div class="seg" role="group" aria-label="記録の見せ方">
+        <button class="seg-btn" type="button" data-view="glyph" aria-pressed="false">字形</button>
+        <button class="seg-btn" type="button" data-view="face" aria-pressed="false">顔</button>
+        <button class="seg-btn" type="button" data-view="both" aria-pressed="true">両方</button>
+      </div>
+    </div>
+    <div id="filmstrip" class="filmstrip" data-view="both" aria-live="polite"></div>
   </section>
 
   <script type="module" src="script.js"></script>

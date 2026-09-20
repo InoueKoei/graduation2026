@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>組み字 — 規格への丸め</title>
+<style>
+  :root{
+    --ink:#141414; --paper:#faf9f7; --rule:#d6d2cb; --dim:#8b857c; --hot:#b8442c;
+    --jp:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none !important}   /* .row{display:flex} に負けるため */
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--jp);
+    min-height:100vh; display:flex; flex-direction:column;
+    padding:4vmin 5vmin; font-feature-settings:"palt";
+  }
+
+  header{display:flex; justify-content:space-between; align-items:baseline;
+         border-bottom:1px solid var(--rule); padding-bottom:1rem}
+  h1{font-size:.95rem; font-weight:500; letter-spacing:.18em}
+  .status{font-size:.75rem; letter-spacing:.1em; color:var(--dim)}
+  .status.live::before{content:"●"; color:#3a8a4a; margin-right:.45em; font-size:.7em}
+
+  main{flex:1; display:grid; grid-template-columns:minmax(0,1fr) 22rem;
+       gap:5vmin; align-items:center; padding:4vmin 0}
+  @media (max-width:900px){ main{grid-template-columns:1fr} }
+
+  /* 字面枠。活字のボディを思わせる細い枠に規格字を置く */
+  .plate{position:relative; aspect-ratio:1; width:min(46vh,100%); margin:0 auto;
+         border:1px solid var(--rule); display:grid; place-items:center}
+  .plate::before,.plate::after{content:""; position:absolute; background:var(--rule)}
+  .plate::before{left:0; right:0; top:50%; height:1px}
+  .plate::after{top:0; bottom:0; left:50%; width:1px}
+  .glyph{line-height:1.05; position:relative; text-align:center;
+         transition:opacity .18s ease; padding:0 .04em}
+  .glyph.empty{color:var(--rule); font-size:min(12vh,24vw)}
+  .glyph.unread{color:var(--hot); opacity:.5; font-size:min(7vh,14vw);
+                letter-spacing:.1em}
+
+  .meta{display:flex; flex-direction:column; gap:2.2rem}
+  .row{display:flex; flex-direction:column; gap:.5rem}
+  .label{font-size:.7rem; letter-spacing:.16em; color:var(--dim)}
+
+  .score{display:flex; align-items:baseline; gap:.6rem}
+  .score b{font-size:2.6rem; font-weight:400; font-variant-numeric:tabular-nums}
+  .score span{font-size:.75rem; color:var(--dim)}
+  .bar{height:2px; background:var(--rule); position:relative}
+  .bar i{position:absolute; inset:0 auto 0 0; background:var(--ink); width:0;
+         transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .bar.low i{background:var(--hot)}
+
+  .ttl{font-family:var(--jp); letter-spacing:.14em}
+  .emoji{font-size:4rem; line-height:1}
+  .rivals{display:flex; flex-direction:column; gap:.35rem}
+  .rival{display:flex; align-items:baseline; gap:.8rem; font-size:.9rem; color:var(--dim)}
+  .rival em{font-style:normal; font-size:1.4rem; color:var(--ink); min-width:1.6em}
+  .rival u{text-decoration:none; font-variant-numeric:tabular-nums; font-size:.8rem}
+
+  footer{border-top:1px solid var(--rule); padding-top:1rem;
+         display:flex; align-items:baseline; gap:1.2rem}
+  .history{font-size:1.9rem; letter-spacing:.12em; line-height:1.5;
+           word-break:break-all; flex:1}
+  .history span{opacity:0; animation:in .5s forwards}
+  @keyframes in{to{opacity:1}}
+  .clear{font-size:.7rem; letter-spacing:.12em; color:var(--dim);
+         background:none; border:1px solid var(--rule); padding:.5em 1em;
+         cursor:pointer; font-family:inherit}
+  .clear:hover{border-color:var(--ink); color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>組 み 字 — 規 格 へ の 丸 め</h1>
+  <div class="status" id="status">接続していません</div>
+</header>
+
+<main>
+  <div class="plate">
+    <div class="glyph empty" id="glyph">—</div>
+  </div>
+
+  <div class="meta">
+    <div class="row">
+      <div class="label">読み手の確信度 — macOS Vision</div>
+      <div class="score"><b id="score">—</b><span id="verdict"></span></div>
+      <div class="bar" id="bar"><i></i></div>
+    </div>
+
+    <div class="row" id="emojiRow" hidden>
+      <div class="label">反応した語</div>
+      <div class="emoji" id="emoji"></div>
+    </div>
+
+    <div class="row" id="shapeRow" hidden>
+      <div class="label">形として近い字 — 参考値</div>
+      <div class="rivals" id="rivals"></div>
+    </div>
+
+    <div class="row">
+      <div class="label">置かれた部品</div>
+      <div class="score"><b id="parts">—</b><span>個</span></div>
+    </div>
+
+    <div class="row" id="titleRow" hidden>
+      <div class="label">称号</div>
+      <div class="score"><b id="title" class="ttl">—</b><span id="foundN"></span></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="history" id="history"></div>
+  <button class="clear" id="clear">消す</button>
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const glyph = $("#glyph"), score = $("#score"), bar = $("#bar"),
+      rivals = $("#rivals"), parts = $("#parts"), hist = $("#history"),
+      status = $("#status"), verdict = $("#verdict"),
+      titleRow = $("#titleRow"), titleEl = $("#title"), foundN = $("#foundN"),
+      emojiRow = $("#emojiRow"), emojiEl = $("#emoji"), shapeRow = $("#shapeRow");
+
+// 語の一覧は出さない。何が入っているかが見えると、探す面白さが消える。
+// 見つけた数と称号だけを静かに出す。
+function renderTitle(d){
+  const n = (d && d.found) ? d.found.length : 0;
+  if(!d || !d.title){ titleRow.hidden = n === 0; }
+  else { titleRow.hidden = false; }
+  titleEl.textContent = (d && d.title) ? d.title : "—";
+  foundN.textContent = n ? `${n} 語` : "";
+}
+
+let lastChar = null;
+
+function render(d){
+  if(d && d.parts && !d.char){
+    // 読めなかったことも結果。黙ったことを黙って隠さない。
+    glyph.textContent = "読めず"; glyph.classList.add("empty");
+    glyph.classList.add("unread"); glyph.style.fontSize = "";
+    score.textContent = "0.00"; verdict.textContent = "行として認識されなかった";
+    bar.querySelector("i").style.width = "0";
+    const sh = d.shape || [];
+    shapeRow.hidden = sh.length === 0;
+    rivals.innerHTML = sh.map(([c, v]) =>
+      `<div class="rival"><em>${c}</em><u>${v.toFixed(2)}</u></div>`).join("");
+    emojiRow.hidden = true;
+    parts.textContent = d.parts;
+    renderTitle(d);
+    lastChar = null;
+    return;
+  }
+  if(!d || !d.char){
+    glyph.textContent = "—"; glyph.classList.add("empty");
+    glyph.classList.remove("unread"); glyph.style.fontSize = "";
+    score.textContent = "—"; verdict.textContent = "";
+    bar.querySelector("i").style.width = "0";
+    rivals.innerHTML = ""; parts.textContent = "—";
+    shapeRow.hidden = true; emojiRow.hidden = true;
+    lastChar = null;
+    return;
+  }
+
+  glyph.textContent = d.char;
+  glyph.classList.remove("empty");
+  glyph.classList.remove("unread");
+  // 1字前提のサイズだと2字以上で枠から出る。字面枠の実寸から割り出す。
+  const n = Math.max(1, [...d.char].length);
+  const pw = document.querySelector(".plate").clientWidth || 300;
+  glyph.style.fontSize = Math.floor(pw * 0.90 / n) + "px";
+
+  const s = d.conf ?? 0;
+  score.textContent = s.toFixed(2);
+  bar.querySelector("i").style.width = (s * 100).toFixed(0) + "%";
+  bar.classList.toggle("low", s < 0.55);
+  // 規格は迷いなく降りてくる。ためらいは数値の側にだけ出す。
+  verdict.textContent = s >= 0.8 ? "はっきり読めた"
+                      : s >= 0.5 ? "読めた"
+                      : "かろうじて読めた";
+
+  const shape = d.shape || [];
+  shapeRow.hidden = shape.length === 0;
+  rivals.innerHTML = shape.map(([c, v]) =>
+    `<div class="rival"><em>${c}</em><u>${v.toFixed(2)}</u></div>`).join("");
+
+  parts.textContent = d.parts ?? "—";
+  renderTitle(d);
+
+  emojiRow.hidden = !d.emoji;
+  emojiEl.textContent = d.emoji || "";
+
+  // 同じ字が続けて出たときは積まない（配置を変えたときだけ増える）
+  if(d.char !== lastChar){
+    const el = document.createElement("span");
+    el.textContent = d.char;
+    hist.appendChild(el);
+    hist.scrollTop = hist.scrollHeight;
+    lastChar = d.char;
+  }
+}
+
+function connect(){
+  const es = new EventSource("/events");
+  es.onopen  = () => { status.textContent = "接続中"; status.classList.add("live"); };
+  es.onmessage = e => { try { render(JSON.parse(e.data)); } catch(_){} };
+  es.onerror = () => {
+    status.textContent = "切断 — 再接続します"; status.classList.remove("live");
+    es.close(); setTimeout(connect, 1500);
+  };
+}
+connect();
+
+$("#clear").onclick = () => { hist.innerHTML = ""; lastChar = null; };
+</script>
+</body>
+</html>

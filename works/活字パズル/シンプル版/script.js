@@ -33,7 +33,9 @@ let running = false;
 // ── 起動フロー ──────────────────────────────────────────────
 (async function boot() {
   try {
-    const cv = await loadOpenCv();
+    const cv = await loadOpenCv(undefined, {
+      onProgress: (stage) => { startStatus.textContent = `opencv.js を${stage}中…`; },
+    });
     scanner = new ArucoScanner(cv);
     startStatus.textContent = 'READY';
     startBtn.disabled = false;

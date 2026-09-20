@@ -24,6 +24,12 @@ next-env.d.ts
 *-debug.log*
 npm-debug.log*
 
+# Python
+_emoji_index.json
+__pycache__/
+*.pyc
+.venv/
+
 # 作業用
 outputs/
 work/

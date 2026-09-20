@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>つまみ字 — ひっぱると のびる</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <p id="hint">ひっぱる</p>
+
+  <div id="panel">
+    <input id="char" type="text" value="あ" autocomplete="off" spellcheck="false" aria-label="文字">
+    <div class="fontmenu" id="font-menu">
+      <button class="fontmenu__button" id="font-menu-button" type="button"
+              aria-haspopup="listbox" aria-expanded="false" aria-label="書体">
+        <span class="fontmenu__current" id="font-menu-current"></span>
+        <span class="fontmenu__caret" aria-hidden="true">▾</span>
+      </button>
+      <ul class="fontmenu__list" id="font-menu-list" role="listbox" hidden></ul>
+    </div>
+  </div>
+
+  <p id="status" role="status"></p>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

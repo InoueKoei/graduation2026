@@ -1,0 +1,9 @@
+{
+  "name": "seisaku-portal",
+  "private": true,
+  "type": "module",
+  "description": "制作ポータル — works/ の作品をローカルで開くランチャー（依存パッケージなし）",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

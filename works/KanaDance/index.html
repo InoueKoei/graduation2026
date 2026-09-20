@@ -4,58 +4,77 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KanaDance — 身体でつくるかな</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: sans-serif; margin: 0; padding: 16px; }
-    #canvas-container {
-      position: relative; margin: 0 auto; background: #eee; border-radius: 12px; overflow: hidden;
-    }
-    video, canvas {
-      position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-      transform: scaleX(-1); /* 鏡像表示 */
-    }
-    .controls { text-align: center; margin-top: 20px; }
-    .mode-switch { margin-bottom: 15px; }
-    .mode-switch label { font-size: 20px; margin: 0 12px; cursor: pointer; }
-    #kana-input { font-size: 20px; padding: 8px; width: 150px; }
-    #register-btn { font-size: 20px; padding: 8px 20px; cursor: pointer; }
-    #register-btn:disabled { opacity: .5; cursor: progress; }
-    #result {
-      font-size: 20px; font-weight: bold; margin-top: 20px; color: #333; text-align: center; min-height: 28px;
-    }
-    #result.error { color: #c0392b; }
-    .threshold { margin-top: 14px; font-size: 15px; color: #555; }
-    .threshold input[type="range"] { width: 220px; vertical-align: middle; }
-    .threshold code { font-size: 16px; color: #111; }
-    [hidden] { display: none !important; }
-  </style>
+  <link rel="stylesheet" href="sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="canvas-container">
+  <header class="topbar">
+    <h1>KanaDance</h1>
+    <div class="topbar-actions">
+      <button id="panel-toggle" class="icon-btn" title="調整パネル表示切替" aria-label="調整パネル切替">⚙</button>
+      <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+    </div>
+  </header>
+
+  <main class="stage" role="img" aria-label="カメラ映像">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
+    <div id="current-char" class="current-char" hidden></div>
+  </main>
+
+  <div id="status" class="status">カメラを許可して、ポーズをとってください…</div>
+
+  <div class="segmented" role="radiogroup" aria-label="モード">
+    <label><input type="radio" name="app-mode" value="register" checked /><span>✍️ 登録</span></label>
+    <label><input type="radio" name="app-mode" value="detect" /><span>🔍 判別</span></label>
   </div>
 
-  <div class="controls">
-    <div class="mode-switch">
-      <label><input type="radio" name="app-mode" value="register" checked /> ✍️ 登録モード</label>
-      <label><input type="radio" name="app-mode" value="detect" /> 🔍 判別モード</label>
-    </div>
-
-    <div id="register-ui">
-      <input type="text" id="kana-input" placeholder="文字 (例: サ)" />
-      <button id="register-btn">DB に登録</button>
-    </div>
-
-    <div class="threshold">
-      一致しやすさ（しきい値）:
-      <input type="range" id="threshold-input" min="0.1" max="2.0" step="0.01" value="1.0" />
-      <code id="threshold-value">1.00</code>
-      <div style="font-size:13px;color:#888;margin-top:4px;">大きいほど一致しやすい（線が出やすい）。判別モードで「最も近い…誤差」を見ながら調整</div>
-    </div>
+  <div id="register-ui" class="register-row">
+    <input type="text" id="kana-input" placeholder="文字 (例: サ)" aria-label="登録する文字" />
+    <button id="register-btn" class="btn-primary">DB に登録</button>
   </div>
 
-  <div id="result">カメラを許可して、ポーズをとってください…</div>
+  <section id="panel" class="panel">
+    <div class="panel-label">判別</div>
+    <div class="ctrl">
+      <label for="match-threshold">一致しやすさ</label>
+      <input type="range" id="match-threshold" min="0.1" max="2" step="0.01" />
+      <output id="match-threshold-value"></output>
+    </div>
+    <p class="note">小さいほど厳しい。判別モードの「最も近い…誤差」を見ながら合わせる。</p>
+
+    <div class="panel-label div">ブレンド（時間の重ね書き）</div>
+    <div class="ctrl">
+      <label for="blend-window">さかのぼる時間</label>
+      <input type="range" id="blend-window" min="0.2" max="3" step="0.1" />
+      <output id="blend-window-value"></output>
+    </div>
+    <div class="ctrl">
+      <label for="blend-interval">取得間隔</label>
+      <input type="range" id="blend-interval" min="0.02" max="0.5" step="0.01" />
+      <output id="blend-interval-value"></output>
+    </div>
+    <div class="ctrl">
+      <label for="blend-steps">中間形</label>
+      <input type="range" id="blend-steps" min="0" max="10" step="1" />
+      <output id="blend-steps-value"></output>
+    </div>
+    <div class="ctrl">
+      <label for="blend-width">線の太さ</label>
+      <input type="range" id="blend-width" min="2" max="40" step="1" />
+      <output id="blend-width-value"></output>
+    </div>
+    <div class="ctrl">
+      <label for="blend-tail">古い形の濃さ</label>
+      <input type="range" id="blend-tail" min="0" max="1" step="0.01" />
+      <output id="blend-tail-value"></output>
+    </div>
+    <p class="note">
+      さかのぼった時間を取得間隔で刻み、隣り合う字形の間に中間形を挟んで重ねる。
+      中間形 0 なら鍵フレームだけの飛び飛びの重ね、増やすほど連続した掃きに近づく。
+      <span id="shape-count" class="count"></span>
+    </p>
+  </section>
 
   <script type="module" src="script.js"></script>
 </body>

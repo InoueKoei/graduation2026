@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DanceToggle — 踏むトグル入力</title>
+  <link rel="stylesheet" href="sumi-tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="title">DanceToggle</h1>
+    <p id="status" class="status">マットを探しています…</p>
+    <div class="modes" role="group" aria-label="モード">
+      <button id="mode-free" class="mode-btn is-on" data-mode="free">フリー入力</button>
+      <button id="mode-game" class="mode-btn" data-mode="game">タイムアタック</button>
+      <button id="mode-duo" class="mode-btn" data-mode="duo">二人</button>
+    </div>
+    <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+  </header>
+
+  <main class="columns">
+    <!-- 左：入力中のテキスト -->
+    <section class="col col-text">
+      <!-- フリー入力 -->
+      <div id="free-view">
+        <div class="panel-label">入力</div>
+        <div id="text-buffer" class="text-buffer" aria-live="polite">
+          <span id="committed"></span><span id="pending" class="pending"></span>
+        </div>
+        <div class="commit">
+          <span class="commit-label">確定まで</span>
+          <span class="meter"><i id="commit-bar"></i></span>
+          <span id="commit-ms" class="commit-ms">—</span>
+        </div>
+      </div>
+
+      <!-- タイムアタック -->
+      <div id="game-view" hidden>
+        <div class="game-head">
+          <div class="panel-label">お題</div>
+          <div class="game-stats">
+            <span class="stat"><b id="game-time">0.0</b><span class="unit">秒</span></span>
+            <span class="stat"><span class="unit">ミス</span><b id="game-miss">0</b></span>
+            <span class="stat"><b id="game-progress">1 / 5</b></span>
+          </div>
+        </div>
+
+        <div class="phrase-meter"><i id="game-bar"></i></div>
+
+        <div id="phrase" class="phrase" aria-live="polite"></div>
+
+        <p id="game-hint" class="game-hint">お題の1字めの面を踏むと計測が始まります。</p>
+
+        <div id="game-result" class="game-result" hidden>
+          <div class="result-label">打ち切りました</div>
+          <div class="result-time"><b id="result-time">0.0</b><span class="unit">秒</span></div>
+          <div class="result-detail">
+            <span><span class="unit">ミス</span> <b id="result-miss">0</b></span>
+            <span><span class="unit">1字あたり</span> <b id="result-per">0.0</b><span class="unit">秒</span></span>
+          </div>
+          <button id="retry-btn" class="btn-ghost">もう一度</button>
+        </div>
+      </div>
+
+      <!-- 二人モード -->
+      <div id="duo-view" hidden>
+        <div class="game-head">
+          <div class="panel-label">二人でひと文字</div>
+          <div class="game-stats">
+            <span class="stat"><span class="unit">ずれ</span><b id="duo-gap">—</b></span>
+          </div>
+        </div>
+
+        <div id="duo-buffer" class="text-buffer" aria-live="polite"></div>
+
+        <div class="duo-pending">
+          <div class="duo-slots">
+            <span id="duo-consonant" class="duo-slot"><span class="duo-slot-label">子音</span><b>—</b></span>
+            <span class="duo-x">×</span>
+            <span id="duo-vowel" class="duo-slot"><span class="duo-slot-label">母音</span><b>—</b></span>
+          </div>
+          <div class="commit">
+            <span class="commit-label">相方待ち</span>
+            <span class="meter"><i id="duo-bar"></i></span>
+            <span id="duo-ms" class="commit-ms">—</span>
+          </div>
+        </div>
+
+        <p id="duo-hint" class="game-hint">
+          子音マットと母音マットを、たがいに 1.5 秒以内に踏むと1文字になります。
+        </p>
+      </div>
+    </section>
+
+    <!-- 右：踏んでいる状況 -->
+    <section class="col col-mat">
+      <div class="panel-label">踏んでいる面</div>
+      <div class="boards">
+        <div class="board-wrap">
+          <div id="board-title" class="board-title" hidden>子音</div>
+          <div id="board" class="board" aria-hidden="true"></div>
+        </div>
+        <div id="vowel-wrap" class="board-wrap" hidden>
+          <div class="board-title">母音</div>
+          <div id="vowel-board" class="board" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="rings" id="rings-block">
+        <div class="ring-row">
+          <span class="ring-label">行</span>
+          <div id="ring" class="ring"><span class="ring-empty">まだ踏まれていません</span></div>
+        </div>
+        <div class="ring-row">
+          <span class="ring-label">印</span>
+          <div id="mark-ring" class="ring"><span class="ring-empty">—</span></div>
+        </div>
+      </div>
+
+      <p class="hint" id="solo-hint">
+        同じ面をくり返し踏むと字が回る。別の面を踏むか、待つと確定。<br />
+        <b>中央は休む場所</b>で、踏んでも字は出ません。<b>2度踏む</b>と濁点・半濁点・小文字。<br />
+        <b>START</b>＝ら行／<b>SELECT</b>＝わ行／<b>両方を同時に踏む</b>＝1字削除。
+      </p>
+
+      <p class="hint" id="duo-hint-right" hidden>
+        <b>子音</b>は外周8面＋<b>START</b>＝ら行＋<b>SELECT</b>＝わ行。1回踏むだけで行が決まる（回さない）。<br />
+        中央は休む場所。<b>2度踏む</b>と濁点・半濁点・小文字。<br />
+        <b>母音</b>も同じ向きに回して置く。盤面どおり あ い う ／ え ・ お。灰色の面は使いません。<br />
+        子音側は<b>中央の2度踏み</b>＝濁点・半濁点・小文字／<b>SELECT+START</b>＝1字削除。
+      </p>
+    </section>
+  </main>
+
+  <section class="settings">
+    <div class="panel-label">調整</div>
+
+    <label class="setting">
+      <span class="setting-name">受付までの溜め</span>
+      <input id="hold-range" type="range" />
+      <output id="hold-out" class="setting-out"></output>
+    </label>
+    <p class="setting-note">
+      新しい面に乗ってから、この時間だけ踏み続けて入力になる。
+      次の面へ移る途中で通過しただけの面は、ここに届く前に足が離れるので拾わない。
+      長くするほど誤入力は減るが、面を移るたびに効く。
+    </p>
+
+    <label class="setting">
+      <span class="setting-name">踏み直しの溜め</span>
+      <input id="repeat-range" type="range" />
+      <output id="repeat-out" class="setting-out"></output>
+    </label>
+    <p class="setting-note">
+      同じ面をもう一度踏むときの溜め。足がその面から動いていない＝通過の危険が無いので、
+      新規より短くてよい。「お」は5回踏むので、ここを詰めると1字がそのぶん軽くなる。
+    </p>
+
+    <label class="setting">
+      <span class="setting-name">中央の2度踏み</span>
+      <input id="home-range" type="range" />
+      <output id="home-out" class="setting-out"></output>
+    </label>
+    <p class="setting-note">
+      中央（休む場所）を2度踏むと濁点になる。その猶予。
+      あいだに他の面が入ったら成立しないので、よそを踏んで戻ってきただけでは出ない。
+    </p>
+
+    <label class="setting">
+      <span class="setting-name">確定までの時間</span>
+      <input id="commit-range" type="range" />
+      <output id="commit-out" class="setting-out"></output>
+    </label>
+
+    <label class="setting">
+      <span class="setting-name">チャタリング除去</span>
+      <input id="debounce-range" type="range" />
+      <output id="debounce-out" class="setting-out"></output>
+    </label>
+
+    <div class="setting" id="shift-setting" hidden>
+      <span class="setting-name">ずれの見せ方</span>
+      <div class="shift-modes" role="group" aria-label="ずれの見せ方">
+        <button class="shift-btn is-on" data-shift="blur">ぼかし</button>
+        <button class="shift-btn" data-shift="slice">短冊</button>
+      </div>
+    </div>
+    <p class="setting-note" id="shift-note" hidden>
+      <b>ぼかし</b>＝ずれるほどぼける。<b>短冊</b>＝字を横に切り、ずれるほど一本ずつ左右にずれる。
+      どちらも「二人がそろっていたか」を字の像に残すためのもの。
+    </p>
+
+    <label class="setting" id="pair-setting" hidden>
+      <span class="setting-name">相方の許容ずれ</span>
+      <input id="pair-range" type="range" />
+      <output id="pair-out" class="setting-out"></output>
+    </label>
+    <p class="setting-note" id="pair-note" hidden>
+      二人モードのみ。子音と母音がこの時間内にそろえば1文字になる。
+      既定 1500ms は既存作「母音子音」で二人で打って決めた値。
+    </p>
+
+    <div class="setting">
+      <label class="setting-check">
+        <input id="keyboard-check" type="checkbox" checked />
+        <span>キーボード代替（子音 <code>q w e / a s d / z x c</code>＋<code>1</code>=わ行 <code>2</code>=ら行、<code>s</code>×2=濁点、母音 <code>u i o / j l</code>）</span>
+      </label>
+      <button id="clear-btn" class="btn-ghost">全消し</button>
+      <button id="newrun-btn" class="btn-ghost" hidden>お題を引き直す</button>
+      <button id="swap-btn" class="btn-ghost" hidden>マットを入れ替える</button>
+    </div>
+  </section>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

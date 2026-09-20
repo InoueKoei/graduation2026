@@ -1,0 +1,137 @@
+/* 墨のモノクロ。experiments/Sumi の抑えたトーンに合わせる。
+   画面には文字ひとつ。操作は右上に小さく置いて、体験の邪魔をしない。 */
+
+:root {
+  --paper: #f2f0ec;
+  --ink: #1c1a19;
+  --hairline: #d8d4cc;
+  --muted: #9c968c;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#stage { position: fixed; inset: 0; }
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* 引っ張る操作をブラウザのスクロール／ズームに取られない */
+  touch-action: none;
+  cursor: default;
+}
+#canvas.is-over { cursor: grab; }
+#canvas.is-grabbing { cursor: grabbing; }
+
+/* --- ヒント（スケッチの言葉のまま） --- */
+#hint {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 46px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em; /* letter-spacing のぶん左に寄るのを戻す */
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity 0.9s ease;
+}
+#hint.is-done { opacity: 0; }
+
+/* --- 操作（右上に小さく） --- */
+#panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  z-index: 5;
+}
+
+#char {
+  width: 44px;
+  height: 30px;
+  padding: 0;
+  text-align: center;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+#char:focus { border-color: var(--muted); }
+
+/* fontmenu.js（moji-stack から流用）が前提にしているクラス名 */
+.fontmenu { position: relative; }
+
+.fontmenu__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.fontmenu__button:hover { border-color: var(--muted); }
+.fontmenu__caret { font-size: 9px; color: var(--muted); }
+
+.fontmenu__list {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  min-width: 100%;
+  list-style: none;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.fontmenu__item {
+  padding: 7px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fontmenu__item:hover { background: rgba(0, 0, 0, 0.04); }
+.fontmenu__item[aria-selected="true"] { background: rgba(0, 0, 0, 0.07); }
+
+/* --- 状態表示（読めない字を入れたときだけ出る） --- */
+#status {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 20px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#status.is-shown { opacity: 1; }

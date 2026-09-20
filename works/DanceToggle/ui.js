@@ -1,0 +1,563 @@
+// ============================================================
+//  ui.js — DOM の取り回し
+//  盤面・環・入力バッファ・調整パネル・テーマをここへ閉じ込め、
+//  入力ロジック側から DOM の知識を切り離す。
+// ============================================================
+
+import {
+  PANEL_GRID, MAT_TO_ROW, HOME_KEY, TIMING_RANGE, GAME,
+  VOWEL_PANEL_GRID, MAT_TO_VOWEL, DUO_RANGE, TIME_SIZE, DUO_BLUR, DUO_SLICE,
+} from './config.js';
+
+const $ = (id) => document.getElementById(id);
+
+const el = {
+  status: $('status'),
+  committed: $('committed'),
+  pending: $('pending'),
+  commitBar: $('commit-bar'),
+  commitMs: $('commit-ms'),
+  board: $('board'),
+  ring: $('ring'),
+  markRing: $('mark-ring'),
+  themeToggle: $('theme-toggle'),
+  holdRange: $('hold-range'),
+  holdOut: $('hold-out'),
+  repeatRange: $('repeat-range'),
+  repeatOut: $('repeat-out'),
+  homeRange: $('home-range'),
+  homeOut: $('home-out'),
+  commitRange: $('commit-range'),
+  commitOut: $('commit-out'),
+  debounceRange: $('debounce-range'),
+  debounceOut: $('debounce-out'),
+  keyboardCheck: $('keyboard-check'),
+  clearBtn: $('clear-btn'),
+  newrunBtn: $('newrun-btn'),
+
+  freeView: $('free-view'),
+  gameView: $('game-view'),
+  modeBtns: [...document.querySelectorAll('.mode-btn')],
+  gameTime: $('game-time'),
+  gameMiss: $('game-miss'),
+  gameProgress: $('game-progress'),
+  gameBar: $('game-bar'),
+  phrase: $('phrase'),
+  gameHint: $('game-hint'),
+  gameResult: $('game-result'),
+  resultTime: $('result-time'),
+  resultMiss: $('result-miss'),
+  resultPer: $('result-per'),
+  retryBtn: $('retry-btn'),
+
+  boardTitle: $('board-title'),
+  vowelWrap: $('vowel-wrap'),
+  vowelBoard: $('vowel-board'),
+  ringsBlock: $('rings-block'),
+  soloHint: $('solo-hint'),
+  duoHintRight: $('duo-hint-right'),
+
+  duoView: $('duo-view'),
+  duoBuffer: $('duo-buffer'),
+  duoSlots: document.querySelector('.duo-slots'),
+  duoConsonant: $('duo-consonant'),
+  duoVowel: $('duo-vowel'),
+  duoBar: $('duo-bar'),
+  duoMs: $('duo-ms'),
+  duoGap: $('duo-gap'),
+
+  shiftSetting: $('shift-setting'),
+  shiftNote: $('shift-note'),
+  pairSetting: $('pair-setting'),
+  pairNote: $('pair-note'),
+  shiftBtns: [...document.querySelectorAll('.shift-btn')],
+  pairRange: $('pair-range'),
+  pairOut: $('pair-out'),
+  swapBtn: $('swap-btn'),
+};
+
+/** 秒を小数1桁で。タイムは 0.1 秒まで見せれば足りる */
+const secs = (ms) => (ms / 1000).toFixed(1);
+
+/**
+ * 入力にかかった時間 → 字の大きさ（倍率）。
+ * minMs 以下は最小、maxMs 以上は最大で頭打ちにする。
+ * 青天井にすると、放置した1字だけで画面が埋まってしまうため。
+ */
+function scaleForMs(ms) {
+  const { minMs, maxMs, minScale, maxScale } = TIME_SIZE;
+  const t = Math.min(1, Math.max(0, (ms - minMs) / (maxMs - minMs)));
+  return minScale + t * (maxScale - minScale);
+}
+
+/**
+ * 二人のずれ → ぼかし量（em）。
+ * 既存作 works/boin-shiin-mvp と同じで、ずれ ÷ 許容ずれ をそのまま写す。
+ * そろっているほどくっきり、ずれるほどぼける。
+ */
+function blurForGap(gapMs, pairMs) {
+  const ratio = Math.min(1, Math.max(0, gapMs / pairMs));
+  return ratio * DUO_BLUR.maxEm;
+}
+
+/**
+ * ずれ → 短冊の割れ方。
+ *
+ * 字を横に count 本の短冊へ切り、一本ずつ左右にずらす。
+ * ずらし量は上端から下端へ進む正弦波で、**振幅が二人のずれ**。
+ * そろっていれば一直線、ずれるほど大きく割れる。
+ *
+ * 既存作 works/Sessan の #paintSlices と同じ考え方（あちらは縦に切って上下へ、
+ * 振幅は心拍）。こちらは canvas を持ち出さず、同じ字を count 枚重ねて
+ * clip-path で一本ぶんだけ見せている。
+ *
+ * @returns {{amp:number, layers:Array<{clip:string, shiftEm:number}>}}
+ */
+function sliceLayers(gapMs, pairMs) {
+  const ratio = Math.min(1, Math.max(0, gapMs / pairMs));
+  const amp = ratio * DUO_SLICE.maxShiftEm;
+  const n = DUO_SLICE.count;
+  const layers = [];
+  for (let i = 0; i < n; i++) {
+    const top = (i / n) * 100;
+    const bottom = 100 - ((i + 1) / n) * 100;
+    // 切れ目がドット単位でずれて隙間が出ないよう、上下に少しだけ食い込ませる
+    const bleed = i === 0 || i === n - 1 ? 0 : 0.35;
+    layers.push({
+      clip: `inset(${Math.max(0, top - bleed)}% 0 ${Math.max(0, bottom - bleed)}% 0)`,
+      shiftEm: Math.sin(-(i / n) * Math.PI * 2 * DUO_SLICE.waveTurns) * amp,
+    });
+  }
+  // 振幅も返す。割れた字ほど左右に余白を取り、自分で隣を押しのけるようにする
+  // （そうしないと、大きく割れた字が隣と重なって読めなくなる）
+  return { amp, layers };
+}
+
+/**
+ * 1字ずつ span に分けて並べる。
+ * 中身が変わっていなければ作り直さない（毎フレーム DOM を捨てると入力中にちらつく）。
+ *
+ * @param {HTMLElement} target
+ * @param {Array} items [{ ch, style }] style は span にそのまま当てる
+ * @param {string} signature 中身が同じかを見分ける鍵
+ */
+function renderChars(target, items, signature) {
+  if (target.dataset.signature === signature) return;
+  target.dataset.signature = signature;
+
+  target.innerHTML = '';
+  for (const it of items) {
+    target.appendChild(it.layers ? sliceSpan(it) : plainSpan(it));
+  }
+}
+
+function plainSpan(it) {
+  const span = document.createElement('span');
+  span.className = it.className ?? 'ch';
+  span.textContent = it.ch;
+  Object.assign(span.style, it.style ?? {});
+  return span;
+}
+
+/**
+ * 短冊に割れた1字。
+ * 字送りの幅は見えない土台がそのまま担い、その上に短冊を重ねる
+ * （重ねるほうを絶対配置にしているので、ずらしても行が崩れない）。
+ */
+function sliceSpan(it) {
+  const wrap = document.createElement('span');
+  wrap.className = 'ch slice';
+  Object.assign(wrap.style, it.style ?? {});
+
+  const base = document.createElement('span');
+  base.className = 'slice-base';
+  base.textContent = it.ch;
+  wrap.appendChild(base);
+
+  for (const layer of it.layers) {
+    const el = document.createElement('span');
+    el.className = 'slice-layer';
+    el.textContent = it.ch;
+    el.style.clipPath = layer.clip;
+    el.style.transform = `translateX(${layer.shiftEm.toFixed(4)}em)`;
+    wrap.appendChild(el);
+  }
+  return wrap;
+}
+
+/** 盤面のセル。key → DOM。毎フレーム querySelector しないため一度だけ作って持つ */
+const cells = new Map();
+/** 母音マットの盤面（二人モードのみ表示） */
+const vowelCells = new Map();
+
+/**
+ * SELECT / START は行の頭文字ではないので、盤面に出す字を別に決める。
+ * SELECT は「濁点・半濁点・小文字」の3つを1枚で兼ねるので記号を並べて示す。
+ */
+const SPECIAL_KANA = { [HOME_KEY]: '゛゜小' };
+
+// ── 盤面 ────────────────────────────────────────────────────
+
+/**
+ * 盤面を1枚組む。
+ * @param {HTMLElement} target 差し込み先
+ * @param {ReadonlyArray} grid 面の並び（PANEL_GRID / VOWEL_PANEL_GRID）
+ * @param {(key:string)=>string|undefined} labelOf その面に出す字。undefined なら「使わない面」
+ * @param {Map} store key → セルの控え（毎フレーム querySelector しないため）
+ */
+function buildBoardInto(target, grid, labelOf, store) {
+  const frag = document.createDocumentFragment();
+  for (const row of grid) {
+    for (const panel of row) {
+      const cell = document.createElement('div');
+      if (!panel) {
+        cell.className = 'cell empty'; // マットの上段中央は面が無い
+        frag.appendChild(cell);
+        continue;
+      }
+      const kana = labelOf(panel.key);
+      const isHome = panel.key === HOME_KEY && kana;
+      cell.className = 'cell'
+        + (isHome ? ' small home' : '')
+        + (kana ? '' : ' unused');
+      cell.innerHTML = `<span class="cell-mark"></span><span class="cell-kana"></span>`;
+      cell.querySelector('.cell-mark').textContent = panel.mark;
+      cell.querySelector('.cell-kana').textContent = kana ?? '・';
+      store.set(panel.key, cell);
+      frag.appendChild(cell);
+    }
+  }
+  target.appendChild(frag);
+}
+
+/** 子音盤（反転）と母音盤（正の向き）を両方組んでおく。表示の出し分けは setMode が行う */
+export function buildBoard() {
+  buildBoardInto(el.board, PANEL_GRID, (k) => MAT_TO_ROW[k] ?? SPECIAL_KANA[k], cells);
+  buildBoardInto(el.vowelBoard, VOWEL_PANEL_GRID, (k) => MAT_TO_VOWEL[k], vowelCells);
+}
+
+// ── 毎フレームの描画 ────────────────────────────────────────
+
+/**
+ * @param {object} snap ToggleEngine.snapshot() の返り値
+ * @param {Set<string>} pressed いま踏まれている面
+ * @param {Map<string, number>} holdProgress key → 溜めの進み具合 0〜1（受付済みは 1）
+ */
+export function render(snap, pressed, holdProgress) {
+  paintBoard(cells, pressed[0], holdProgress[0]);
+  paintBoard(vowelCells, pressed[1], holdProgress[1]);
+
+  if (!snap) return; // 二人モードはトグルの状態を持たない
+
+  // 確定した字は「出しはじめてから確定するまで」の時間で大きさが決まる。
+  // 未確定の字は経過に合わせて**その場で育つ**ので、迷っているあいだ字が膨らんでいく
+  const sized = snap.chars.map((c) => ({
+    ch: c.ch,
+    style: { fontSize: `${scaleForMs(c.ms).toFixed(3)}em` },
+  }));
+  renderChars(el.committed, sized, snap.chars.map((c) => `${c.ch}${Math.round(c.ms / 50)}`).join(','));
+
+  el.pending.textContent = snap.pendingChar ?? '';
+  el.pending.style.fontSize = snap.pendingChar
+    ? `${scaleForMs(snap.pendingMs).toFixed(3)}em`
+    : '';
+
+  // 確定メーターは「残り」を出す。減っていくほうが待ちの体感に合う
+  const remain = snap.pendingChar ? 1 - snap.commitProgress : 0;
+  el.commitBar.style.width = `${(remain * 100).toFixed(1)}%`;
+  el.commitMs.textContent = snap.pendingChar ? `${Math.round(snap.remainMs)} ms` : '—';
+
+  renderRing(el.ring, snap.ring, snap.ringIndex, 'まだ踏まれていません');
+  renderRing(el.markRing, snap.markRing, snap.markIndex, '—');
+}
+
+/** 盤面1枚ぶんの塗り替え */
+function paintBoard(store, pressed, holdProgress) {
+  if (!pressed) return;
+  for (const [key, cell] of store) {
+    const p = holdProgress?.get(key) ?? 0;
+    // 溜めの途中は下から墨が満ちる。満ちきった面だけが反転して「入った」ことを示す。
+    // 通過しただけの面は途中まで満ちて消えるので、拾われなかったことが目で分かる
+    cell.classList.toggle('on', pressed.has(key) && p >= 1);
+    cell.classList.toggle('holding', pressed.has(key) && p < 1);
+    cell.style.setProperty('--hold', p.toFixed(3));
+  }
+}
+
+/**
+ * 環を横一列に並べ、いまの位置を強調する。
+ * 「何回目を踏んでいるか」を数えずに目で確かめられるようにするための表示。
+ */
+function renderRing(target, ring, index, emptyText) {
+  // 中身が同じなら作り直さない（毎フレーム DOM を捨てると入力中にちらつく）
+  const signature = ring && ring.length ? `${ring.join('')}|${index}` : '';
+  if (target.dataset.signature === signature) return;
+  target.dataset.signature = signature;
+
+  if (!signature) {
+    // 空にするときも署名を '' に更新しておくこと。
+    // 更新を忘れると、同じ環・同じ位置に戻ってきたときに署名が一致してしまい、
+    // 「まだ踏まれていません」の表示のまま張り付く。
+    target.innerHTML = `<span class="ring-empty"></span>`;
+    target.firstChild.textContent = emptyText;
+    return;
+  }
+
+  target.innerHTML = '';
+  ring.forEach((ch, i) => {
+    const item = document.createElement('span');
+    item.className = i === index ? 'ring-item current' : 'ring-item';
+    item.textContent = ch;
+    target.appendChild(item);
+  });
+}
+
+// ── 状態表示 ────────────────────────────────────────────────
+
+export function setStatus({ connected, message }) {
+  el.status.textContent = message;
+  el.status.classList.toggle('connected', Boolean(connected));
+}
+
+// ── 調整パネル・テーマ ──────────────────────────────────────
+
+/**
+ * 調整パネルを配線する。値の保持は呼び出し側（script.js）の責任で、
+ * ここは「動かされたら教える」だけにしてある。
+ *
+ * @param {object} handlers
+ * @param {{commitMs:number, releaseDebounceMs:number, keyboard:boolean}} initial
+ */
+export function bindSettings(handlers, initial) {
+  applyRange(el.holdRange, TIMING_RANGE.holdMs, initial.holdMs);
+  applyRange(el.repeatRange, TIMING_RANGE.repeatHoldMs, initial.repeatHoldMs);
+  applyRange(el.homeRange, TIMING_RANGE.homeDoubleMs, initial.homeDoubleMs);
+  applyRange(el.commitRange, TIMING_RANGE.commitMs, initial.commitMs);
+  applyRange(el.debounceRange, TIMING_RANGE.releaseDebounceMs, initial.releaseDebounceMs);
+  el.keyboardCheck.checked = initial.keyboard;
+  el.holdOut.textContent = `${initial.holdMs} ms`;
+  el.repeatOut.textContent = `${initial.repeatHoldMs} ms`;
+  el.homeOut.textContent = `${initial.homeDoubleMs} ms`;
+  el.commitOut.textContent = `${initial.commitMs} ms`;
+  el.debounceOut.textContent = `${initial.releaseDebounceMs} ms`;
+
+  el.holdRange.addEventListener('input', () => {
+    const v = Number(el.holdRange.value);
+    el.holdOut.textContent = `${v} ms`;
+    handlers.onHoldMs?.(v);
+  });
+  el.repeatRange.addEventListener('input', () => {
+    const v = Number(el.repeatRange.value);
+    el.repeatOut.textContent = `${v} ms`;
+    handlers.onRepeatHoldMs?.(v);
+  });
+  el.homeRange.addEventListener('input', () => {
+    const v = Number(el.homeRange.value);
+    el.homeOut.textContent = `${v} ms`;
+    handlers.onHomeDoubleMs?.(v);
+  });
+  el.commitRange.addEventListener('input', () => {
+    const v = Number(el.commitRange.value);
+    el.commitOut.textContent = `${v} ms`;
+    handlers.onCommitMs?.(v);
+  });
+  el.debounceRange.addEventListener('input', () => {
+    const v = Number(el.debounceRange.value);
+    el.debounceOut.textContent = `${v} ms`;
+    handlers.onDebounceMs?.(v);
+  });
+  el.keyboardCheck.addEventListener('change', () => handlers.onKeyboard?.(el.keyboardCheck.checked));
+  el.clearBtn.addEventListener('click', () => handlers.onClear?.());
+}
+
+function applyRange(input, range, value) {
+  input.min = range.min;
+  input.max = range.max;
+  input.step = range.step;
+  input.value = value;
+}
+
+/** ライト / ダーク切替。既存作品と同じく <html data-theme> を差し替えるだけ */
+export function bindTheme(storageKey) {
+  const saved = localStorage.getItem(storageKey);
+  if (saved) document.documentElement.dataset.theme = saved;
+
+  el.themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(storageKey, next);
+  });
+}
+
+
+// ── モード切替 ──────────────────────────────────────────────
+
+export function setMode(mode) {
+  const duo = mode === 'duo';
+
+  el.freeView.hidden = mode !== 'free';
+  el.gameView.hidden = mode !== 'game';
+  el.duoView.hidden = !duo;
+  el.newrunBtn.hidden = mode !== 'game';
+
+  // 右カラム：二人モードだけ盤面を2枚出し、トグルの環は引っこめる
+  el.vowelWrap.hidden = !duo;
+  el.boardTitle.hidden = !duo;
+  el.ringsBlock.hidden = duo;
+  el.soloHint.hidden = duo;
+  el.duoHintRight.hidden = !duo;
+
+  // 調整パネル：二人モードでしか効かないものを出し入れする
+  el.shiftSetting.hidden = !duo;
+  el.shiftNote.hidden = !duo;
+  el.pairSetting.hidden = !duo;
+  el.pairNote.hidden = !duo;
+  el.swapBtn.hidden = !duo;
+
+  for (const btn of el.modeBtns) btn.classList.toggle('is-on', btn.dataset.mode === mode);
+}
+
+export function bindModes(onChange) {
+  for (const btn of el.modeBtns) {
+    btn.addEventListener('click', () => onChange(btn.dataset.mode));
+  }
+  el.retryBtn.addEventListener('click', () => onChange('game', { restart: true }));
+  el.newrunBtn.addEventListener('click', () => onChange('game', { restart: true }));
+}
+
+/** マットの入れ替えボタン。2台とも同じ VID/PID で、どちらが子音側かは列挙順まかせなので要る */
+export function bindSwap(onSwap) {
+  el.swapBtn.addEventListener('click', onSwap);
+}
+
+// ── タイムアタックの描画 ────────────────────────────────────
+
+/**
+ * @param {object} g game.js のスナップショット
+ * @param {string|null} pendingChar いま出ている未確定の字
+ */
+export function renderGame(g, pendingChar, chars = []) {
+  el.gameTime.textContent = secs(g.elapsed);
+  el.gameMiss.textContent = g.misses;
+  el.gameProgress.textContent = `${Math.min(g.phraseIndex + 1, g.phraseCount)} / ${g.phraseCount}`;
+  el.gameBar.style.width = `${(g.totalChars ? (g.doneChars / g.totalChars) * 100 : 0).toFixed(1)}%`;
+
+  renderPhrase(g, pendingChar, chars);
+
+  el.gameHint.hidden = g.started;
+  el.gameResult.hidden = !g.finished;
+  if (g.finished) {
+    el.resultTime.textContent = secs(g.elapsed);
+    el.resultMiss.textContent = g.misses;
+    el.resultPer.textContent = secs(g.msPerChar);
+  }
+}
+
+/**
+ * お題を1字ずつ組む。打ち終えた字は墨、これから踏む字は薄墨、いま狙う字だけ枠で囲む。
+ *
+ * 狙う字の直後に、いま出ている未確定の字を薄く添える。
+ * トグルは目的の字に着くまで環を回るので、「いまどこまで来たか」が見えないと
+ * あと何回踏めばよいか分からなくなる（右の環表示と同じことを、目線を動かさずに読めるように）。
+ */
+function renderPhrase(g, pendingChar, chars) {
+  const signature = `${g.phrase}|${g.typed.length}|${pendingChar ?? ''}|${g.finished}`;
+  if (el.phrase.dataset.signature === signature) return;
+  el.phrase.dataset.signature = signature;
+
+  el.phrase.innerHTML = '';
+  const cursor = g.typed.length;
+  [...g.phrase].forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.className = 'phrase-char' + (i < cursor ? ' done' : i === cursor ? ' now' : '');
+    span.textContent = ch;
+    // 打ち終えた字は、その1字にかかった時間で大きさが決まる。
+    // どこで手こずったかが、打ち終えた文にそのまま残る
+    // 打ち終えた字は、その字を踏みはじめる前に止まっていた時間で大きさが決まる。
+    // どこで手が止まったかが、打ち終えた文にそのまま残る
+    if (TIME_SIZE.inGame && i < cursor && chars[i]) {
+      span.style.fontSize = `${scaleForMs(chars[i].ms).toFixed(3)}em`;
+    }
+    el.phrase.appendChild(span);
+
+    if (i === cursor && pendingChar) {
+      const p = document.createElement('span');
+      p.className = 'phrase-pending';
+      p.textContent = `（${pendingChar}）`;
+      el.phrase.appendChild(p);
+    }
+  });
+}
+
+/** お題に無い面を踏んだことを一瞬だけ見せる */
+export function flashMiss(key) {
+  const cell = cells.get(key);
+  if (!cell) return;
+  cell.classList.remove('miss');
+  void cell.offsetWidth; // アニメーションを取り直すための強制リフロー
+  cell.classList.add('miss');
+  setTimeout(() => cell.classList.remove('miss'), GAME.missFlashMs);
+}
+
+
+// ── 二人モードの描画 ────────────────────────────────────────
+
+/**
+ * @param {object} d DuoEngine.snapshot() の返り値
+ */
+export function renderDuo(d, pairMs, shiftMode = 'blur') {
+  // 呼吸が合った字ほどくっきり、ずれるほど崩れる。
+  // 「相手と合ったかどうか」がそのまま字の像として残る
+  const items = d.chars.map((c) => {
+    if (shiftMode !== 'slice') {
+      return { ch: c.ch, style: { filter: `blur(${blurForGap(c.gapMs, pairMs).toFixed(4)}em)` } };
+    }
+    const { amp, layers } = sliceLayers(c.gapMs, pairMs);
+    return { ch: c.ch, layers, style: { margin: `0 ${amp.toFixed(4)}em` } };
+  });
+  const signature = shiftMode + '|' + d.chars.map((c) => `${c.ch}${Math.round(c.gapMs / 25)}`).join(',');
+  renderChars(el.duoBuffer, items, signature);
+
+  // 成立しなかった組み合わせは、そのまま両側に残して一瞬見せる。
+  // 「や と い を踏んだが字にならなかった」ことが分かるように、消さずに出す
+  const rej = d.lastReject;
+  const consonant = rej ? rej.consonant : (d.waitingSide === 'consonant' ? d.waitingValue : null);
+  const vowel = rej ? rej.vowel : (d.waitingSide === 'vowel' ? d.waitingValue : null);
+
+  el.duoConsonant.querySelector('b').textContent = consonant ?? '—';
+  el.duoVowel.querySelector('b').textContent = vowel ?? '—';
+  el.duoConsonant.classList.toggle('waiting', !rej && d.waitingSide === 'consonant');
+  el.duoVowel.classList.toggle('waiting', !rej && d.waitingSide === 'vowel');
+  el.duoSlots.classList.toggle('rejected', Boolean(rej));
+
+  // 相方待ちの残り時間。減っていくほうが「間に合わない」感じに合う
+  el.duoBar.style.width = `${(d.waitingRemain * 100).toFixed(1)}%`;
+  el.duoMs.textContent = d.waitingSide ? `${Math.round(d.remainMs)} ms` : '—';
+
+  // 直近に成立した1文字のずれ。呼吸が合ったかどうかがそのまま数字になる
+  el.duoGap.textContent = d.lastPair ? `${Math.round(d.lastPair.gapMs)} ms` : '—';
+}
+
+/** 二人モードの許容ずれスライダ */
+export function bindDuoSettings(handlers, initial) {
+  applyRange(el.pairRange, DUO_RANGE.pairMs, initial.pairMs);
+  el.pairOut.textContent = `${initial.pairMs} ms`;
+  el.pairRange.addEventListener('input', () => {
+    const v = Number(el.pairRange.value);
+    el.pairOut.textContent = `${v} ms`;
+    handlers.onPairMs?.(v);
+  });
+}
+
+
+/** ずれの見せ方（ぼかし / 短冊）の切り替え */
+export function bindShiftMode(onChange, initial) {
+  setShiftMode(initial);
+  for (const btn of el.shiftBtns) {
+    btn.addEventListener('click', () => { setShiftMode(btn.dataset.shift); onChange(btn.dataset.shift); });
+  }
+}
+
+export function setShiftMode(mode) {
+  for (const btn of el.shiftBtns) btn.classList.toggle('is-on', btn.dataset.shift === mode);
+}

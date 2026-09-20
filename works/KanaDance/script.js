@@ -1,75 +1,40 @@
 // ============================================================
-//  script.js — KanaDance 本体
+//  script.js — KanaDance 本体（初期化と描画ループ）
 //  カメラで身体を捉え、ポーズを「かな字形」として登録／判別する。
 //   登録モード: いまのポーズを字と紐づけて Supabase に保存
 //   判別モード: 最も近い字を推定し、一筆書き（または巨大文字）を重ねて描く
+//  一筆書きは時間のブレンド：直近 1 秒を 0.1 秒ごとに取り、
+//  隣り合う字形の間を補間して重ねる（Illustrator のブレンドツールのイメージ）。
 // ============================================================
 
 import { PoseLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs';
 import { APP_CONFIG } from './config.js';
 import { loadReferencePoses, savePose } from './pose-store.js';
-import { normalizePose, toPixelPoints, matchLetter, resolvePoint } from './pose-matcher.js';
+import { normalizePose, toPixelPoints, matchLetter } from './pose-matcher.js';
+import { PoseHistory } from './pose-history.js';
+import { Renderer } from './renderer.js';
+import * as ui from './ui.js';
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
-// ── DOM 参照 ────────────────────────────────────────────────
-const video       = document.getElementById('webcam');
-const canvas      = document.getElementById('output_canvas');
-const ctx         = canvas.getContext('2d');
-const resultDiv   = document.getElementById('result');
-const registerUi  = document.getElementById('register-ui');
-const container   = document.getElementById('canvas-container');
-const kanaInput   = document.getElementById('kana-input');
-const registerBtn = document.getElementById('register-btn');
-
-// キャンバス・コンテナのサイズを設定に合わせる
-const { width: W, height: H } = APP_CONFIG.video;
-video.width = W; video.height = H;
-canvas.width = W; canvas.height = H;
-container.style.width = `${W}px`;
-container.style.maxWidth = '100%';
-container.style.aspectRatio = `${W} / ${H}`;
+ui.setupLayout();
+const renderer = new Renderer(ui.canvas);
+const history = new PoseHistory(APP_CONFIG.limits.bufferMs);
 
 // ── 状態 ────────────────────────────────────────────────────
 let poseLandmarker = null;
 let references = { poses: {}, lines: {} };
 let latestNormalized = null;   // 直近フレームの正規化ポーズ（登録に使う）
 let lastVideoTime = -1;
-let matchThreshold = APP_CONFIG.matchThreshold; // スライダーで調整可能
+// 直近に一致した字。動いている最中は一致が外れやすいので、
+// さかのぼる時間ぶんだけ保持して、尾のブレンドを描き切る。
+let latched = { letter: null, atMs: -Infinity };
 
-const currentMode = () => document.querySelector('input[name="app-mode"]:checked').value;
-
-// ── しきい値スライダー ──────────────────────────────────────
-const thresholdInput = document.getElementById('threshold-input');
-const thresholdValue = document.getElementById('threshold-value');
-if (thresholdInput && thresholdValue) {
-  thresholdInput.value = String(matchThreshold);
-  thresholdValue.textContent = matchThreshold.toFixed(2);
-  thresholdInput.addEventListener('input', () => {
-    matchThreshold = parseFloat(thresholdInput.value);
-    thresholdValue.textContent = matchThreshold.toFixed(2);
-  });
-}
-
-function setStatus(msg) {
-  resultDiv.textContent = msg;
-  resultDiv.classList.remove('error');
-}
-function setError(msg) {
-  resultDiv.textContent = `⚠️ ${msg}`;
-  resultDiv.classList.add('error');
-  console.error(msg);
-}
-
-// ── モード切り替え ──────────────────────────────────────────
-document.querySelectorAll('input[name="app-mode"]').forEach((radio) => {
-  radio.addEventListener('change', (e) => {
-    const register = e.target.value === 'register';
-    registerUi.hidden = !register;
-    setStatus(register ? '登録モード：ポーズをとって DB に登録してください' : '判別モード：ポーズを探しています…');
-  });
+ui.bindControls({
+  onRegister: registerCurrentPose,
+  onThemeChange: () => renderer.syncTheme(),
 });
 
 // ── 初期化 ──────────────────────────────────────────────────
@@ -82,8 +47,7 @@ document.querySelectorAll('input[name="app-mode"]').forEach((radio) => {
   try {
     references = await loadReferencePoses();
   } catch (err) {
-    console.error(err);
-    setError(`参照ポーズを読み込めません（判別不可・登録は可能）: ${err.message}`);
+    ui.setError(`参照ポーズを読み込めません（判別不可・登録は可能）: ${err.message}`);
   }
 
   // 3) 姿勢推定モデル（判別・描画に必要。無くてもカメラ映像は出る）
@@ -94,131 +58,114 @@ document.querySelectorAll('input[name="app-mode"]').forEach((radio) => {
       runningMode: 'VIDEO',
     });
   } catch (err) {
-    setError(`姿勢推定モデルを読み込めません: ${err.message}`);
+    ui.setError(`姿勢推定モデルを読み込めません: ${err.message}`);
   }
 })();
 
 async function startCamera() {
   try {
+    // ideal で「希望」を伝えるだけにする。exact にすると、その解像度を出せない
+    // カメラで起動そのものが失敗する。来たサイズには画面のほうを合わせる。
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: W, height: H },
+      video: {
+        width: { ideal: APP_CONFIG.video.width },
+        height: { ideal: APP_CONFIG.video.height },
+      },
       audio: false,
     });
-    video.srcObject = stream;
-    video.addEventListener('loadeddata', () => {
-      setStatus('カメラを許可しました。ポーズをとってください…');
+    ui.video.srcObject = stream;
+    ui.video.addEventListener('loadeddata', () => {
+      ui.setStatus(`カメラを許可しました（${ui.video.videoWidth}×${ui.video.videoHeight}）。ポーズをとってください…`);
       requestAnimationFrame(renderLoop);
     }, { once: true });
   } catch (err) {
-    setError(`カメラを起動できません: ${err.message}`);
+    ui.setError(`カメラを起動できません: ${err.message}`);
   }
 }
 
 // ── 描画ループ ──────────────────────────────────────────────
 function renderLoop() {
   requestAnimationFrame(renderLoop);
-  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
-  lastVideoTime = video.currentTime;
+  if (!poseLandmarker || ui.video.currentTime === lastVideoTime) return;
+  lastVideoTime = ui.video.currentTime;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const results = poseLandmarker.detectForVideo(video, performance.now());
+  // 実際に来ている解像度に毎フレーム追従する。
+  // 変わったら軌跡は捨てる（前の解像度のピクセル座標が混ざると掃きが飛ぶ）
+  const w = ui.video.videoWidth;
+  const h = ui.video.videoHeight;
+  if (ui.syncFrameSize(w, h)) history.clear();
+
+  renderer.clear();
+  const now = performance.now();
+  const results = poseLandmarker.detectForVideo(ui.video, now);
   if (!results.landmarks?.length) return;
 
   const landmarks = results.landmarks[0];
   latestNormalized = normalizePose(landmarks);
-  const pixelPoints = toPixelPoints(landmarks, canvas.width, canvas.height);
 
-  drawJoints(pixelPoints);
+  const pixelPoints = toPixelPoints(landmarks, w, h);
+  history.push(now, pixelPoints);
 
-  if (currentMode() !== 'detect') return;
+  renderer.drawJoints(pixelPoints);
 
+  if (ui.currentMode() !== 'detect') return;
+  drawDetection(now);
+}
+
+/** 判別モードの描画とステータス表示 */
+function drawDetection(now) {
   const refCount = Object.keys(references.poses).length;
   if (refCount === 0) {
-    setStatus('参照ポーズが読み込めていません（DB未接続）');
+    ui.setStatus('参照ポーズが読み込めていません（DB未接続）');
     return;
   }
 
-  // 最も近い字とその誤差を毎フレーム求める（しきい値判定はここで）
+  const { matchThreshold, windowMs, intervalMs } = ui.settings;
   const { letter, error } = matchLetter(latestNormalized, references.poses);
-  if (letter && error < matchThreshold) {
-    setStatus(`判定結果:「${letter}」 誤差 ${error.toFixed(2)} / しきい値 ${matchThreshold.toFixed(2)}`);
-    const lines = references.lines[letter];
-    if (lines?.length) {
-      drawKanaLines(lines, pixelPoints);
-    } else {
-      drawBigChar(letter); // 線データが無い字（ノ/フ/リ等）は巨大文字表示
-    }
+  const matched = letter && error < matchThreshold;
+
+  if (matched) {
+    latched = { letter, atMs: now };
+    ui.setStatus(`判定結果:「${letter}」 誤差 ${error.toFixed(2)} / しきい値 ${matchThreshold.toFixed(2)}`);
   } else {
     // 一致しないときも「最も近い候補と誤差」を出す＝どれだけ惜しいか可視化しスライダーで調整できる
-    setStatus(`最も近い:「${letter ?? '—'}」誤差 ${error.toFixed(2)}（一致=しきい値 ${matchThreshold.toFixed(2)} 未満）／登録 ${refCount} 件`);
+    ui.setStatus(`最も近い:「${letter ?? '—'}」誤差 ${error.toFixed(2)}（一致=しきい値 ${matchThreshold.toFixed(2)} 未満）／登録 ${refCount} 件`);
   }
-}
 
-// ── 描画パーツ ──────────────────────────────────────────────
-function drawJoints(pixelPoints) {
-  ctx.fillStyle = APP_CONFIG.dotColor;
-  for (const p of Object.values(pixelPoints)) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, APP_CONFIG.jointRadius, 0, 2 * Math.PI);
-    ctx.fill();
+  // 一致が切れても、さかのぼる時間のあいだは尾を描き続ける
+  if (!latched.letter || now - latched.atMs > windowMs) {
+    ui.setCurrentChar(null);
+    ui.setShapeCount(0);
+    return;
   }
-}
+  ui.setCurrentChar(latched.letter);
 
-/** 一筆書き記述に沿って身体上に線を引く */
-function drawKanaLines(lines, pixelPoints) {
-  ctx.strokeStyle = APP_CONFIG.line.color;
-  ctx.lineWidth = APP_CONFIG.line.width;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  for (const lineStr of lines) {
-    const tokens = lineStr.split('-');
-    const start = resolvePoint(tokens[0], pixelPoints);
-    if (!start) continue;
-
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    for (let i = 1; i < tokens.length; i++) {
-      const pt = resolvePoint(tokens[i], pixelPoints);
-      if (pt) ctx.lineTo(pt.x, pt.y);
-    }
-    ctx.stroke();
+  const lines = references.lines[latched.letter];
+  if (!lines?.length) {
+    renderer.drawBigChar(latched.letter); // 線データが無い字（ノ/フ/リ等）は巨大文字表示
+    ui.setShapeCount(0);
+    return;
   }
-}
 
-/** 線データが無い字は、鏡像を打ち消して中央に大きく表示する */
-function drawBigChar(letter) {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.font = `bold ${APP_CONFIG.fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.scale(-1, 1); // canvas は CSS で左右反転しているので文字だけ元に戻す
-  ctx.fillText(letter, 0, 0);
-  ctx.restore();
+  const frames = history.keyframes(windowMs, intervalMs, APP_CONFIG.limits.maxKeyframes);
+  ui.setShapeCount(renderer.drawKanaBlend(lines, frames, ui.settings));
 }
 
 // ── 登録 ────────────────────────────────────────────────────
-registerBtn.addEventListener('click', async () => {
-  const letter = kanaInput.value.trim();
-  if (!letter) { setError('文字を入力してください'); return; }
-  if (!latestNormalized) { setError('身体が検出されていません'); return; }
+async function registerCurrentPose(letter) {
+  if (!latestNormalized) { ui.setError('身体が検出されていません'); return; }
 
-  registerBtn.disabled = true;
-  setStatus('Supabase に送信中…');
+  ui.setStatus('Supabase に送信中…');
   try {
     await savePose(letter, latestNormalized);
     references = await loadReferencePoses(); // 追加分を即反映
-    kanaInput.value = '';
-    setStatus(`✅ 「${letter}」を登録しました`);
+    ui.clearKanaInput();
+    ui.setStatus(`✅ 「${letter}」を登録しました`);
   } catch (err) {
-    setError(`登録に失敗しました: ${err.message}`);
-  } finally {
-    registerBtn.disabled = false;
+    ui.setError(`登録に失敗しました: ${err.message}`);
   }
-});
+}
 
 window.addEventListener('beforeunload', () => {
-  video.srcObject?.getTracks().forEach((t) => t.stop());
+  ui.video.srcObject?.getTracks().forEach((t) => t.stop());
 });

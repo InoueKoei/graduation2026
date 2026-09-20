@@ -1,0 +1,360 @@
+/* ── DanceToggle スタイル（sumi 基調・墨のモノクロ）。色はすべてトークン参照 ──
+   デザイントークンは sumi-tokens.css を先に読み込むこと。 */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+:root {
+  --gap: 16px;
+  --radius: 12px;
+}
+
+body {
+  margin: 0;
+  padding: 16px 16px 32px;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: "ZEN Interface", system-ui, -apple-system, sans-serif;
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap);
+}
+
+/* ── 上部 ─────────────────────────────────────────────── */
+.topbar {
+  width: min(1000px, 100%);
+  display: flex; align-items: center; gap: 12px;
+}
+.title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .04em; }
+.status {
+  margin: 0; flex: 1;
+  font-size: 12.5px; color: var(--color-text-placeholder);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.status.connected { color: var(--color-text-secondary); }
+
+.icon-btn {
+  width: 36px; height: 36px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 16px; line-height: 1;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+.icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent-strong); }
+
+/* ── 2カラム。左＝テキスト、右＝踏んでいる状況 ─────────── */
+.columns {
+  width: min(1000px, 100%);
+  display: grid; grid-template-columns: 1fr 360px; gap: var(--gap);
+  align-items: stretch;
+}
+.col {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius);
+}
+.panel-label {
+  font-size: 11px; letter-spacing: .12em;
+  color: var(--color-text-placeholder); text-transform: uppercase;
+}
+
+/* ── 左：入力テキスト ─────────────────────────────────── */
+.text-buffer {
+  flex: 1; min-height: 300px;
+  font-size: 44px; line-height: 1.6; letter-spacing: .04em;
+  word-break: break-all; overflow-y: auto;
+}
+/* 未確定の1字。確定済みと同じ大きさのまま色だけ薄くして、下線で「まだ動く」ことを示す */
+.pending {
+  color: var(--color-text-placeholder);
+  border-bottom: 3px solid var(--color-accent-default);
+}
+
+.commit {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--color-text-placeholder);
+}
+.commit-label { flex: 0 0 auto; }
+.commit-ms { flex: 0 0 auto; min-width: 5em; text-align: right; font-variant-numeric: tabular-nums; }
+.meter {
+  flex: 1; height: 5px; border-radius: 999px;
+  background: var(--color-muted); overflow: hidden;
+}
+.meter > i {
+  display: block; height: 100%; width: 0;
+  background: var(--color-accent-default);
+}
+
+/* ── 右：盤面 ─────────────────────────────────────────── */
+.board {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+  aspect-ratio: 3 / 4;
+}
+.cell {
+  --hold: 0;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1px solid var(--color-border); border-radius: 8px;
+  background: var(--color-column);
+  transition: background .06s linear, color .06s linear, border-color .06s linear;
+}
+.cell.empty { border-style: dashed; background: transparent; }
+.cell > * { position: relative; z-index: 1; }
+
+/* 溜めの途中は下から墨が満ちる。満ちきる前に足が離れれば、通過として捨てられたことが分かる。
+   高さは JS が毎フレーム入れる --hold（0〜1）なので、ここに transition は掛けない */
+.cell.holding::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; z-index: 0;
+  height: calc(var(--hold) * 100%);
+  /* 踏みながら離れて見るので、薄いオーバーレイでは読めない。
+     反転（.on）へ向かう途中とわかる中間の墨を置く */
+  background: var(--color-text-placeholder);
+}
+.cell.holding { border-color: var(--color-text-placeholder); }
+
+/* 受け付けられた面は墨を反転させる。足元と画面を一目で照合するため、中間状態は作らない */
+.cell.on {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+  color: var(--color-background);
+}
+.cell-mark { font-size: 12px; color: var(--color-text-placeholder); line-height: 1; }
+.cell.on .cell-mark { color: var(--color-background); }
+.cell-kana { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.cell.small .cell-kana { font-size: 13px; font-weight: 400; }
+
+/* ── 環（いま何回目か） ───────────────────────────────── */
+.rings { display: flex; flex-direction: column; gap: 6px; }
+.ring-row { display: flex; align-items: center; gap: 10px; }
+.ring-label {
+  flex: 0 0 auto; width: 1.6em;
+  font-size: 11px; color: var(--color-text-placeholder);
+}
+.ring { display: flex; gap: 4px; flex-wrap: wrap; min-height: 30px; align-items: center; }
+.ring-empty { font-size: 11px; color: var(--color-disabled); }
+.ring-item {
+  min-width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 17px; border-radius: 6px;
+  border: 1px solid transparent;
+  color: var(--color-text-placeholder);
+}
+.ring-item.current {
+  border-color: var(--color-accent-strong);
+  color: var(--color-accent-strong);
+  font-weight: 700;
+}
+
+.hint {
+  margin: 0; font-size: 11.5px; line-height: 1.7;
+  color: var(--color-text-placeholder);
+  border-top: 1px solid var(--color-border); padding-top: 10px;
+}
+.hint b { color: var(--color-text-secondary); font-weight: 700; }
+
+/* ── 調整パネル ───────────────────────────────────────── */
+.settings {
+  width: min(1000px, 100%);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius);
+}
+.setting {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 12.5px; color: var(--color-text-secondary);
+}
+.setting-name { flex: 0 0 auto; width: 9em; color: var(--color-text-placeholder); }
+.setting input[type="range"] { flex: 1; accent-color: var(--color-accent-default); }
+.setting-out { flex: 0 0 auto; min-width: 5em; text-align: right; font-variant-numeric: tabular-nums; }
+.setting-check { flex: 1; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.setting-note {
+  margin: -4px 0 4px 0; padding-left: calc(9em + 12px);
+  font-size: 11.5px; line-height: 1.7; color: var(--color-text-placeholder);
+}
+.setting code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; padding: 1px 4px; border-radius: 4px;
+  background: var(--color-muted); color: var(--color-text-secondary);
+}
+
+.btn-ghost {
+  flex: 0 0 auto;
+  font: inherit; font-size: 12px; padding: 6px 14px;
+  background: transparent; color: var(--color-text-secondary);
+  border: 1px solid var(--color-border); border-radius: 999px; cursor: pointer;
+}
+.btn-ghost:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+
+/* ── 狭い画面 ─────────────────────────────────────────── */
+@media (max-width: 800px) {
+  .columns { grid-template-columns: 1fr; }
+  .text-buffer { min-height: 140px; font-size: 34px; }
+  .board { max-width: 320px; }
+  .setting { flex-wrap: wrap; }
+  .setting-name { width: 100%; }
+  .setting-note { padding-left: 0; }
+}
+
+/* ── モード切替 ───────────────────────────────────────── */
+.modes { display: flex; gap: 0; flex: 0 0 auto; border: 1px solid var(--color-border); border-radius: 999px; overflow: hidden; }
+.mode-btn {
+  font: inherit; font-size: 12px; padding: 7px 14px;
+  background: transparent; color: var(--color-text-placeholder);
+  border: none; cursor: pointer; white-space: nowrap;
+}
+.mode-btn:hover { background: var(--color-muted); }
+.mode-btn.is-on { background: var(--color-accent-strong); color: var(--color-background); }
+
+/* ── タイムアタック ───────────────────────────────────── */
+#free-view, #game-view { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+
+.game-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.game-stats { display: flex; gap: 16px; align-items: baseline; font-size: 12px; color: var(--color-text-placeholder); }
+.game-stats .stat { display: inline-flex; align-items: baseline; gap: 3px; }
+.game-stats b { font-size: 17px; color: var(--color-text-primary); font-variant-numeric: tabular-nums; font-weight: 700; }
+.unit { font-size: 11px; color: var(--color-text-placeholder); }
+
+.phrase-meter { height: 3px; border-radius: 999px; background: var(--color-muted); overflow: hidden; }
+.phrase-meter > i { display: block; height: 100%; width: 0; background: var(--color-accent-default); transition: width .12s linear; }
+
+/* お題。打ち終えた字は墨、これから踏む字は薄墨、いま狙う字だけ枠で囲む */
+.phrase {
+  flex: 1; min-height: 160px;
+  font-size: 40px; line-height: 1.9; letter-spacing: .06em;
+  word-break: break-all;
+}
+.phrase-char { color: var(--color-disabled); }
+.phrase-char.done { color: var(--color-text-primary); }
+.phrase-char.now {
+  color: var(--color-accent-strong);
+  box-shadow: inset 0 -3px 0 var(--color-accent-default);
+}
+/* いま出ている未確定の字。狙う字の直後に薄く添えて、あと何回踏むかを見当づける */
+.phrase-pending { color: var(--color-text-placeholder); }
+
+.game-hint { margin: 0; font-size: 12px; color: var(--color-text-placeholder); }
+
+.game-result {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 16px; border: 1px solid var(--color-accent-strong); border-radius: var(--radius);
+}
+.result-label { font-size: 11px; letter-spacing: .12em; color: var(--color-text-placeholder); }
+.result-time b { font-size: 46px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.result-detail { display: flex; gap: 18px; font-size: 13px; color: var(--color-text-secondary); }
+.result-detail b { font-variant-numeric: tabular-nums; }
+
+/* お題に無い面を踏んだとき。反転させたうえで一瞬だけ強く見せる */
+.cell.miss, .cell.miss.on {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-background);
+  animation: miss-flash .26s ease-out;
+}
+@keyframes miss-flash {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 800px) {
+  .topbar { flex-wrap: wrap; }
+  .status { order: 3; width: 100%; }
+  .phrase { font-size: 30px; min-height: 110px; }
+}
+
+/* ── 二人モード ───────────────────────────────────────── */
+#duo-view { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+
+/* 待っている片割れ。子音 × 母音 の形をそのまま出す */
+.duo-pending { display: flex; flex-direction: column; gap: 10px; }
+.duo-slots { display: flex; align-items: center; gap: 12px; }
+.duo-slot {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 14px; min-height: 58px;
+  border: 1px solid var(--color-border); border-radius: 8px;
+  background: var(--color-column);
+}
+.duo-slot-label { font-size: 11px; color: var(--color-text-placeholder); }
+.duo-slot b { font-size: 30px; line-height: 1; color: var(--color-disabled); font-weight: 700; }
+/* 踏まれて相方を待っている側 */
+.duo-slot.waiting { border-color: var(--color-accent-strong); }
+.duo-slot.waiting b { color: var(--color-accent-strong); }
+.duo-x { font-size: 16px; color: var(--color-text-placeholder); }
+
+/* 成立しない組み合わせ（や行のい など）を一瞬だけ見せる */
+.duo-slots.rejected .duo-slot { border-color: var(--color-text-primary); }
+.duo-slots.rejected .duo-slot b { color: var(--color-text-primary); }
+.duo-slots.rejected .duo-x::after {
+  content: ' 成立しません'; font-size: 11px; color: var(--color-text-secondary);
+}
+
+/* ── 盤面を2枚並べる ─────────────────────────────────── */
+.boards { display: flex; gap: 10px; align-items: flex-start; }
+.board-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.board-title {
+  font-size: 11px; letter-spacing: .08em; color: var(--color-text-placeholder);
+  text-align: center;
+}
+/* 使わない面は薄く。母音マットの下段など */
+.cell.unused { opacity: .3; }
+.cell.unused .cell-kana { font-size: 13px; font-weight: 400; }
+
+/* ── 1字ごとの装飾（時間＝大きさ／ずれ＝ぼけ） ───────────── */
+.text-buffer .ch {
+  display: inline-block;
+  /* 大きさが変わっても行のベースラインで揃える。下端で揃えると大きい字だけ浮く */
+  vertical-align: baseline;
+  line-height: 1;
+}
+/* 未確定の字も経過に合わせて育つので、同じ扱いにする */
+.pending { display: inline-block; vertical-align: baseline; line-height: 1; }
+
+/* 中央＝休む場所。文字の面と見分けがつくよう、へこませて描く */
+.cell.home {
+  border-style: dashed;
+  background: transparent;
+}
+.cell.home .cell-kana { color: var(--color-text-placeholder); }
+
+/* ただし踏んでいるあいだは他の面と同じく反転させる。
+   2度踏みの1度目が入ったことが見えないと、濁点を狙えないため。
+   （この規則は .cell.on より後ろに置くこと。前に置くと transparent に負ける） */
+.cell.home.holding { border-style: solid; }
+.cell.home.on {
+  border-style: solid;
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+}
+.cell.home.on .cell-kana { color: var(--color-background); }
+
+/* ── ずれの見せ方：短冊 ───────────────────────────────── */
+/* 字送りの幅は見えない土台が担い、その上に短冊を絶対配置で重ねる。
+   こうしておけば、短冊を左右にずらしても行が崩れない。
+   line-height を少し広げてあるのは、clip-path の箱から字がはみ出して
+   上下端が切れるのを防ぐため */
+.text-buffer .ch.slice {
+  position: relative;
+  display: inline-block;
+  line-height: 1.3;
+}
+.ch.slice .slice-base { visibility: hidden; }
+.ch.slice .slice-layer {
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  white-space: pre;
+}
+
+.shift-modes {
+  display: flex; flex: 0 0 auto;
+  border: 1px solid var(--color-border); border-radius: 999px; overflow: hidden;
+}
+.shift-btn {
+  font: inherit; font-size: 12px; padding: 5px 14px;
+  background: transparent; color: var(--color-text-placeholder);
+  border: none; cursor: pointer;
+}
+.shift-btn:hover { background: var(--color-muted); }
+.shift-btn.is-on { background: var(--color-accent-strong); color: var(--color-background); }

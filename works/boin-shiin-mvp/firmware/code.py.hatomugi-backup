@@ -1,0 +1,50 @@
+import board
+from kmk.kmk_keyboard import KMKKeyboard
+from kmk.keys import KC
+from kmk.scanners import DiodeOrientation
+from kmk.modules.macros import Macros, Tap
+
+keyboard = KMKKeyboard()
+
+macros = Macros()
+keyboard.modules.append(macros)
+
+keyboard.col_pins = (board.GP0, board.GP1, board.GP2, board.GP3)
+keyboard.row_pins = (board.GP4, board.GP5, board.GP6, board.GP7)
+keyboard.diode_orientation = DiodeOrientation.COL2ROW
+
+# ローマ字を打つ → F7（全角カタカナ変換）→ Enter（確定）
+def kata(romaji):
+    return KC.MACRO(romaji, Tap(KC.F6), Tap(KC.ENTER))
+
+HATOMUGI    = kata("hatomugi\n")        # ハトムギ
+OMUGI       = kata("oomugi\n")          # オオムギ
+HABUCHA     = kata("habucha\n")         # ハブチャ
+HATSUGAMUGI = kata("hatsugaoomugi\n")   # ハツガオオムギ
+
+KOME        = kata("kome\n")            # コメ
+TOMOROKOSHI = kata("toumorokoshi\n")    # トウモロコシ
+BIWA        = kata("biwanoha\n")        # ビワノハ
+TANPOPO     = kata("tanpoponone\n")     # タンポポノネ
+
+GOBO        = kata("gobou\n")           # ゴボウ
+SATSUMAIMO  = kata("satsumaimo\n")      # サツマイモ
+KIBI        = kata("kibi\n")            # キビ
+KAKI        = kata("kakinoha\n")        # カキノハ
+
+MIKAN       = kata("mikannnokawa\n")     # ミカンノカワ
+AZUKI       = kata("azuki\n")           # アズキ
+NATSUME     = kata("natsume\n")         # ナツメ
+YUZU        = kata("yuzunokawa")      # ユズノカワ
+
+keyboard.keymap = [
+    [
+        HATSUGAMUGI, HABUCHA,    OMUGI,       HATOMUGI,    # 行1
+        TANPOPO,     BIWA,       TOMOROKOSHI, KOME,        # 行2
+        KAKI,        KIBI,       SATSUMAIMO,  GOBO,        # 行3
+        YUZU,        NATSUME,    AZUKI,       MIKAN,       # 行4
+    ]
+]
+
+if __name__ == '__main__':
+    keyboard.go()

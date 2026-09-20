@@ -1,0 +1,127 @@
+/* ============================================================
+   メイン画面
+   ------------------------------------------------------------
+   デザインは極力最小限にする（要件書 11章）。
+   文字とカーソル以外は、なるべく画面に出さない。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #f4f3f1;
+  font-family: "Hiragino Sans", sans-serif;
+  /* 二本指のスワイプで画面が動いてしまわないように */
+  overscroll-behavior: none;
+  touch-action: none;
+  /* 文字を運ぶ操作中に選択状態になるのを防ぐ */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 実カーソルは消す。画面に出るのは P1 / P2 の2つだけにする（要件書 12章）。 */
+  cursor: none;
+}
+
+/* --- 接続の案内 --- */
+
+#setup {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.07);
+  font-size: 13px;
+  color: #444;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+#setup.done {
+  opacity: 0;
+}
+
+#setup .rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 18px;
+  align-items: center;
+}
+
+#setup .who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+#setup .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+#setup .dot.on {
+  background: #2fa14e;
+}
+
+#setup .url {
+  font-variant-numeric: tabular-nums;
+  color: #222;
+}
+
+#setup .url.on {
+  color: #999;
+  text-decoration: line-through;
+}
+
+#setup .hint {
+  margin: 0;
+  font-size: 11px;
+  color: #999;
+}
+
+/* --- 操作者用の情報（d キー） --- */
+
+#debug {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.84);
+  color: #eee;
+  font-size: 11px;
+  line-height: 1.75;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  max-width: 42ch;
+  pointer-events: none;
+}
+
+#debug b {
+  color: #fff;
+  font-weight: 600;
+}

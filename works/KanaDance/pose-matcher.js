@@ -79,18 +79,27 @@ export function matchLetter(current, references) {
 }
 
 /**
- * 線トークンを座標へ解決する。
- *   "[LH_RH]" … 左手と右手の中点
- *   "RH" など  … 略語 → 部位名 → ピクセル座標
+ * 線トークンを部位名の配列へ解く。
+ *   "RH"        … ['r_hand']
+ *   "[LH_RH]"   … ['l_hand','r_hand']（複数指定なら重心を指す）
+ * @returns {string[]}
+ */
+export function resolveTokenParts(token) {
+  const body = token.startsWith('[') && token.endsWith(']') ? token.slice(1, -1) : token;
+  return body.split('_').map((alias) => SHORTCUTS[alias] ?? alias);
+}
+
+/**
+ * 線トークンを座標へ解決する。複数部位ならその重心。
  * @returns {{x:number,y:number}|null}
  */
 export function resolvePoint(token, pixelPoints) {
-  if (token.startsWith('[') && token.endsWith(']')) {
-    const [aliasA, aliasB] = token.slice(1, -1).split('_');
-    const a = pixelPoints[SHORTCUTS[aliasA] ?? aliasA];
-    const b = pixelPoints[SHORTCUTS[aliasB] ?? aliasB];
-    if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    return null;
+  const parts = resolveTokenParts(token);
+  let x = 0, y = 0;
+  for (const name of parts) {
+    const p = pixelPoints[name];
+    if (!p) return null;
+    x += p.x; y += p.y;
   }
-  return pixelPoints[SHORTCUTS[token] ?? token] ?? null;
+  return { x: x / parts.length, y: y / parts.length };
 }

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FootSteps — 歩いた軌跡を線にする</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<header id="head">
+  <h1>FootSteps</h1>
+  <p class="sub">歩いた軌跡を線にする</p>
+</header>
+
+<aside id="readout">
+  <dl>
+    <dt>歩数</dt><dd><span id="rSteps">0</span></dd>
+    <dt>線の長さ</dt><dd><span id="rLen">0.00</span> m</dd>
+    <dt>左足</dt><dd class="foot l"><span id="rL">未接続</span></dd>
+    <dt>右足</dt><dd class="foot r"><span id="rR">未接続</span></dd>
+  </dl>
+  <p id="rec" class="rec">● 記録中 <span id="rRecN">0</span></p>
+</aside>
+
+<footer id="bar">
+  <div class="grp">
+    <span class="lbl">つなぐ</span>
+    <button id="bSerial">USB を追加</button>
+    <button id="bSerialOff" disabled>切断</button>
+    <button id="bWs">WebSocket</button>
+    <button id="bDemo">デモ</button>
+    <button id="bFile">ファイル再生</button>
+    <input type="file" id="fileIn" accept=".json,.jsonl,.txt" hidden>
+  </div>
+  <div class="grp">
+    <span class="lbl">操作</span>
+    <button id="bOrigin">構え（原点リセット）</button>
+    <button id="bRec">記録開始</button>
+    <button id="bFit">全体を表示</button>
+    <button id="bClear">消す</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">書き出す</span>
+    <button id="bSvg">SVG（線）</button>
+    <button id="bJson">JSON</button>
+    <button id="bCsv">CSV</button>
+  </div>
+</footer>
+
+<p id="toast"></p>
+
+<script src="js/track.js"></script>
+<script src="js/sources.js"></script>
+<script src="js/view.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

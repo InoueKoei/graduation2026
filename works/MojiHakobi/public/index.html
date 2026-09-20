@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文字運び ─ メイン画面</title>
+    <link rel="stylesheet" href="/main.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <!-- 接続の案内。二人とも繋がったら自然に消える。 -->
+    <div id="setup">
+      <div class="rows"></div>
+      <p class="hint">
+        メイン画面と同じ Wi-Fi につないだ端末で、それぞれの URL を開く。
+      </p>
+    </div>
+
+    <!-- 操作者向け。d キーで出す。観客には見せない。 -->
+    <div id="debug" hidden></div>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

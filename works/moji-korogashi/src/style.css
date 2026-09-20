@@ -1,0 +1,206 @@
+/* 紙は白、線は黒。参照しているスケッチのとおり。
+   操作は右上に小さく置いて、コースの邪魔をしない（experiments/TsumamiJi と同じ構え）。 */
+
+:root {
+  --paper: #ffffff;
+  --ink: #111111;
+  --hairline: #dcdcdc;
+  --muted: #9a9a9a;
+  --accent: #2f6df6;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#stage { position: fixed; inset: 0; }
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* ドラッグをブラウザのスクロール／ズームに取られない */
+  touch-action: none;
+  cursor: default;
+}
+body.mode-edit #canvas { cursor: default; }
+body.mode-edit #canvas.is-over { cursor: grab; }
+body.mode-edit #canvas.is-grabbing { cursor: grabbing; }
+body.mode-play #canvas { cursor: crosshair; }
+
+/* --- 操作パネル（右上） --- */
+#panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  z-index: 5;
+}
+
+.edit-only {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+body.mode-play .edit-only { display: none; }
+
+.modes {
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mode {
+  height: 30px;
+  padding: 0 13px;
+  font-size: 12px;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mode + .mode { border-left: 1px solid var(--hairline); }
+.mode:hover { color: var(--ink); }
+.mode.is-on { background: var(--ink); color: #fff; }
+
+#text {
+  width: 168px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+#text:focus { border-color: var(--muted); }
+#text::placeholder { color: var(--muted); font-size: 12px; }
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.slider input { width: 84px; accent-color: var(--ink); }
+
+.ghost {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ghost:hover { color: var(--ink); border-color: var(--muted); }
+
+/* fontmenu.js（TsumamiJi / moji-stack から流用）が前提にしているクラス名 */
+.fontmenu { position: relative; }
+
+.fontmenu__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.fontmenu__button:hover { border-color: var(--muted); }
+.fontmenu__caret { font-size: 9px; color: var(--muted); }
+
+.fontmenu__list {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  min-width: 100%;
+  list-style: none;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  /* ローカル書体を足すと数十件になるので、スクロールさせる */
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 10;
+}
+
+/* 同梱書体とローカル書体の境目 */
+.fontmenu__item.is-group-head {
+  border-top: 1px solid var(--hairline);
+  margin-top: 3px;
+  padding-top: 9px;
+}
+
+.fontmenu__item {
+  padding: 7px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fontmenu__item:hover { background: rgba(0, 0, 0, 0.04); }
+.fontmenu__item[aria-selected="true"] { background: rgba(0, 0, 0, 0.07); }
+
+/* --- 画面下の言葉 --- */
+#hint {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 44px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.36em;
+  text-indent: 0.36em;
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+#status {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 20px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#status.is-shown { opacity: 1; }
+#status.is-warn { color: #c0392b; }

@@ -1,0 +1,1 @@
+../common/foot_core.h

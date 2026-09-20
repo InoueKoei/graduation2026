@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>黒量計測 ─ 文字運び</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        padding: 32px 40px 80px;
+        font-family: "Hiragino Sans", sans-serif;
+        color: #1b1b1b;
+        background: #fafafa;
+        line-height: 1.7;
+      }
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .lead {
+        max-width: 640px;
+        font-size: 13px;
+        color: #666;
+        margin: 0 0 28px;
+      }
+      .controls {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        margin-bottom: 28px;
+      }
+      label {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: #888;
+        margin-bottom: 4px;
+      }
+      input[type="text"] {
+        font: inherit;
+        font-size: 13px;
+        padding: 7px 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        width: 420px;
+        background: #fff;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        padding: 8px 16px;
+        border: 1px solid #1b1b1b;
+        background: #1b1b1b;
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: #fff;
+        color: #1b1b1b;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      #status {
+        font-size: 12px;
+        color: #666;
+        min-height: 20px;
+        margin-bottom: 16px;
+      }
+      #status.err {
+        color: #c0392b;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 13px;
+        width: 100%;
+        max-width: 760px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 5px 10px;
+        border-bottom: 1px solid #e8e8e8;
+      }
+      th {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: #888;
+        font-weight: 500;
+      }
+      td.ch {
+        font-size: 26px;
+        width: 52px;
+        line-height: 1.2;
+      }
+      td.num {
+        font-variant-numeric: tabular-nums;
+        width: 84px;
+        color: #555;
+      }
+      .bar {
+        height: 9px;
+        background: #1b1b1b;
+        border-radius: 1px;
+      }
+      tr.heavy td.ch {
+        color: #c0392b;
+      }
+      tr.heavy .bar {
+        background: #c0392b;
+      }
+      .legend {
+        font-size: 12px;
+        color: #888;
+        margin: 20px 0 8px;
+        max-width: 760px;
+      }
+      pre {
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 4px;
+        padding: 14px 16px;
+        font-size: 11px;
+        line-height: 1.5;
+        max-height: 260px;
+        overflow: auto;
+        max-width: 760px;
+      }
+      #stage {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>黒量計測</h1>
+    <p class="lead">
+      文字の字面に占める黒の量を数えて、重さの値をつくるツール。要件書5章のとおり、計測はアプリの外側でおこない、
+      アプリには算出済みの値だけを渡す。1文字ずつ大きなキャンバスに描いて、色のついたピクセルの割合を数えている。
+      表示に使うのと同じブラウザの描画結果を数えるので、画面で見えている黒さと値がずれない。
+      <br /><br />
+      <strong>書体を変えたら必ず計測しなおすこと。</strong>
+      黒量は書体とウェイトによって変わるので、weights.json と実際の表示がずれると重さの根拠が崩れる。
+    </p>
+
+    <div class="controls">
+      <div>
+        <label for="font">書体（CSS の font-family）</label>
+        <input id="font" type="text" />
+      </div>
+      <button id="run">計測する</button>
+      <button id="save" class="ghost" disabled>data/weights.json に保存</button>
+      <button id="download" class="ghost" disabled>ダウンロード</button>
+    </div>
+
+    <div id="status"></div>
+
+    <table id="table" hidden>
+      <thead>
+        <tr>
+          <th>文字</th>
+          <th>weight</th>
+          <th>実測の被覆率</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <p class="legend" id="legend" hidden></p>
+
+    <pre id="json" hidden></pre>
+
+    <canvas id="stage"></canvas>
+
+    <script type="module">
+      import { ALL_CHARS, isMark } from "/kana.js";
+      import { CONFIG } from "/config.js";
+
+      const SIZE = 400; // 計測に使う文字サイズ(px)。大きいほど誤差が小さい。
+      const PAD = 1.6; // キャンバスを文字サイズの何倍とるか（はみ出しを切らないため）
+
+      const $font = document.getElementById("font");
+      const $run = document.getElementById("run");
+      const $save = document.getElementById("save");
+      const $download = document.getElementById("download");
+      const $status = document.getElementById("status");
+      const $table = document.getElementById("table");
+      const $legend = document.getElementById("legend");
+      const $json = document.getElementById("json");
+      const canvas = document.getElementById("stage");
+
+      $font.value = CONFIG.fontFamily;
+
+      let result = null;
+
+      /**
+       * 1文字を描いて、色のついたピクセルの量を数える。
+       * 返す値は「文字サイズの正方形（仮想ボディ）の面積に対する割合」。
+       * アンチエイリアスのふちも濃さに応じて数えるので、
+       * 線の細い文字が実際より軽く出すぎることがない。
+       */
+      function inkRatio(ctx, ch, side) {
+        ctx.clearRect(0, 0, side, side);
+        ctx.fillStyle = "#000";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(ch, side / 2, side / 2);
+
+        const data = ctx.getImageData(0, 0, side, side).data;
+        let ink = 0;
+        for (let i = 3; i < data.length; i += 4) ink += data[i]; // アルファ値の合計
+        // 不透明ピクセル換算にしてから、仮想ボディの面積で割る
+        return ink / 255 / (SIZE * SIZE);
+      }
+
+      /** 書体名を1つだけ指定して「あ」を描いたときの、ピクセルの並びを表す短い指紋 */
+      function fingerprint(ctx, cssFamily, side) {
+        ctx.save();
+        ctx.font = `${CONFIG.fontWeight} ${SIZE}px ${cssFamily}`;
+        ctx.clearRect(0, 0, side, side);
+        ctx.fillStyle = "#000";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("あ", side / 2, side / 2);
+        const d = ctx.getImageData(0, 0, side, side).data;
+        ctx.restore();
+
+        // 全ピクセルを比べると重いので、粗い格子の濃さだけを取り出す
+        const N = 12;
+        const cell = Math.floor(side / N);
+        const sig = [];
+        for (let gy = 0; gy < N; gy++) {
+          for (let gx = 0; gx < N; gx++) {
+            let sum = 0;
+            for (let y = 0; y < cell; y += 3) {
+              for (let x = 0; x < cell; x += 3) {
+                sum += d[(((gy * cell + y) * side + gx * cell + x) << 2) + 3];
+              }
+            }
+            sig.push(Math.round(sum / 255));
+          }
+        }
+        return sig.join(",");
+      }
+
+      /**
+       * font-family の並びのうち、実際には入っていない書体名を返す。
+       * 全部入っていなければ配列は空にならない＝代替書体で計測している。
+       */
+      function detectMissingFamilies(ctx, stack, side) {
+        // 存在しない書体名 = このブラウザの既定書体で描かれる
+        const fallbackSig = fingerprint(ctx, '"__no_such_font_9x7q__"', side);
+
+        const families = stack
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s && !/^(sans-serif|serif|monospace|cursive|fantasy|system-ui)$/i.test(s));
+
+        return families.filter(
+          (f) => fingerprint(ctx, f, side) === fallbackSig
+        );
+      }
+
+      async function measure() {
+        const family = $font.value.trim();
+        if (!family) return;
+
+        $run.disabled = true;
+        $status.className = "";
+        $status.textContent = "書体を読み込んでいます…";
+
+        // 書体が使えるか確かめる。未インストールだと別の書体で測ってしまうため。
+        try {
+          await document.fonts.load(
+            `${CONFIG.fontWeight} ${SIZE}px ${family}`,
+            ALL_CHARS.join("")
+          );
+          await document.fonts.ready;
+        } catch {
+          /* load に失敗しても描画自体はできるので進む */
+        }
+
+        const side = Math.round(SIZE * PAD);
+        canvas.width = side;
+        canvas.height = side;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.font = `${CONFIG.fontWeight} ${SIZE}px ${family}`;
+
+        // 指定した書体が本当に入っているかを確かめる。
+        //
+        //   ・measureText の幅は使えない。かなや漢字はどの書体でも1em幅なので、
+        //     書体が入っていなくても幅が一致してしまう。
+        //   ・document.fonts.check() も使えない。代替書体で描けるなら true を返すため、
+        //     存在しない書体名でも true になる。
+        //
+        // そこで、書体名を単独で指定して「あ」を描いた絵と、
+        // 存在しない書体名で描いた絵（＝必ず代替書体になる）を見比べる。
+        // 絵が同じなら、その書体名は効いていない。
+        const missing = detectMissingFamilies(ctx, family, side);
+
+        $status.textContent = "計測中…";
+        // 「計測中」を一度描かせてから、詰まる処理に入る。
+        // requestAnimationFrame はタブが裏にあると止まってしまうので使わない。
+        await new Promise((r) => setTimeout(r, 16));
+
+        const raw = {};
+        for (const ch of ALL_CHARS) raw[ch] = inkRatio(ctx, ch, side);
+
+        // --- 0..1 に正規化する ---
+        // 実測の被覆率は書体によって 0.09〜0.23 あたりに固まっていて、
+        // そのままだと threshold を決めにくい。いちばん軽い文字を 0、
+        // いちばん重い文字を 1 にそろえる。文字どうしの差の比率は保たれる。
+        //
+        // このとき「゛」「゜」は幅を決める側に入れない。
+        // 印は他のかなの半分以下しか黒がなく、これを最小値にすると
+        // かな46文字が上半分に固まってしまい、threshold 0.5 でほとんどが
+        // 二人がかりになってしまう。印はあくまで軽いおまけとして扱い、
+        // かなの範囲に当てはめた結果 0 未満になったら 0 に丸める。
+        const base = ALL_CHARS.filter((ch) => !isMark(ch));
+        const baseValues = base.map((ch) => raw[ch]);
+        const min = Math.min(...baseValues);
+        const max = Math.max(...baseValues);
+        const span = max - min || 1;
+
+        const weights = {};
+        for (const ch of ALL_CHARS) {
+          const w = (raw[ch] - min) / span;
+          weights[ch] = Number(Math.min(Math.max(w, 0), 1).toFixed(3));
+        }
+
+        result = {
+          font: family,
+          fontSize: SIZE,
+          measuredAt: new Date().toISOString(),
+          note:
+            "weight は字面の黒量を 0..1 に正規化した値。0/1 の基準は五十音46文字の最小・最大で、" +
+            "「゛」「゜」は基準から外したうえで同じ物差しに載せている（下回る場合は0）。" +
+            "raw は仮想ボディの面積に対する実測の被覆率。",
+          weights,
+          raw: Object.fromEntries(
+            ALL_CHARS.map((ch) => [ch, Number(raw[ch].toFixed(4))])
+          ),
+        };
+
+        render(min, max, missing);
+        $run.disabled = false;
+        $save.disabled = false;
+        $download.disabled = false;
+      }
+
+      function render(min, max, missing) {
+        const rows = ALL_CHARS.map((ch) => ({
+          ch,
+          w: result.weights[ch],
+          raw: result.raw[ch],
+        })).sort((a, b) => b.w - a.w);
+
+        const tbody = $table.querySelector("tbody");
+        tbody.innerHTML = "";
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          if (r.w >= CONFIG.threshold) tr.className = "heavy";
+          tr.innerHTML =
+            `<td class="ch" style="font-family:${result.font}">${r.ch}</td>` +
+            `<td class="num">${r.w.toFixed(3)}</td>` +
+            `<td class="num">${(r.raw * 100).toFixed(2)}%</td>` +
+            `<td><div class="bar" style="width:${Math.max(r.w * 100, 0.6)}%"></div></td>`;
+          tbody.appendChild(tr);
+        }
+        $table.hidden = false;
+
+        const heavy = rows.filter((r) => r.w >= CONFIG.threshold);
+        $legend.hidden = false;
+        $legend.textContent =
+          `五十音46文字の実測の被覆率は ${(min * 100).toFixed(2)}% 〜 ${(max * 100).toFixed(2)}%。` +
+          ` いまの threshold ${CONFIG.threshold} だと ` +
+          `${heavy.length} / ${rows.length} 文字が二人がかりになる（赤い行）。` +
+          ` 割合を変えたいときは public/config.js の threshold を動かす。`;
+
+        $json.hidden = false;
+        $json.textContent = JSON.stringify(result, null, 2);
+
+        const named = result.font
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => !/^(sans-serif|serif|monospace|cursive|fantasy|system-ui)$/i.test(s));
+
+        if (missing.length && missing.length === named.length) {
+          $status.className = "err";
+          $status.textContent =
+            `指定した書体がどれも入っていない（${missing.join(", ")}）。` +
+            "総称ファミリの代替書体で計測している。書体名を確認すること。";
+        } else if (missing.length) {
+          $status.className = "";
+          $status.textContent =
+            `${ALL_CHARS.length} 文字を計測した。` +
+            `（入っていない書体名: ${missing.join(", ")} ─ 後ろの書体が使われている）`;
+        } else {
+          $status.className = "";
+          $status.textContent = `${ALL_CHARS.length} 文字を計測した。`;
+        }
+      }
+
+      $run.addEventListener("click", measure);
+
+      $save.addEventListener("click", async () => {
+        $save.disabled = true;
+        try {
+          const res = await fetch("/api/weights", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(result),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          $status.className = "";
+          $status.textContent = "data/weights.json に保存した。メイン画面を再読み込みすると反映される。";
+        } catch (e) {
+          $status.className = "err";
+          $status.textContent = `保存に失敗した: ${e.message}`;
+        }
+        $save.disabled = false;
+      });
+
+      $download.addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(result, null, 2)], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "weights.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    </script>
+  </body>
+</html>

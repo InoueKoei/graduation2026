@@ -1,0 +1,120 @@
+/* ── KanaDance スタイル（sumi 基調・墨のモノクロ） ──
+   デザイントークンは sumi-tokens.css を先に読み込むこと。色はすべて --color-* 参照。 */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+:root {
+  --cam-ar: 1.7778;   /* カメラの比。映像が来たら JS が実解像度から上書きする（既定は仮） */
+  --stage-max-h: 52vh;
+  --content-w: min(760px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
+}
+
+body {
+  margin: 0; padding: 16px 16px 40px;
+  background: var(--color-background); color: var(--color-text-primary);
+  font-family: "ZEN Interface", system-ui, -apple-system, sans-serif; line-height: 1.6;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+
+/* トップバー */
+.topbar { width: var(--content-w); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.topbar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: .04em; }
+.topbar-actions { display: flex; gap: 8px; }
+
+/* sumi アイコンボタン（ピル） */
+.icon-btn {
+  width: 36px; height: 36px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 16px; line-height: 1;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 999px;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+.icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent-strong); }
+
+/* カメラステージ（映像と canvas は鏡像） */
+.stage {
+  position: relative; width: var(--content-w); aspect-ratio: var(--cam-ar);
+  background: var(--color-muted);
+  border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden;
+}
+.stage video, .stage canvas {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  transform: scaleX(-1);
+  /* ステージの比は実解像度に合わせてあるので普段はぴったり収まる。
+     映像が来る前の一瞬など、比がずれている間に引き伸ばさないための保険 */
+  object-fit: contain;
+}
+
+/* 判定中の字（半透明チップに墨文字） */
+.current-char {
+  position: absolute; bottom: 12px; right: 12px; z-index: 10;
+  min-width: 72px; text-align: center; padding: 2px 16px; border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  border: 1px solid var(--color-border); backdrop-filter: blur(6px);
+  font-size: 48px; font-weight: 700; line-height: 1.2; color: var(--color-accent-strong);
+}
+
+/* 状態表示 */
+.status {
+  width: var(--content-w); min-height: 24px;
+  font-size: 13px; color: var(--color-text-secondary); font-variant-numeric: tabular-nums;
+}
+.status.error { color: var(--color-text-primary); font-weight: 700; }
+
+/* モード切替（sumi セグメンテッド） */
+.segmented { display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: var(--color-muted); }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span {
+  display: inline-flex; align-items: center; height: 34px; padding: 0 18px;
+  border-radius: 999px; cursor: pointer; font-size: 14px; color: var(--color-text-secondary);
+  transition: background .15s, color .15s;
+}
+.segmented input:checked + span { background: var(--color-surface); color: var(--color-text-primary); font-weight: 700; }
+.segmented input:focus-visible + span { box-shadow: 0 0 0 2px var(--color-accent-strong); }
+
+/* 登録行 */
+.register-row { display: flex; gap: 8px; align-items: center; }
+#kana-input {
+  font: inherit; font-size: 16px; height: 44px; width: 160px; padding: 0 14px;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 999px;
+}
+#kana-input::placeholder { color: var(--color-text-placeholder); }
+.btn-primary {
+  font: inherit; font-weight: 700; height: 44px; padding: 0 20px; border-radius: 999px; cursor: pointer;
+  background: var(--color-accent-strong); color: var(--primitive-0);
+  border: 1px solid var(--color-accent-strong); transition: opacity .15s;
+}
+.btn-primary:disabled { opacity: .45; cursor: progress; }
+
+/* 調整パネル */
+.panel {
+  width: var(--content-w); margin-top: 8px; padding: 16px 18px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+}
+.panel-label { font-size: 11px; color: var(--color-text-placeholder); letter-spacing: .06em; margin-bottom: 8px; }
+.panel-label.div { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 14px; }
+
+.ctrl { display: grid; grid-template-columns: 7.5em 1fr 5em; align-items: center; gap: 12px; margin: 6px 0; }
+.ctrl label { font-size: 13px; color: var(--color-text-secondary); }
+.ctrl output { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+
+/* レンジ（sumi の墨スライダー） */
+.ctrl input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; cursor: pointer; }
+.ctrl input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-muted); }
+.ctrl input[type="range"]::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-muted); }
+.ctrl input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px;
+  border-radius: 999px; background: var(--color-accent-strong); border: 2px solid var(--color-surface);
+}
+.ctrl input[type="range"]::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 999px;
+  background: var(--color-accent-strong); border: 2px solid var(--color-surface);
+}
+.ctrl input[type="range"]:focus-visible { outline: none; }
+.ctrl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--color-accent-overlay); }
+
+.note { margin: 8px 0 0; font-size: 12px; color: var(--color-text-placeholder); }
+.count { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }

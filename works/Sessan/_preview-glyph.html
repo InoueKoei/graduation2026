@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sessan — 字のずれを詰める（カメラ不要）</title>
+<link rel="stylesheet" href="sumi-tokens.css" />
+<style>
+  body { margin:0; padding:16px; background:var(--color-background); color:var(--color-text-primary);
+         font-family:"ZEN Interface", system-ui, sans-serif; display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+  .stage { position:relative; width:640px; max-width:100%; aspect-ratio:4/3;
+           background:var(--color-muted); border:1px solid var(--color-border); border-radius:12px; overflow:hidden; }
+  canvas { width:100%; height:100%; display:block; }
+  .ctrl { width:280px; font-size:12.5px; color:var(--color-text-secondary); display:flex; flex-direction:column; gap:12px; }
+  fieldset { border:1px solid var(--color-border); border-radius:12px; padding:10px 12px 12px; margin:0;
+             display:flex; flex-direction:column; gap:9px; background:var(--color-surface); }
+  legend { font-size:11px; color:var(--color-text-placeholder); letter-spacing:.04em; padding:0 4px; }
+  label { display:flex; flex-direction:column; gap:3px; }
+  .v { color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; }
+  input[type=text], select { width:100%; font:inherit; font-size:14px; padding:5px 8px;
+    background:var(--color-background); color:var(--color-text-primary);
+    border:1px solid var(--color-border); border-radius:8px; }
+  input[type=text].big { font-size:20px; }
+  .bpm { font-size:30px; font-variant-numeric:tabular-nums; color:var(--color-text-primary);
+         display:flex; align-items:center; gap:10px; }
+  .bpm small { font-size:12px; color:var(--color-text-placeholder); }
+  .dot { width:12px; height:12px; flex:0 0 auto; border-radius:999px; background:var(--color-accent-default); }
+  .hrv { display:flex; gap:14px; font-variant-numeric:tabular-nums; }
+  .hrv div { display:flex; flex-direction:column; gap:1px; }
+  .hrv b { font-size:16px; color:var(--color-text-primary); font-weight:700; }
+  .hrv span { font-size:10px; color:var(--color-text-placeholder); }
+  .row { display:flex; gap:8px; align-items:center; }
+  button { font:inherit; font-size:12px; height:30px; padding:0 12px; border-radius:999px; cursor:pointer;
+           background:transparent; color:var(--color-text-secondary); border:1px solid var(--color-border); }
+  button:hover { background:var(--color-muted); border-color:var(--color-accent-strong); }
+  .state { font-size:11px; color:var(--color-accent-default); min-height:1.2em; }
+  .note { line-height:1.65; color:var(--color-text-placeholder); font-size:11px; margin:0; }
+  pre { margin:0; padding:10px; background:var(--color-background); border:1px solid var(--color-border);
+        border-radius:8px; font-size:10.5px; line-height:1.5; overflow:auto; max-height:230px;
+        color:var(--color-text-secondary); white-space:pre; }
+</style>
+</head>
+<body>
+  <div class="stage"><canvas id="c" width="640" height="480"></canvas></div>
+
+  <div class="ctrl">
+    <fieldset>
+      <legend>心拍（いま動いている値）</legend>
+      <div class="bpm"><i class="dot" id="dot"></i><span id="bpm">–</span><small>bpm</small></div>
+      <div class="hrv">
+        <div><b id="sdnn">–</b><span>SDNN</span></div>
+        <div><b id="rmssd">–</b><span>RMSSD</span></div>
+        <div><b id="beats">0</b><span>拍</span></div>
+      </div>
+      <p class="note" id="hrv-note">直近60拍から計算する。30拍たまるまでは目安。</p>
+      <label>身体の状態
+        <select id="preset"></select>
+      </label>
+      <label>基準 bpm <span class="v" id="v-base"></span><input type="range" id="base" min="48" max="120" step="1" /></label>
+      <label>揺れの倍率 <span class="v" id="v-spread"></span><input type="range" id="spread" min="0" max="2.5" step="0.05" /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>字のずれ</legend>
+      <label>字 <input type="text" id="char" class="big" value="あ" maxlength="2" /></label>
+      <label>短冊の本数 <span class="v" id="v-slices"></span><input type="range" id="slices" min="2" max="48" step="1" /></label>
+      <label>波の数 <span class="v" id="v-turns"></span><input type="range" id="turns" min="0.25" max="4" step="0.05" /></label>
+      <label>ずれの量 <span class="v" id="v-shift"></span><input type="range" id="shift" min="0" max="0.4" step="0.005" /></label>
+      <label>脈の谷に残すずれ <span class="v" id="v-floor"></span><input type="range" id="floor" min="0" max="1" step="0.02" /></label>
+      <label>不透明度（確定直前）<span class="v" id="v-alpha"></span><input type="range" id="alpha" min="0.05" max="1" step="0.01" /></label>
+      <label>縁の暈し <span class="v" id="v-halo"></span><input type="range" id="halo" min="0" max="0.12" step="0.005" /></label>
+      <label>大きさ <span class="v" id="v-size"></span><input type="range" id="size" min="120" max="700" step="10" /></label>
+      <label>確定の進み <span class="v" id="v-prog"></span><input type="range" id="prog" min="0" max="1" step="0.01" value="1" /></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>本番との同期</legend>
+      <div class="state" id="state"></div>
+      <div class="row">
+        <button type="button" id="reset">↺ 既定値に戻す</button>
+        <button type="button" id="dump">config.js 用に出す</button>
+      </div>
+      <pre id="out" hidden></pre>
+      <p class="note">ここで動かした値は <b>localStorage に即保存され、index.html も起動時に同じ値を読む</b>。
+      本番の HUD に「調整中」と出ていれば効いている。恒久化するなら上のボタンで出して config.js に貼る。</p>
+    </fieldset>
+  </div>
+
+<script type="module">
+import { HEARTBEAT, HEARTBEAT_PRESETS, GLYPH, PROXIMITY, TUNING } from './config.js';
+import { HeartSim } from './heartbeat.js';
+import { Renderer } from './renderer.js';
+import { loadTuning, saveTuning, clearTuning } from './tuning.js';
+
+const $ = (id) => document.getElementById(id);
+
+// 本番と同じ場所から読む。プレビューを開いた時点で、本番と同じ見え方になる
+const glyph = loadTuning(TUNING.glyphKey, GLYPH);
+let ui = { preset: 'focus', baseBpm: HEARTBEAT.baseBpm, spread: 1 };
+try {
+  const raw = localStorage.getItem(TUNING.previewKey);
+  if (raw) ui = { ...ui, ...JSON.parse(raw) };
+} catch { /* 読めなくても既定で動く */ }
+if (!HEARTBEAT_PRESETS[ui.preset]) ui.preset = 'focus';
+
+const canvas = $('c');
+const renderer = new Renderer(canvas, document.querySelector('.stage'), glyph);
+const ctx = canvas.getContext('2d');
+let heart = new HeartSim(resolveHeart());
+
+/** プリセット × 基準bpm × 倍率 → heartbeat.js に渡す値 */
+function resolveHeart() {
+  const base = HEARTBEAT_PRESETS[ui.preset].values;
+  const k = Math.max(ui.spread, 0.05);
+  // 範囲も一緒に広げないと、揺らしたぶんが頭打ちで削られる
+  const lo = Math.max(35, Math.round(ui.baseBpm - (base.baseBpm - base.bpmRange[0]) * Math.max(k, 1)));
+  const hi = Math.min(200, Math.round(ui.baseBpm + (base.bpmRange[1] - base.baseBpm) * Math.max(k, 1)));
+  return {
+    ...base,
+    baseBpm: ui.baseBpm,
+    bpmRange: [lo, hi],
+    respAmpBpm: base.respAmpBpm * ui.spread,
+    wanderAmpBpm: base.wanderAmpBpm * ui.spread,
+    jitterBpm: base.jitterBpm * ui.spread,
+  };
+}
+
+// ── 保存（触るたびに本番へ効く） ─────────────────────────────
+let saveTimer = 0;
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTuning(TUNING.glyphKey, glyph);
+    saveTuning(TUNING.heartKey, resolveHeart());
+    try { localStorage.setItem(TUNING.previewKey, JSON.stringify(ui)); } catch { /* 憶えられなくてよい */ }
+    $('state').textContent = `本番に反映済み — ${new Date().toLocaleTimeString('ja-JP')}`;
+  }, 200);
+}
+
+// ── 字のずれ ────────────────────────────────────────────────
+const binds = [
+  ['slices', 'slices', (v) => +v, (v) => `${v} 本`],
+  ['turns', 'waveTurns', (v) => +v, (v) => v.toFixed(2)],
+  ['shift', 'shiftRatio', (v) => +v, (v) => v.toFixed(3)],
+  ['floor', 'pulseFloor', (v) => +v, (v) => v.toFixed(2)],
+  ['alpha', 'alphaMax', (v) => +v, (v) => v.toFixed(2)],
+  ['halo', 'haloRatio', (v) => +v, (v) => v.toFixed(3)],
+];
+for (const [id, key, parse, fmt] of binds) {
+  const el = $(id);
+  el.value = glyph[key];
+  $(`v-${id}`).textContent = fmt(glyph[key]);
+  el.addEventListener('input', () => {
+    glyph[key] = parse(el.value);
+    $(`v-${id}`).textContent = fmt(glyph[key]);
+    if (key === 'haloRatio') renderer.syncTheme(); // 暈しは刷り込み済みなので刷り直す
+    persist();
+  });
+}
+
+// 大きさと確定の進みは見るためだけの値（本番では顔の近さと保持時間で決まる）
+$('size').value = 330;
+$('v-size').textContent = '330px';
+$('size').addEventListener('input', () => { $('v-size').textContent = `${$('size').value}px`; });
+$('v-prog').textContent = '100%';
+$('prog').addEventListener('input', () => { $('v-prog').textContent = `${Math.round($('prog').value * 100)}%`; });
+
+// ── 心拍 ────────────────────────────────────────────────────
+for (const [id, p] of Object.entries(HEARTBEAT_PRESETS)) {
+  const opt = document.createElement('option');
+  opt.value = id;
+  opt.textContent = p.label;
+  $('preset').append(opt);
+}
+$('preset').value = ui.preset;
+$('base').value = ui.baseBpm;
+$('spread').value = ui.spread;
+$('v-base').textContent = `${ui.baseBpm}`;
+$('v-spread').textContent = `${(+ui.spread).toFixed(2)} ×`;
+
+function rebuildHeart() {
+  heart = new HeartSim(resolveHeart());
+  rr.length = 0;
+  beatAt = null;
+  persist();
+}
+$('preset').addEventListener('change', () => {
+  ui.preset = $('preset').value;
+  // プリセットを選び直したら、基準 bpm もそのプリセットの値に戻す
+  ui.baseBpm = HEARTBEAT_PRESETS[ui.preset].values.baseBpm;
+  $('base').value = ui.baseBpm;
+  $('v-base').textContent = `${ui.baseBpm}`;
+  rebuildHeart();
+});
+$('base').addEventListener('input', () => {
+  ui.baseBpm = +$('base').value;
+  $('v-base').textContent = `${ui.baseBpm}`;
+  rebuildHeart();
+});
+$('spread').addEventListener('input', () => {
+  ui.spread = +$('spread').value;
+  $('v-spread').textContent = `${ui.spread.toFixed(2)} ×`;
+  rebuildHeart();
+});
+
+// ── HRV の実測（直近60拍の拍間隔から） ──────────────────────
+const rr = [];
+let beatAt = null;
+function trackBeat(nowMs) {
+  if (beatAt !== null) {
+    rr.push(nowMs - beatAt);
+    while (rr.length > 60) rr.shift();
+  }
+  beatAt = nowMs;
+  if (rr.length < 2) return;
+  const mean = rr.reduce((a, b) => a + b, 0) / rr.length;
+  const sdnn = Math.sqrt(rr.reduce((a, b) => a + (b - mean) ** 2, 0) / rr.length);
+  const d = rr.slice(1).map((v, i) => v - rr[i]);
+  const rmssd = Math.sqrt(d.reduce((a, b) => a + b * b, 0) / d.length);
+  $('sdnn').textContent = `${Math.round(sdnn)}ms`;
+  $('rmssd').textContent = `${Math.round(rmssd)}ms`;
+  $('beats').textContent = rr.length;
+  $('hrv-note').textContent = rr.length < 30
+    ? `直近60拍から計算する。あと ${30 - rr.length} 拍で安定する。`
+    : '直近60拍から計算する。座った成人の短時間計測は SDNN が数十ms 台に収まることが多い。';
+}
+
+// ── 本番との同期の操作 ──────────────────────────────────────
+$('reset').addEventListener('click', () => {
+  clearTuning(TUNING.glyphKey);
+  clearTuning(TUNING.heartKey);
+  try { localStorage.removeItem(TUNING.previewKey); } catch { /* 消せなくてよい */ }
+  location.reload();
+});
+$('dump').addEventListener('click', () => {
+  const h = resolveHeart();
+  const num = (v) => (Number.isInteger(v) ? v : +v.toFixed(4));
+  const lines = [
+    'export const GLYPH = Object.freeze({',
+    // config.js と同じ「シングルクォートで囲む」書き方にする（そのまま貼れるように）
+    `  family: '${String(glyph.family).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',`,
+    ...['slices', 'waveTurns', 'shiftRatio', 'pulseFloor', 'alphaMin', 'alphaMax', 'haloRatio', 'recordAlpha']
+      .map((k) => `  ${k}: ${num(glyph[k])},`),
+    '});',
+    '',
+    'export const HEARTBEAT = Object.freeze({',
+    `  baseBpm: ${num(h.baseBpm)},`,
+    `  bpmRange: [${h.bpmRange.join(', ')}],`,
+    ...['respRateHz', 'respAmpBpm', 'wanderHz', 'wanderAmpBpm', 'jitterBpm', 'jitterDecaySec']
+      .map((k) => `  ${k}: ${num(h[k])},`),
+    '});',
+  ];
+  $('out').textContent = lines.join('\n');
+  $('out').hidden = false;
+});
+
+// ── 描画 ────────────────────────────────────────────────────
+// 大きさスライダを PROXIMITY の逆算で渡す（本番は顔の近さから決まる値）
+const proximityFor = (px) =>
+  PROXIMITY.far + ((px - PROXIMITY.minPx) / (PROXIMITY.maxPx - PROXIMITY.minPx)) * (PROXIMITY.near - PROXIMITY.far);
+
+function frame() {
+  const now = performance.now();
+  const beat = heart.sample(now);
+  if (beat.beat) trackBeat(now);
+
+  $('bpm').textContent = Math.round(beat.bpm);
+  $('dot').style.transform = `scale(${0.7 + 0.55 * beat.pulse})`;
+  $('dot').style.opacity = 0.3 + 0.7 * beat.pulse;
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-muted').trim() || '#222';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  renderer.drawCurrentChar($('char').value || 'あ', proximityFor(+$('size').value), +$('prog').value, beat);
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
