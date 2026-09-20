@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gamepad Probe — 入力デバイス実測</title>
+<style>
+/* sumi トークン（同梱コピー。単体で動くよう直書きしている） */
+:root {
+  --bg: #f7f7f7; --surface: #ffffff;
+  --text: #282828; --text2: #606060; --text3: #7a7a7a;
+  --border: #a0a0a0; --muted: #e0e0e0; --column: #f0f0f0;
+  --disabled: #cccccc; --accent: #282828; --strong: #000000;
+  --ok: #1f6f3f; --ng: #8f2020;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* .controls の display:flex に負けないように */
+body {
+  margin: 0; padding: 24px 20px 64px;
+  font-family: "ZEN Interface", system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; line-height: 1.7;
+}
+.wrap { max-width: 920px; margin: 0 auto; }
+h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: .04em; }
+.lede { margin: 0 0 28px; font-size: 12.5px; color: var(--text3); }
+section { margin-bottom: 26px; }
+h2 {
+  margin: 0 0 10px; font-size: 11px; letter-spacing: .14em;
+  color: var(--text3); font-weight: 700;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--muted);
+  border-radius: 8px; padding: 14px 16px;
+}
+.row {
+  display: flex; gap: 12px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--column);
+}
+.row:last-child { border-bottom: 0; }
+.row dt { flex: 0 0 11em; color: var(--text3); font-size: 12px; margin: 0; }
+.row dd {
+  margin: 0; flex: 1 1 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; word-break: break-all;
+}
+.ok { color: var(--ok); font-weight: 700; }
+.ng { color: var(--ng); font-weight: 700; }
+
+select, button {
+  font: inherit; font-size: 13px; padding: 6px 13px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text); cursor: pointer;
+}
+button:hover { background: var(--column); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: var(--strong); }
+button:disabled { color: var(--disabled); border-color: var(--muted); cursor: default; background: var(--surface); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+
+.last {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 30px; font-weight: 700; line-height: 1.2;
+  min-height: 1.2em; letter-spacing: .02em;
+}
+.last small { font-size: 13px; font-weight: 400; color: var(--text3); letter-spacing: 0; }
+
+.btn-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn {
+  min-width: 52px; padding: 7px 4px; text-align: center;
+  border: 1px solid var(--muted); border-radius: 6px;
+  background: var(--column); font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  transition: none;
+}
+.btn .i { display: block; font-size: 10px; color: var(--text3); }
+.btn .v { display: block; font-weight: 700; }
+.btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.on .i { color: rgba(255,255,255,.65); }
+
+.axis { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.axis .lbl {
+  flex: 0 0 4.5em; font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px; color: var(--text3);
+}
+.axis .bar {
+  flex: 1 1 auto; height: 12px; background: var(--column);
+  border-radius: 6px; position: relative; overflow: hidden;
+}
+.axis .fill { position: absolute; top: 0; bottom: 0; background: var(--border); }
+.axis .bar.hot .fill { background: var(--accent); }
+.axis .mid { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--disabled); }
+.axis .num {
+  flex: 0 0 4em; text-align: right;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+textarea {
+  width: 100%; min-height: 84px; font: inherit;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  padding: 9px 11px; border: 1px solid var(--muted); border-radius: 6px;
+  background: var(--surface); color: var(--text); resize: vertical;
+}
+.target { font-size: 22px; font-weight: 700; margin: 12px 0 4px; }
+.target small { font-size: 12px; font-weight: 400; color: var(--text3); }
+pre {
+  background: var(--column); border: 1px solid var(--muted); border-radius: 6px;
+  padding: 12px 14px; overflow-x: auto; font-size: 12px; margin: 10px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.6;
+}
+.hint { font-size: 12px; color: var(--text3); margin: 8px 0 0; }
+.empty { color: var(--text3); font-size: 13px; }
+table.map { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 10px; }
+table.map th, table.map td {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--column);
+  font-family: ui-monospace, Menlo, monospace;
+}
+table.map th { color: var(--text3); font-weight: 400; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Gamepad Probe</h1>
+  <p class="lede">
+    ゲームコントローラー／ダンスマットが Gamepad API で読めるかを実測し、
+    そのまま <code>config.js</code> に貼れるマッピングを書き出す。
+    <strong>このページ自体は古いブラウザでも動く構文で書いてある</strong>ので、環境が古い場合はその旨を表示する。
+  </p>
+
+  <section>
+    <h2>環境</h2>
+    <div class="card"><dl id="env" style="margin:0"></dl></div>
+  </section>
+
+  <section>
+    <h2>接続中のデバイス</h2>
+    <div class="card">
+      <div class="controls">
+        <select id="padSelect"></select>
+        <span id="padCount" class="empty"></span>
+      </div>
+      <dl id="padInfo" style="margin:0"></dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>最後に反応した入力</h2>
+    <div class="card"><div class="last" id="last">—</div></div>
+  </section>
+
+  <section>
+    <h2>ボタン</h2>
+    <div class="card"><div class="btn-grid" id="buttons"><span class="empty">デバイス未検出</span></div></div>
+  </section>
+
+  <section>
+    <h2>軸</h2>
+    <div class="card" id="axes"><span class="empty">デバイス未検出</span></div>
+  </section>
+
+  <section>
+    <h2>マッピングを記録する</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0">
+        割り当てたい名前を1行ずつ書き、「記録開始」を押して、上から順に物理入力を踏む／押す。
+        ボタンでも軸でも自動で判別する。
+      </p>
+      <textarea id="names">left
+down
+up
+right
+square
+triangle
+cross
+circle
+select
+start
+center</textarea>
+      <div class="controls" style="margin-top:12px">
+        <button class="primary" id="recStart">記録開始</button>
+        <button id="recSkip" disabled>この項目を飛ばす</button>
+        <button id="recReset">やり直す</button>
+      </div>
+      <div class="target" id="target"></div>
+      <table class="map" id="mapTable" hidden>
+        <thead><tr><th>名前</th><th>種類</th><th>番号</th><th>値</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <pre id="out" hidden></pre>
+      <div class="controls" id="outCtl" hidden><button id="copy">コピー</button></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* 意図的に ES2019 以下の構文だけで書いている。
+   `??` や `?.` を使うと Chromium 79 以下で構文エラーになり、
+   「ブラウザが古い」という結論そのものが表示できなくなるため。 */
+(function () {
+  'use strict';
+
+  var AXIS_THRESHOLD = 0.5;
+
+  // ── 環境 ─────────────────────────────────────────────
+  function supports(src) {
+    try { new Function(src)(); return true; } catch (e) { return false; }
+  }
+  function chromeVersion() {
+    var m = navigator.userAgent.match(/Chrom(?:e|ium)\/(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+  function badge(ok, yes, no) {
+    return '<span class="' + (ok ? 'ok' : 'ng') + '">' + (ok ? yes : no) + '</span>';
+  }
+  function renderEnv() {
+    var cv = chromeVersion();
+    var nullish = supports('return 1 ?? 2');
+    var optional = supports('var o = {}; return o?.a');
+    var secure = window.isSecureContext;
+    var hasApi = typeof navigator.getGamepads === 'function';
+
+    var rows = [
+      ['Chromium / Chrome', cv === null
+        ? '<span class="ng">判別できず</span>'
+        : cv + ' ' + badge(cv >= 80, '（十分）', '（古い。80 以上が必要）')],
+      ['?? / ?. が使えるか', badge(nullish && optional, '使える', '使えない — 作品側のJSが動きません')],
+      ['セキュアコンテキスト', badge(secure, 'はい', 'いいえ — Gamepad API が無効化されます')],
+      ['Gamepad API', badge(hasApi, 'あり', 'なし')],
+      ['オリジン', location.origin || '(file)'],
+      ['UA', navigator.userAgent]
+    ];
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      html += '<div class="row"><dt>' + rows[i][0] + '</dt><dd>' + rows[i][1] + '</dd></div>';
+    }
+    if (!secure) {
+      html += '<div class="row"><dt></dt><dd class="ng">'
+            + 'http://localhost か https でないと getGamepads() は常に空を返します。'
+            + 'LAN の http://192.168.x.x では動きません。</dd></div>';
+    }
+    document.getElementById('env').innerHTML = html;
+  }
+  renderEnv();
+
+  // ── パッドの取得 ──────────────────────────────────────
+  function pads() {
+    var raw = navigator.getGamepads ? navigator.getGamepads() : [];
+    var out = [];
+    for (var i = 0; i < raw.length; i++) { if (raw[i]) out.push(raw[i]); }
+    out.sort(function (a, b) { return a.index - b.index; });
+    return out;
+  }
+
+  var selectEl = document.getElementById('padSelect');
+  var selectedIndex = null;
+  var knownKey = '';
+
+  function syncSelect(list) {
+    var key = list.map(function (p) { return p.index + ':' + p.id; }).join('|');
+    if (key === knownKey) return;
+    knownKey = key;
+
+    selectEl.innerHTML = '';
+    for (var i = 0; i < list.length; i++) {
+      var o = document.createElement('option');
+      o.value = String(list[i].index);
+      o.textContent = '[' + list[i].index + '] ' + list[i].id;
+      selectEl.appendChild(o);
+    }
+    var stillThere = false;
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].index === selectedIndex) { stillThere = true; break; }
+    }
+    if (!stillThere) selectedIndex = list.length ? list[0].index : null;
+    if (selectedIndex !== null) selectEl.value = String(selectedIndex);
+
+    document.getElementById('padCount').textContent =
+      list.length ? (list.length + ' 台' + (list.length >= 2 ? '（2台目以降は index 順）' : '')) : '';
+  }
+  selectEl.addEventListener('change', function () { selectedIndex = parseInt(selectEl.value, 10); });
+
+  function current(list) {
+    for (var i = 0; i < list.length; i++) { if (list[i].index === selectedIndex) return list[i]; }
+    return null;
+  }
+
+  // ── 表示 ─────────────────────────────────────────────
+  var infoEl = document.getElementById('padInfo');
+  var buttonsEl = document.getElementById('buttons');
+  var axesEl = document.getElementById('axes');
+  var lastEl = document.getElementById('last');
+  var lastSig = '';
+
+  function renderInfo(pad) {
+    if (!pad) {
+      infoEl.innerHTML = '<div class="row"><dd class="empty">'
+        + 'デバイスが見つかりません。<strong>一度ボタンを押す／マットを踏む</strong>と列挙されます'
+        + '（Chrome は初回入力まで getGamepads() を空で返します）。</dd></div>';
+      return;
+    }
+    var rows = [
+      ['id', pad.id],
+      ['index', String(pad.index)],
+      ['mapping', pad.mapping ? pad.mapping : '(空 — 標準配列として扱われていない)'],
+      ['buttons / axes', pad.buttons.length + ' / ' + pad.axes.length],
+      ['接続', pad.connected ? 'connected' : 'disconnected']
+    ];
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      html += '<div class="row"><dt>' + rows[i][0] + '</dt><dd>' + rows[i][1] + '</dd></div>';
+    }
+    infoEl.innerHTML = html;
+  }
+
+  var btnCells = [];
+  function renderButtons(pad) {
+    if (!pad) { buttonsEl.innerHTML = '<span class="empty">デバイス未検出</span>'; btnCells = []; return; }
+    if (btnCells.length !== pad.buttons.length) {
+      buttonsEl.innerHTML = '';
+      btnCells = [];
+      for (var i = 0; i < pad.buttons.length; i++) {
+        var d = document.createElement('div');
+        d.className = 'btn';
+        d.innerHTML = '<span class="i">' + i + '</span><span class="v">·</span>';
+        buttonsEl.appendChild(d);
+        btnCells.push(d);
+      }
+    }
+    for (var k = 0; k < pad.buttons.length; k++) {
+      var b = pad.buttons[k];
+      var on = b.pressed || b.value > 0.5;
+      btnCells[k].className = on ? 'btn on' : 'btn';
+      btnCells[k].lastChild.textContent = b.value > 0 && b.value < 1 ? b.value.toFixed(2) : (on ? '1' : '·');
+    }
+  }
+
+  var axCells = [];
+  function renderAxes(pad) {
+    if (!pad) { axesEl.innerHTML = '<span class="empty">デバイス未検出</span>'; axCells = []; return; }
+    if (axCells.length !== pad.axes.length) {
+      axesEl.innerHTML = '';
+      axCells = [];
+      for (var i = 0; i < pad.axes.length; i++) {
+        var w = document.createElement('div');
+        w.className = 'axis';
+        w.innerHTML = '<span class="lbl">axes[' + i + ']</span>'
+                    + '<span class="bar"><span class="mid"></span><span class="fill"></span></span>'
+                    + '<span class="num">0.00</span>';
+        axesEl.appendChild(w);
+        axCells.push({ bar: w.querySelector('.bar'), fill: w.querySelector('.fill'), num: w.querySelector('.num') });
+      }
+    }
+    for (var k = 0; k < pad.axes.length; k++) {
+      var v = pad.axes[k];
+      var c = axCells[k];
+      var pct = Math.min(Math.abs(v), 1) * 50;
+      c.fill.style.left = (v >= 0 ? 50 : 50 - pct) + '%';
+      c.fill.style.width = pct + '%';
+      c.bar.className = Math.abs(v) > AXIS_THRESHOLD ? 'bar hot' : 'bar';
+      c.num.textContent = v.toFixed(2);
+    }
+  }
+
+  function renderLast(pad) {
+    if (!pad) return;
+    var hit = null;
+    for (var i = 0; i < pad.buttons.length; i++) {
+      if (pad.buttons[i].pressed || pad.buttons[i].value > 0.5) { hit = 'buttons[' + i + ']'; break; }
+    }
+    if (!hit) {
+      for (var j = 0; j < pad.axes.length; j++) {
+        if (Math.abs(pad.axes[j]) > AXIS_THRESHOLD) {
+          hit = 'axes[' + j + '] = ' + pad.axes[j].toFixed(2); break;
+        }
+      }
+    }
+    if (hit && hit !== lastSig) {
+      lastSig = hit;
+      lastEl.innerHTML = hit + ' <small>index ' + pad.index + '</small>';
+    }
+  }
+
+  // ── マッピング記録 ────────────────────────────────────
+  var recNames = [], recPos = -1, recResult = [], recBase = null, recArmed = false;
+  var namesEl = document.getElementById('names');
+  var targetEl = document.getElementById('target');
+  var tableEl = document.getElementById('mapTable');
+  var outEl = document.getElementById('out');
+  var outCtl = document.getElementById('outCtl');
+  var skipBtn = document.getElementById('recSkip');
+
+  function recording() { return recPos >= 0 && recPos < recNames.length; }
+
+  document.getElementById('recStart').addEventListener('click', function () {
+    var lines = namesEl.value.split('\n');
+    recNames = [];
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].replace(/^\s+|\s+$/g, '');
+      if (t) recNames.push(t);
+    }
+    if (!recNames.length) { targetEl.textContent = '名前が空です'; return; }
+    recResult = []; recPos = 0; recBase = null; recArmed = false;
+    skipBtn.disabled = false;
+    outEl.hidden = true; outCtl.hidden = true;
+    tableEl.hidden = false;
+    tableEl.querySelector('tbody').innerHTML = '';
+    paintTarget();
+  });
+  document.getElementById('recReset').addEventListener('click', function () {
+    recPos = -1; recResult = []; skipBtn.disabled = true;
+    targetEl.textContent = ''; tableEl.hidden = true;
+    outEl.hidden = true; outCtl.hidden = true;
+  });
+  skipBtn.addEventListener('click', function () {
+    if (!recording()) return;
+    recPos++; recBase = null; recArmed = false; paintTarget();
+  });
+
+  function paintTarget() {
+    if (recording()) {
+      targetEl.innerHTML = '踏む → <code>' + recNames[recPos] + '</code> '
+        + '<small>（' + (recPos + 1) + ' / ' + recNames.length + '）離してから次へ進みます</small>';
+    } else if (recPos >= 0) {
+      targetEl.innerHTML = '<small>記録完了</small>';
+      emit();
+      recPos = -1;
+      skipBtn.disabled = true;
+    }
+  }
+
+  function addRow(r) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + r.name + '</td><td>' + r.kind + '</td><td>' + r.index + '</td>'
+                 + '<td>' + (r.kind === 'axis' ? r.value.toFixed(2) : '1') + '</td>';
+    tableEl.querySelector('tbody').appendChild(tr);
+  }
+
+  function pollRecord(pad) {
+    if (!pad || !recording()) return;
+
+    if (recBase === null) { recBase = pad.axes.slice(); return; }
+
+    var found = null;
+    for (var i = 0; i < pad.buttons.length; i++) {
+      if (pad.buttons[i].pressed || pad.buttons[i].value > 0.5) {
+        found = { kind: 'button', index: i, value: 1 }; break;
+      }
+    }
+    if (!found) {
+      for (var j = 0; j < pad.axes.length && j < recBase.length; j++) {
+        if (Math.abs(pad.axes[j] - recBase[j]) > AXIS_THRESHOLD) {
+          found = { kind: 'axis', index: j, value: pad.axes[j] }; break;
+        }
+      }
+    }
+
+    // 押しっぱなしで次の項目まで進んでしまわないよう、一度離すまで待つ
+    if (!found) { recArmed = true; return; }
+    if (!recArmed) return;
+
+    found.name = recNames[recPos];
+    recResult.push(found);
+    addRow(found);
+    recPos++; recBase = null; recArmed = false;
+    paintTarget();
+  }
+
+  function emit() {
+    var buttons = [], axes = [];
+    for (var i = 0; i < recResult.length; i++) {
+      (recResult[i].kind === 'button' ? buttons : axes).push(recResult[i]);
+    }
+    var s = '// Gamepad Probe による実測値\n';
+    s += '// ' + new Date().toISOString().slice(0, 10) + ' / ' + navigator.platform + '\n';
+    var pad = current(pads());
+    if (pad) s += '// device: ' + pad.id + '\n';
+    s += '\nexport const BUTTON = Object.freeze({\n';
+    for (var b = 0; b < buttons.length; b++) {
+      s += '  ' + buttons[b].name + ': ' + buttons[b].index + ',\n';
+    }
+    s += '});\n';
+    for (var a = 0; a < axes.length; a++) {
+      s += '\n// ' + axes[a].name + ' はボタンではなく軸に出る\n';
+      s += 'export const ' + axes[a].name.toUpperCase() + '_AXIS = Object.freeze({ index: '
+         + axes[a].index + ', threshold: ' + AXIS_THRESHOLD + ' });\n';
+    }
+    outEl.textContent = s;
+    outEl.hidden = false;
+    outCtl.hidden = false;
+  }
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    function done() { btn.textContent = 'コピーした'; setTimeout(function () { btn.textContent = 'コピー'; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(outEl.textContent).then(done, fallback);
+    } else { fallback(); }
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(outEl);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = '手動でコピーしてください'; }
+    }
+  });
+
+  // ── ループ ───────────────────────────────────────────
+  function frame() {
+    var list = pads();
+    syncSelect(list);
+    var pad = current(list);
+    renderInfo(pad);
+    renderButtons(pad);
+    renderAxes(pad);
+    renderLast(pad);
+    pollRecord(pad);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
