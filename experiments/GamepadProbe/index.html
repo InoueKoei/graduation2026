@@ -218,6 +218,9 @@ center</textarea>
     var nullish = supports('return 1 ?? 2');
     var optional = supports('var o = {}; return o?.a');
     var secure = window.isSecureContext;
+    // Gamepad をセキュアコンテキスト限定にしたのは Chromium 86 前後の独自実装。
+    // それ以前のバージョンは平文 HTTP でも普通に読める。
+    var enforcesSecure = (cv === null) || (cv >= 86);
     var hasApi = typeof navigator.getGamepads === 'function';
 
     var rows = [
@@ -225,7 +228,11 @@ center</textarea>
         ? '<span class="ng">判別できず</span>'
         : cv + ' ' + badge(cv >= 80, '（十分）', '（古い。80 以上が必要）')],
       ['?? / ?. が使えるか', badge(nullish && optional, '使える', '使えない — 作品側のJSが動きません')],
-      ['セキュアコンテキスト', badge(secure, 'はい', 'いいえ — Gamepad API が無効化されます')],
+      ['セキュアコンテキスト', secure
+        ? '<span class="ok">はい</span>'
+        : (enforcesSecure
+            ? '<span class="ng">いいえ — Gamepad API が空を返します</span>'
+            : '<span class="ok">いいえ（このバージョンは制限前なので読める）</span>')],
       ['Gamepad API', badge(hasApi, 'あり', 'なし')],
       ['オリジン', location.origin || '(file)'],
       ['UA', navigator.userAgent]
@@ -234,10 +241,16 @@ center</textarea>
     for (var i = 0; i < rows.length; i++) {
       html += '<div class="row"><dt>' + rows[i][0] + '</dt><dd>' + rows[i][1] + '</dd></div>';
     }
-    if (!secure) {
+    if (!secure && enforcesSecure) {
       html += '<div class="row"><dt></dt><dd class="ng">'
             + 'http://localhost か https でないと getGamepads() は常に空を返します。'
             + 'LAN の http://192.168.x.x では動きません。</dd></div>';
+    }
+    if (!secure && !enforcesSecure) {
+      html += '<div class="row"><dt></dt><dd>'
+            + 'Gamepad のセキュアコンテキスト制限は Chromium 86 前後で入ったもの。'
+            + 'このブラウザはそれより前なので、平文 HTTP でもパッドを読める。'
+            + '<strong>ただし更新後は localhost か https が必須になる。</strong></dd></div>';
     }
     document.getElementById('env').innerHTML = html;
   }
