@@ -182,13 +182,22 @@
     <div class="setting" id="shift-setting" hidden>
       <span class="setting-name">ずれの見せ方</span>
       <div class="shift-modes" role="group" aria-label="ずれの見せ方">
+        <button class="shift-btn" data-shift="size">大きさ</button>
         <button class="shift-btn is-on" data-shift="blur">ぼかし</button>
         <button class="shift-btn" data-shift="slice">短冊</button>
       </div>
+      <label class="setting-check shift-width">
+        <input id="duo-width-check" type="checkbox" autocomplete="off" />
+        <span>字幅も変える</span>
+      </label>
     </div>
     <p class="setting-note" id="shift-note" hidden>
-      <b>ぼかし</b>＝ずれるほどぼける。<b>短冊</b>＝字を横に切り、ずれるほど一本ずつ左右にずれる。
-      どちらも「二人がそろっていたか」を字の像に残すためのもの。
+      <b>大きさ</b>＝そろうほど大きく、ずれるほど小さい。<b>ぼかし</b>＝ずれるほどぼける。
+      <b>短冊</b>＝字を横に切り、ずれるほど一本ずつ左右にずれる。
+      ぼかしと短冊は「ずれ＝崩れ」、大きさは向きが逆で「そろえば育つ」。
+      崩さないように踏むのと、合わせにいくのとで、二人の身振りが変わる。
+      <br><b>字幅も変える</b>＝そろうほど広く、ずれるほど細い。
+      行の高さを崩さないので、上の3つのどれにも重ねられる。
     </p>
 
     <label class="setting" id="pair-setting" hidden>
@@ -203,7 +212,7 @@
 
     <div class="setting">
       <label class="setting-check">
-        <input id="keyboard-check" type="checkbox" checked />
+        <input id="keyboard-check" type="checkbox" checked autocomplete="off" />
         <span>キーボード代替（子音 <code>q w e / a s d / z x c</code>＋<code>1</code>=わ行 <code>2</code>=ら行、<code>s</code>×2=濁点、母音 <code>u i o / j l</code>）</span>
       </label>
       <button id="clear-btn" class="btn-ghost">全消し</button>

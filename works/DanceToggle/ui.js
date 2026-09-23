@@ -6,7 +6,8 @@
 
 import {
   PANEL_GRID, MAT_TO_ROW, HOME_KEY, TIMING_RANGE, GAME,
-  VOWEL_PANEL_GRID, MAT_TO_VOWEL, DUO_RANGE, TIME_SIZE, DUO_BLUR, DUO_SLICE,
+  VOWEL_PANEL_GRID, MAT_TO_VOWEL, DUO_RANGE, TIME_WIDTH, DUO_BLUR, DUO_SLICE,
+  DUO_SIZE, DUO_WIDTH,
 } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -71,6 +72,7 @@ const el = {
   pairSetting: $('pair-setting'),
   pairNote: $('pair-note'),
   shiftBtns: [...document.querySelectorAll('.shift-btn')],
+  duoWidthCheck: $('duo-width-check'),
   pairRange: $('pair-range'),
   pairOut: $('pair-out'),
   swapBtn: $('swap-btn'),
@@ -80,15 +82,44 @@ const el = {
 const secs = (ms) => (ms / 1000).toFixed(1);
 
 /**
- * 入力にかかった時間 → 字の大きさ（倍率）。
- * minMs 以下は最小、maxMs 以上は最大で頭打ちにする。
- * 青天井にすると、放置した1字だけで画面が埋まってしまうため。
+ * 止まっていた時間 → 字の横幅（％）。
+ * 短いほど細く、長いほど広い。minMs 以下・maxMs 以上は頭打ちにする。
  */
-function scaleForMs(ms) {
-  const { minMs, maxMs, minScale, maxScale } = TIME_SIZE;
+function widthForMs(ms) {
+  const { minMs, maxMs, minPct, maxPct } = TIME_WIDTH;
   const t = Math.min(1, Math.max(0, (ms - minMs) / (maxMs - minMs)));
-  return minScale + t * (maxScale - minScale);
+  return minPct + t * (maxPct - minPct);
 }
+
+/**
+ * 幅を字に当てる style。
+ *
+ * 可変フォントの幅軸（`font-variation-settings: "wdth"`）は軸を持つフォントでしか
+ * 効かず、無い端末では黙って素の幅のまま出てしまう。そこで軸には頼らず、
+ * `scaleX` で字そのものを横に引き伸ばす／縮める——どのフォントでも必ず効く。
+ *
+ * ただし `transform` は組版の幅を変えない（掛けても隣の字は動かない）ので、
+ * 足りない／余る分を `margin-right` で足し引きして字送りを合わせる。
+ * かなは全角＝1em 送りなので、半分に縮めた字は右へ 0.5em 詰める。
+ *
+ * 箱そのものの幅はいじらない。下線（未確定の字）や枠（お題のいま狙う字）は
+ * 箱に付いているので、字と同じ倍率で一緒に伸び縮みしてくれる。
+ * 大きさ（font-size）は動かさないため、行の高さは揃ったまま。
+ */
+function widthStyle(ms) {
+  return scaleXStyle(widthForMs(ms) / 100);
+}
+
+/** 横倍率 → style。字送りの補正込み（二人モードの「字幅」でも使う） */
+function scaleXStyle(scale) {
+  return {
+    transform: `scaleX(${scale.toFixed(4)})`,
+    marginRight: `${(scale - 1).toFixed(4)}em`,
+  };
+}
+
+/** 幅の指定を消して素の字に戻す（未確定の字が消えたときなど） */
+const NO_WIDTH = Object.freeze({ transform: '', marginRight: '' });
 
 /**
  * 二人のずれ → ぼかし量（em）。
@@ -98,6 +129,26 @@ function scaleForMs(ms) {
 function blurForGap(gapMs, pairMs) {
   const ratio = Math.min(1, Math.max(0, gapMs / pairMs));
   return ratio * DUO_BLUR.maxEm;
+}
+
+/**
+ * 二人のずれ → 字の大きさ（em）と横幅（％）。
+ *
+ * ぼかし・短冊とは**向きが逆**。あちらは「ずれ＝崩れ」だが、こちらは
+ * **そろうほど得をする**——ぴたりと合えば字が育ち（広がり）、ずれるほど痩せる。
+ * 踏む側の動機が「崩さないように」から「合わせにいく」に変わる。
+ */
+function sizeForGap(gapMs, pairMs) {
+  const ratio = Math.min(1, Math.max(0, gapMs / pairMs));
+  // 比をそのまま写すと、実際のずれ（50〜500ms）が比の下のほうに固まって差が出ない。
+  // curve 乗して小さいずれのあたりを引き伸ばす（config.js の DUO_SIZE を見よ）
+  const t = ratio ** DUO_SIZE.curve;
+  return DUO_SIZE.maxEm + t * (DUO_SIZE.minEm - DUO_SIZE.maxEm);
+}
+
+function duoWidthForGap(gapMs, pairMs) {
+  const ratio = Math.min(1, Math.max(0, gapMs / pairMs));
+  return DUO_WIDTH.maxPct + ratio * (DUO_WIDTH.minPct - DUO_WIDTH.maxPct);
 }
 
 /**
@@ -249,18 +300,13 @@ export function render(snap, pressed, holdProgress) {
 
   if (!snap) return; // 二人モードはトグルの状態を持たない
 
-  // 確定した字は「出しはじめてから確定するまで」の時間で大きさが決まる。
-  // 未確定の字は経過に合わせて**その場で育つ**ので、迷っているあいだ字が膨らんでいく
-  const sized = snap.chars.map((c) => ({
-    ch: c.ch,
-    style: { fontSize: `${scaleForMs(c.ms).toFixed(3)}em` },
-  }));
+  // 確定した字は「前の字を踏み終えてから踏みはじめるまで」の間隔で幅が決まる。
+  // 踏みはじめた瞬間に決まるので、確定を待つあいだに変わることはない
+  const sized = snap.chars.map((c) => ({ ch: c.ch, style: widthStyle(c.ms) }));
   renderChars(el.committed, sized, snap.chars.map((c) => `${c.ch}${Math.round(c.ms / 50)}`).join(','));
 
   el.pending.textContent = snap.pendingChar ?? '';
-  el.pending.style.fontSize = snap.pendingChar
-    ? `${scaleForMs(snap.pendingMs).toFixed(3)}em`
-    : '';
+  Object.assign(el.pending.style, snap.pendingChar ? widthStyle(snap.pendingMs) : NO_WIDTH);
 
   // 確定メーターは「残り」を出す。減っていくほうが待ちの体感に合う
   const remain = snap.pendingChar ? 1 - snap.commitProgress : 0;
@@ -471,12 +517,10 @@ function renderPhrase(g, pendingChar, chars) {
     const span = document.createElement('span');
     span.className = 'phrase-char' + (i < cursor ? ' done' : i === cursor ? ' now' : '');
     span.textContent = ch;
-    // 打ち終えた字は、その1字にかかった時間で大きさが決まる。
-    // どこで手こずったかが、打ち終えた文にそのまま残る
-    // 打ち終えた字は、その字を踏みはじめる前に止まっていた時間で大きさが決まる。
+    // 打ち終えた字は、その字を踏みはじめる前に止まっていた時間で幅が決まる。
     // どこで手が止まったかが、打ち終えた文にそのまま残る
-    if (TIME_SIZE.inGame && i < cursor && chars[i]) {
-      span.style.fontSize = `${scaleForMs(chars[i].ms).toFixed(3)}em`;
+    if (TIME_WIDTH.inGame && i < cursor && chars[i]) {
+      Object.assign(span.style, widthStyle(chars[i].ms));
     }
     el.phrase.appendChild(span);
 
@@ -505,17 +549,37 @@ export function flashMiss(key) {
 /**
  * @param {object} d DuoEngine.snapshot() の返り値
  */
-export function renderDuo(d, pairMs, shiftMode = 'blur') {
-  // 呼吸が合った字ほどくっきり、ずれるほど崩れる。
-  // 「相手と合ったかどうか」がそのまま字の像として残る
+export function renderDuo(d, pairMs, shiftMode = 'blur', widthOn = false) {
+  // 「相手と合ったかどうか」がそのまま字の像として残る。
+  // ぼかし・短冊は合った字ほどくっきり、大きさ・字幅は合った字ほど育つ
   const items = d.chars.map((c) => {
-    if (shiftMode !== 'slice') {
-      return { ch: c.ch, style: { filter: `blur(${blurForGap(c.gapMs, pairMs).toFixed(4)}em)` } };
+    const style = {};
+    let layers = null;
+    let pad = 0; // 短冊が隣を押しのけるぶんの余白（em）
+
+    if (shiftMode === 'slice') {
+      const r = sliceLayers(c.gapMs, pairMs);
+      layers = r.layers;
+      pad = r.amp;
+    } else if (shiftMode === 'size') {
+      style.fontSize = `${sizeForGap(c.gapMs, pairMs).toFixed(4)}em`;
+    } else {
+      style.filter = `blur(${blurForGap(c.gapMs, pairMs).toFixed(4)}em)`;
     }
-    const { amp, layers } = sliceLayers(c.gapMs, pairMs);
-    return { ch: c.ch, layers, style: { margin: `0 ${amp.toFixed(4)}em` } };
+
+    // 字幅は上の3つのどれにも重ねられる。
+    // margin は短冊の余白と取り合いになるので、まとめてここで書く
+    // （em は自分の font-size 基準なので、大きさを変えた字でも送りは正しく詰まる）
+    const scale = widthOn ? duoWidthForGap(c.gapMs, pairMs) / 100 : 1;
+    if (widthOn) style.transform = `scaleX(${scale.toFixed(4)})`;
+    if (pad || widthOn) {
+      style.marginLeft = `${pad.toFixed(4)}em`;
+      style.marginRight = `${(pad + scale - 1).toFixed(4)}em`;
+    }
+    return { ch: c.ch, layers, style };
   });
-  const signature = shiftMode + '|' + d.chars.map((c) => `${c.ch}${Math.round(c.gapMs / 25)}`).join(',');
+  const signature = `${shiftMode}${widthOn ? '+w' : ''}|`
+    + d.chars.map((c) => `${c.ch}${Math.round(c.gapMs / 25)}`).join(',');
   renderChars(el.duoBuffer, items, signature);
 
   // 成立しなかった組み合わせは、そのまま両側に残して一瞬見せる。
@@ -550,12 +614,18 @@ export function bindDuoSettings(handlers, initial) {
 }
 
 
-/** ずれの見せ方（ぼかし / 短冊）の切り替え */
+/** ずれの見せ方（大きさ / ぼかし / 短冊）の切り替え */
 export function bindShiftMode(onChange, initial) {
   setShiftMode(initial);
   for (const btn of el.shiftBtns) {
     btn.addEventListener('click', () => { setShiftMode(btn.dataset.shift); onChange(btn.dataset.shift); });
   }
+}
+
+/** 字幅の入／切。見せ方3つのどれにも重ねられるので、ボタン列とは別立てにしてある */
+export function bindDuoWidth(onChange, initial) {
+  el.duoWidthCheck.checked = initial;
+  el.duoWidthCheck.addEventListener('change', () => onChange(el.duoWidthCheck.checked));
 }
 
 export function setShiftMode(mode) {

@@ -9,7 +9,7 @@
 // ============================================================
 
 import {
-  MAT_TO_ROW, MAT_TO_VOWEL, TIMING, DUO, DEFAULT_SHIFT_MODE,
+  MAT_TO_ROW, MAT_TO_VOWEL, TIMING, DUO, SHIFT_MODES, DEFAULT_SHIFT_MODE, DEFAULT_DUO_WIDTH,
   DEFAULT_MODE, MODE_SLOTS, STORAGE_KEY,
 } from './config.js';
 import { MatReader } from './mat.js';
@@ -40,10 +40,15 @@ function loadSettings() {
     releaseDebounceMs: TIMING.releaseDebounceMs,
     pairMs: DUO.pairMs,
     shiftMode: DEFAULT_SHIFT_MODE,
+    duoWidth: DEFAULT_DUO_WIDTH,
     keyboard: true,
   };
   try {
-    return { ...base, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') };
+    const saved = { ...base, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') };
+    // 見せ方の名前は増減するので、残っていた値が今無ければ既定に戻す
+    // （知らない名前のままだと、どのボタンも光っていない状態になる）
+    if (!(saved.shiftMode in SHIFT_MODES)) saved.shiftMode = DEFAULT_SHIFT_MODE;
+    return saved;
   } catch {
     return base; // 壊れた値が入っていても起動は止めない
   }
@@ -206,7 +211,7 @@ function draw() {
   if (mode === 'duo') {
     const d = duo.tick();
     ui.render(null, reader.pressed, reader.holdProgress); // 盤面2枚だけ塗る
-    ui.renderDuo(d, duo.pairMs, settings.shiftMode);
+    ui.renderDuo(d, duo.pairMs, settings.shiftMode, settings.duoWidth);
     return;
   }
   const snap = engine.tick();
@@ -237,6 +242,7 @@ ui.bindSettings({
 }, settings);
 
 ui.bindShiftMode((v) => { settings.shiftMode = v; saveSettings(settings); draw(); }, settings.shiftMode);
+ui.bindDuoWidth((v) => { settings.duoWidth = v; saveSettings(settings); draw(); }, settings.duoWidth);
 ui.bindDuoSettings({
   onPairMs: (v) => { duo.pairMs = v; settings.pairMs = v; saveSettings(settings); },
 }, settings);

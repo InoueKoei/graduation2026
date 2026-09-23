@@ -6,6 +6,9 @@
 :root {
   --gap: 16px;
   --radius: 12px;
+  /* 打った字を刷るフォント。幅は scaleX で自前に変えるので、
+     可変フォントの幅軸は要らない——どのフォントに落ちても幅は効く */
+  --font-kana: "ZEN Interface", system-ui, -apple-system, sans-serif;
 }
 
 body {
@@ -62,6 +65,7 @@ body {
 
 /* ── 左：入力テキスト ─────────────────────────────────── */
 .text-buffer {
+  font-family: var(--font-kana);
   flex: 1; min-height: 300px;
   font-size: 44px; line-height: 1.6; letter-spacing: .04em;
   word-break: break-all; overflow-y: auto;
@@ -222,6 +226,7 @@ body {
 
 /* お題。打ち終えた字は墨、これから踏む字は薄墨、いま狙う字だけ枠で囲む */
 .phrase {
+  font-family: var(--font-kana);
   flex: 1; min-height: 160px;
   font-size: 40px; line-height: 1.9; letter-spacing: .06em;
   word-break: break-all;
@@ -302,15 +307,17 @@ body {
 .cell.unused { opacity: .3; }
 .cell.unused .cell-kana { font-size: 13px; font-weight: 400; }
 
-/* ── 1字ごとの装飾（時間＝大きさ／ずれ＝ぼけ） ───────────── */
-.text-buffer .ch {
+/* ── 1字ごとの装飾（時間＝幅／ずれ＝ぼけ） ───────────────── */
+/* 幅は scaleX で変えるので、大きさ（行の高さ）は動かない。
+   transform は組版の幅を変えないので、余り／不足は ui.js 側が margin-right で埋める。
+   inline-block でないと transform が効かない。左端を起点にするのは、
+   縮めた字が左に詰まって、字送りの補正と向きを揃えるため */
+.text-buffer .ch,
+.phrase-char,
+.pending {
   display: inline-block;
-  /* 大きさが変わっても行のベースラインで揃える。下端で揃えると大きい字だけ浮く */
-  vertical-align: baseline;
-  line-height: 1;
+  transform-origin: left center;
 }
-/* 未確定の字も経過に合わせて育つので、同じ扱いにする */
-.pending { display: inline-block; vertical-align: baseline; line-height: 1; }
 
 /* 中央＝休む場所。文字の面と見分けがつくよう、へこませて描く */
 .cell.home {
@@ -357,4 +364,7 @@ body {
   border: none; cursor: pointer;
 }
 .shift-btn:hover { background: var(--color-muted); }
+/* 字幅は見せ方の4つ目ではなく、3つのどれにも重ねる入／切。
+   ボタン列と同じ行に置くが、伸びて右端まで占めないよう flex を切っておく */
+.shift-width { flex: 0 0 auto; }
 .shift-btn.is-on { background: var(--color-accent-strong); color: var(--color-background); }
