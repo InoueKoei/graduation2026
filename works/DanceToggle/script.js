@@ -41,6 +41,7 @@ function loadSettings() {
     pairMs: DUO.pairMs,
     shiftMode: DEFAULT_SHIFT_MODE,
     duoWidth: DEFAULT_DUO_WIDTH,
+    settingsOpen: true,
     keyboard: true,
   };
   try {
@@ -243,6 +244,7 @@ ui.bindSettings({
 
 ui.bindShiftMode((v) => { settings.shiftMode = v; saveSettings(settings); draw(); }, settings.shiftMode);
 ui.bindDuoWidth((v) => { settings.duoWidth = v; saveSettings(settings); draw(); }, settings.duoWidth);
+ui.bindSettingsOpen((v) => { settings.settingsOpen = v; saveSettings(settings); }, settings.settingsOpen);
 ui.bindDuoSettings({
   onPairMs: (v) => { duo.pairMs = v; settings.pairMs = v; saveSettings(settings); },
 }, settings);

@@ -26,7 +26,7 @@
       <div id="free-view">
         <div class="panel-label">入力</div>
         <div id="text-buffer" class="text-buffer" aria-live="polite">
-          <span id="committed"></span><span id="pending" class="pending"></span>
+          <span id="committed"></span><span id="pending" class="pending"></span><i id="caret" class="caret" aria-hidden="true"></i>
         </div>
         <div class="commit">
           <span class="commit-label">確定まで</span>
@@ -72,7 +72,7 @@
           </div>
         </div>
 
-        <div id="duo-buffer" class="text-buffer" aria-live="polite"></div>
+        <div class="text-buffer" aria-live="polite"><span id="duo-buffer"></span><i id="duo-caret" class="caret" aria-hidden="true"></i></div>
 
         <div class="duo-pending">
           <div class="duo-slots">
@@ -87,9 +87,6 @@
           </div>
         </div>
 
-        <p id="duo-hint" class="game-hint">
-          子音マットと母音マットを、たがいに 1.5 秒以内に踏むと1文字になります。
-        </p>
       </div>
     </section>
 
@@ -120,104 +117,85 @@
 
       <p class="hint" id="solo-hint">
         同じ面をくり返し踏むと字が回る。別の面を踏むか、待つと確定。<br />
-        <b>中央は休む場所</b>で、踏んでも字は出ません。<b>2度踏む</b>と濁点・半濁点・小文字。<br />
-        <b>START</b>＝ら行／<b>SELECT</b>＝わ行／<b>両方を同時に踏む</b>＝1字削除。
+        <b>中央</b>＝休む場所。<b>2度踏む</b>と濁点・半濁点・小文字。<br />
+        <b>START</b>＝ら行／<b>SELECT</b>＝わ行／<b>両方同時</b>＝1字削除。
       </p>
 
       <p class="hint" id="duo-hint-right" hidden>
-        <b>子音</b>は外周8面＋<b>START</b>＝ら行＋<b>SELECT</b>＝わ行。1回踏むだけで行が決まる（回さない）。<br />
-        中央は休む場所。<b>2度踏む</b>と濁点・半濁点・小文字。<br />
-        <b>母音</b>も同じ向きに回して置く。盤面どおり あ い う ／ え ・ お。灰色の面は使いません。<br />
-        子音側は<b>中央の2度踏み</b>＝濁点・半濁点・小文字／<b>SELECT+START</b>＝1字削除。
+        <b>子音</b>＝1回踏むだけで行が決まる（回さない）。<br />
+        <b>母音</b>＝盤面どおり。灰色の面は使いません。<br />
+        <b>中央2度踏み</b>＝濁点・半濁点・小文字／<b>SELECT+START</b>＝1字削除。
       </p>
     </section>
   </main>
 
   <section class="settings">
-    <div class="panel-label">調整</div>
+    <button id="settings-toggle" class="panel-label settings-toggle" aria-expanded="true" aria-controls="settings-body">
+      調整
+    </button>
+    <div id="settings-body" class="settings-body">
 
-    <label class="setting">
-      <span class="setting-name">受付までの溜め</span>
-      <input id="hold-range" type="range" />
-      <output id="hold-out" class="setting-out"></output>
-    </label>
-    <p class="setting-note">
-      新しい面に乗ってから、この時間だけ踏み続けて入力になる。
-      次の面へ移る途中で通過しただけの面は、ここに届く前に足が離れるので拾わない。
-      長くするほど誤入力は減るが、面を移るたびに効く。
-    </p>
+      <label class="setting">
+        <span class="setting-name">受付までの溜め</span>
+        <input id="hold-range" type="range" />
+        <output id="hold-out" class="setting-out"></output>
+      </label>
+      <label class="setting">
+        <span class="setting-name">踏み直しの溜め</span>
+        <input id="repeat-range" type="range" />
+        <output id="repeat-out" class="setting-out"></output>
+      </label>
+      <label class="setting">
+        <span class="setting-name">中央の2度踏み</span>
+        <input id="home-range" type="range" />
+        <output id="home-out" class="setting-out"></output>
+      </label>
+      <label class="setting">
+        <span class="setting-name">確定までの時間</span>
+        <input id="commit-range" type="range" />
+        <output id="commit-out" class="setting-out"></output>
+      </label>
 
-    <label class="setting">
-      <span class="setting-name">踏み直しの溜め</span>
-      <input id="repeat-range" type="range" />
-      <output id="repeat-out" class="setting-out"></output>
-    </label>
-    <p class="setting-note">
-      同じ面をもう一度踏むときの溜め。足がその面から動いていない＝通過の危険が無いので、
-      新規より短くてよい。「お」は5回踏むので、ここを詰めると1字がそのぶん軽くなる。
-    </p>
+      <label class="setting">
+        <span class="setting-name">チャタリング除去</span>
+        <input id="debounce-range" type="range" />
+        <output id="debounce-out" class="setting-out"></output>
+      </label>
 
-    <label class="setting">
-      <span class="setting-name">中央の2度踏み</span>
-      <input id="home-range" type="range" />
-      <output id="home-out" class="setting-out"></output>
-    </label>
-    <p class="setting-note">
-      中央（休む場所）を2度踏むと濁点になる。その猶予。
-      あいだに他の面が入ったら成立しないので、よそを踏んで戻ってきただけでは出ない。
-    </p>
-
-    <label class="setting">
-      <span class="setting-name">確定までの時間</span>
-      <input id="commit-range" type="range" />
-      <output id="commit-out" class="setting-out"></output>
-    </label>
-
-    <label class="setting">
-      <span class="setting-name">チャタリング除去</span>
-      <input id="debounce-range" type="range" />
-      <output id="debounce-out" class="setting-out"></output>
-    </label>
-
-    <div class="setting" id="shift-setting" hidden>
-      <span class="setting-name">ずれの見せ方</span>
-      <div class="shift-modes" role="group" aria-label="ずれの見せ方">
-        <button class="shift-btn" data-shift="size">大きさ</button>
-        <button class="shift-btn is-on" data-shift="blur">ぼかし</button>
-        <button class="shift-btn" data-shift="slice">短冊</button>
+      <div class="setting" id="shift-setting" hidden>
+        <span class="setting-name">ずれの見せ方</span>
+        <div class="shift-modes" role="group" aria-label="ずれの見せ方">
+          <button class="shift-btn" data-shift="size">大きさ</button>
+          <button class="shift-btn is-on" data-shift="blur">ぼかし</button>
+          <button class="shift-btn" data-shift="slice">短冊</button>
+        </div>
+        <label class="setting-check shift-width">
+          <input id="duo-width-check" type="checkbox" autocomplete="off" />
+          <span>字幅も変える</span>
+        </label>
       </div>
-      <label class="setting-check shift-width">
-        <input id="duo-width-check" type="checkbox" autocomplete="off" />
-        <span>字幅も変える</span>
-      </label>
-    </div>
-    <p class="setting-note" id="shift-note" hidden>
-      <b>大きさ</b>＝そろうほど大きく、ずれるほど小さい。<b>ぼかし</b>＝ずれるほどぼける。
-      <b>短冊</b>＝字を横に切り、ずれるほど一本ずつ左右にずれる。
-      ぼかしと短冊は「ずれ＝崩れ」、大きさは向きが逆で「そろえば育つ」。
-      崩さないように踏むのと、合わせにいくのとで、二人の身振りが変わる。
-      <br><b>字幅も変える</b>＝そろうほど広く、ずれるほど細い。
-      行の高さを崩さないので、上の3つのどれにも重ねられる。
-    </p>
+      <p class="setting-note" id="shift-note" hidden>
+        <b>大きさ</b>と<b>字幅</b>はそろうほど育ち、<b>ぼかし</b>と<b>短冊</b>はずれるほど崩れる。
+      </p>
 
-    <label class="setting" id="pair-setting" hidden>
-      <span class="setting-name">相方の許容ずれ</span>
-      <input id="pair-range" type="range" />
-      <output id="pair-out" class="setting-out"></output>
-    </label>
-    <p class="setting-note" id="pair-note" hidden>
-      二人モードのみ。子音と母音がこの時間内にそろえば1文字になる。
-      既定 1500ms は既存作「母音子音」で二人で打って決めた値。
-    </p>
-
-    <div class="setting">
-      <label class="setting-check">
-        <input id="keyboard-check" type="checkbox" checked autocomplete="off" />
-        <span>キーボード代替（子音 <code>q w e / a s d / z x c</code>＋<code>1</code>=わ行 <code>2</code>=ら行、<code>s</code>×2=濁点、母音 <code>u i o / j l</code>）</span>
+      <label class="setting" id="pair-setting" hidden>
+        <span class="setting-name">相方の許容ずれ</span>
+        <input id="pair-range" type="range" />
+        <output id="pair-out" class="setting-out"></output>
       </label>
-      <button id="clear-btn" class="btn-ghost">全消し</button>
-      <button id="newrun-btn" class="btn-ghost" hidden>お題を引き直す</button>
-      <button id="swap-btn" class="btn-ghost" hidden>マットを入れ替える</button>
+      <p class="setting-note" id="pair-note" hidden>
+        子音と母音がこの時間内にそろえば1文字になる。
+      </p>
+
+      <div class="setting">
+        <label class="setting-check">
+          <input id="keyboard-check" type="checkbox" checked autocomplete="off" />
+          <span>キーボード代替（<code>q w e / a s d / z x c</code>＋<code>1</code> <code>2</code>、母音 <code>u i o / j l</code>）</span>
+        </label>
+        <button id="clear-btn" class="btn-ghost">全消し</button>
+        <button id="newrun-btn" class="btn-ghost" hidden>お題を引き直す</button>
+        <button id="swap-btn" class="btn-ghost" hidden>マットを入れ替える</button>
+      </div>
     </div>
   </section>
 

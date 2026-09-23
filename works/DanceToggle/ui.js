@@ -59,7 +59,9 @@ const el = {
   duoHintRight: $('duo-hint-right'),
 
   duoView: $('duo-view'),
+  caret: $('caret'),
   duoBuffer: $('duo-buffer'),
+  duoCaret: $('duo-caret'),
   duoSlots: document.querySelector('.duo-slots'),
   duoConsonant: $('duo-consonant'),
   duoVowel: $('duo-vowel'),
@@ -76,6 +78,8 @@ const el = {
   pairRange: $('pair-range'),
   pairOut: $('pair-out'),
   swapBtn: $('swap-btn'),
+  settingsToggle: $('settings-toggle'),
+  settingsBody: $('settings-body'),
 };
 
 /** 秒を小数1桁で。タイムは 0.1 秒まで見せれば足りる */
@@ -307,6 +311,12 @@ export function render(snap, pressed, holdProgress) {
 
   el.pending.textContent = snap.pendingChar ?? '';
   Object.assign(el.pending.style, snap.pendingChar ? widthStyle(snap.pendingMs) : NO_WIDTH);
+
+  // カーソルは「次の字が今どれだけの幅で出るか」をそのまま幅で見せる。
+  // 踏まずに止まっているほど伸び、頭打ちに達したら色で知らせる
+  const caretPct = widthForMs(snap.idleMs);
+  el.caret.style.width = `${(caretPct / 100).toFixed(4)}em`;
+  el.caret.classList.toggle('full', caretPct >= TIME_WIDTH.maxPct - 0.5);
 
   // 確定メーターは「残り」を出す。減っていくほうが待ちの体感に合う
   const remain = snap.pendingChar ? 1 - snap.commitProgress : 0;
@@ -594,6 +604,14 @@ export function renderDuo(d, pairMs, shiftMode = 'blur', widthOn = false) {
   el.duoVowel.classList.toggle('waiting', !rej && d.waitingSide === 'vowel');
   el.duoSlots.classList.toggle('rejected', Boolean(rej));
 
+  // カーソルは一人モードと同じ約束で、**相方が今踏めばどんな字になるか**を幅で見せる。
+  // 一人モードは待つほど伸びるが、こちらは逆で**待つほど縮む**（ずれるほど痩せるので）。
+  // 見せ方が大きさでも字幅でもないとき（ぼかし・短冊）は幅が変わらないので、素の1em のまま
+  const waited = d.waitingSide ? pairMs - d.remainMs : 0;
+  const caretEm = (shiftMode === 'size' ? sizeForGap(waited, pairMs) : 1)
+    * (widthOn ? duoWidthForGap(waited, pairMs) / 100 : 1);
+  el.duoCaret.style.width = `${caretEm.toFixed(4)}em`;
+
   // 相方待ちの残り時間。減っていくほうが「間に合わない」感じに合う
   el.duoBar.style.width = `${(d.waitingRemain * 100).toFixed(1)}%`;
   el.duoMs.textContent = d.waitingSide ? `${Math.round(d.remainMs)} ms` : '—';
@@ -620,6 +638,21 @@ export function bindShiftMode(onChange, initial) {
   for (const btn of el.shiftBtns) {
     btn.addEventListener('click', () => { setShiftMode(btn.dataset.shift); onChange(btn.dataset.shift); });
   }
+}
+
+/** 調整パネルの開閉。見出しがそのままボタン */
+export function bindSettingsOpen(onChange, initial) {
+  setSettingsOpen(initial);
+  el.settingsToggle.addEventListener('click', () => {
+    const open = el.settingsBody.hidden;   // 今たたまれていれば開く
+    setSettingsOpen(open);
+    onChange(open);
+  });
+}
+
+function setSettingsOpen(open) {
+  el.settingsBody.hidden = !open;
+  el.settingsToggle.setAttribute('aria-expanded', String(open));
 }
 
 /** 字幅の入／切。見せ方3つのどれにも重ねられるので、ボタン列とは別立てにしてある */
