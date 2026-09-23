@@ -313,7 +313,12 @@ export function render(snap, pressed, holdProgress) {
   Object.assign(el.pending.style, snap.pendingChar ? widthStyle(snap.pendingMs) : NO_WIDTH);
 
   // カーソルは「次の字が今どれだけの幅で出るか」をそのまま幅で見せる。
-  // 踏まずに止まっているほど伸び、頭打ちに達したら色で知らせる
+  // 踏まずに止まっているほど伸び、頭打ちに達したら色で知らせる。
+  //
+  // 字を回しているあいだ（未確定がある）は出さない。出す側の字も薄いので、
+  // 「薄い字＋線」が並ぶと、どこまでが字でどこからが次なのかが読めなくなる。
+  // 1字打ち終えてから次の溜めが見えはじめる、という順番のほうが素直
+  el.caret.hidden = Boolean(snap.pendingChar);
   const caretPct = widthForMs(snap.idleMs);
   el.caret.style.width = `${(caretPct / 100).toFixed(4)}em`;
   el.caret.classList.toggle('full', caretPct >= TIME_WIDTH.maxPct - 0.5);

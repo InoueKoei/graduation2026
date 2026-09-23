@@ -87,12 +87,13 @@ body {
 }
 /* これ以上は広くならない（maxPct で頭打ち）。伸びが止まった理由が見えるように色を変える */
 .caret.full { background: var(--color-accent-strong); }
+/* display を持っているので、hidden を効かせるには明示が要る */
+.caret[hidden] { display: none; }
 
-/* 未確定の1字。確定済みと同じ大きさのまま色だけ薄くして、下線で「まだ動く」ことを示す */
-.pending {
-  color: var(--color-text-placeholder);
-  border-bottom: 3px solid var(--color-accent-default);
-}
+/* 未確定の1字。確定済みと同じ大きさのまま、色だけ薄くして「まだ動く」ことを示す。
+   下線は引かない——字ごとに幅が違ううえ、すぐ隣にカーソルの線が来るので、
+   2本の線の高さと長さが揃わず目障りになる。薄い色だけで用は足りる */
+.pending { color: var(--color-text-placeholder); }
 
 .commit {
   display: flex; align-items: center; gap: 10px;
