@@ -9,11 +9,10 @@
 </head>
 <body>
   <header class="topbar">
-    <h1 class="title">DanceToggle</h1>
     <p id="status" class="status">マットを探しています…</p>
+    <button id="clear-btn" class="btn-ghost">全消し</button>
     <div class="modes" role="group" aria-label="モード">
       <button id="mode-free" class="mode-btn is-on" data-mode="free">フリー入力</button>
-      <button id="mode-game" class="mode-btn" data-mode="game">タイムアタック</button>
       <button id="mode-duo" class="mode-btn" data-mode="duo">二人</button>
     </div>
     <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
@@ -35,39 +34,11 @@
         </div>
       </div>
 
-      <!-- タイムアタック -->
-      <div id="game-view" hidden>
-        <div class="game-head">
-          <div class="panel-label">お題</div>
-          <div class="game-stats">
-            <span class="stat"><b id="game-time">0.0</b><span class="unit">秒</span></span>
-            <span class="stat"><span class="unit">ミス</span><b id="game-miss">0</b></span>
-            <span class="stat"><b id="game-progress">1 / 5</b></span>
-          </div>
-        </div>
-
-        <div class="phrase-meter"><i id="game-bar"></i></div>
-
-        <div id="phrase" class="phrase" aria-live="polite"></div>
-
-        <p id="game-hint" class="game-hint">お題の1字めの面を踏むと計測が始まります。</p>
-
-        <div id="game-result" class="game-result" hidden>
-          <div class="result-label">打ち切りました</div>
-          <div class="result-time"><b id="result-time">0.0</b><span class="unit">秒</span></div>
-          <div class="result-detail">
-            <span><span class="unit">ミス</span> <b id="result-miss">0</b></span>
-            <span><span class="unit">1字あたり</span> <b id="result-per">0.0</b><span class="unit">秒</span></span>
-          </div>
-          <button id="retry-btn" class="btn-ghost">もう一度</button>
-        </div>
-      </div>
-
       <!-- 二人モード -->
       <div id="duo-view" hidden>
-        <div class="game-head">
+        <div class="view-head">
           <div class="panel-label">二人でひと文字</div>
-          <div class="game-stats">
+          <div class="view-stats">
             <span class="stat"><span class="unit">ずれ</span><b id="duo-gap">—</b></span>
           </div>
         </div>
@@ -192,8 +163,6 @@
           <input id="keyboard-check" type="checkbox" checked autocomplete="off" />
           <span>キーボード代替（<code>q w e / a s d / z x c</code>＋<code>1</code> <code>2</code>、母音 <code>u i o / j l</code>）</span>
         </label>
-        <button id="clear-btn" class="btn-ghost">全消し</button>
-        <button id="newrun-btn" class="btn-ghost" hidden>お題を引き直す</button>
         <button id="swap-btn" class="btn-ghost" hidden>マットを入れ替える</button>
       </div>
     </div>

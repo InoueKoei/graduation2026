@@ -212,8 +212,6 @@ export const TIME_WIDTH = Object.freeze({
    */
   minPct: 50,
   maxPct: 150,
-  /** タイムアタックでも打ち終えた字に効かせるか */
-  inGame: true,
 });
 
 /**
@@ -487,26 +485,13 @@ export const KEYBOARD_FALLBACK = Object.freeze({
 // ── モード ──────────────────────────────────────────────────
 
 /**
- * free  … 自由に打つ
- * game  … タイムアタック。決められた数のお題を全部打ち切るまでのタイムを計る
+ * free … ひとりで自由に打つ
+ * duo  … 二人でひと文字（子音マット＋母音マット）
  *
- * 分岐は script.js のイベント配線だけ。mat.js は何も知らず、
- * toggle-core.js も「お題の字」を1つ受け取るだけで、ゲームの進行は game.js に閉じている。
+ * 分岐は script.js のイベント配線だけ。mat.js も toggle-core.js もモードを知らない。
  */
-export const MODES = Object.freeze({ free: 'フリー入力', game: 'タイムアタック', duo: '二人' });
+export const MODES = Object.freeze({ free: 'フリー入力', duo: '二人' });
 export const DEFAULT_MODE = 'free';
-
-/** タイムアタックの設定 */
-export const GAME = Object.freeze({
-  /**
-   * 1回で出すお題の数。
-   * 足で踏むので1字が重い。5文（およそ50字）で、慣れた人が1〜2分というあたりを見込んでいる。
-   * 展示で回転が悪ければ減らす。
-   */
-  phrasesPerRun: 5,
-  /** ミスした面を赤く見せる時間 */
-  missFlashMs: 260,
-});
 
 /**
  * モードごとに要るマットの台数。
@@ -514,7 +499,7 @@ export const GAME = Object.freeze({
  * 2台とも同じ VID/PID なので区別は Gamepad の index 順しかなく、
  * どちらが子音側になるかは USB の列挙順まかせ。画面から入れ替えられるようにしてある。
  */
-export const MODE_SLOTS = Object.freeze({ free: 1, game: 1, duo: 2 });
+export const MODE_SLOTS = Object.freeze({ free: 1, duo: 2 });
 
 /** 設定の保存先（localStorage）。既存作品と同じく作品名 + 用途 + バージョンで切る */
 export const STORAGE_KEY = 'dancetoggle.settings.v1';

@@ -39,31 +39,6 @@ export function markRingOf(ch) {
 }
 
 /**
- * 「その字を出すにはどの面を踏むか」の逆引き表。
- *
- * 環に並んだ字だけでなく、そこから印で派生する字も同じ行に登録する
- * （「が」は か行、「っ」は た行、「ー」は わ行）。
- * タイムアタックで「お題の字を出せない面」を弾くのに使う。
- */
-const ROW_OF = new Map();
-for (const [row, ring] of Object.entries(RINGS)) {
-  for (const ch of ring) {
-    ROW_OF.set(ch, row);
-    for (const marked of MARK_RING[ch] ?? []) ROW_OF.set(marked, row);
-  }
-}
-
-/** その字を出せる行。出せない字なら null */
-export function rowForChar(ch) {
-  return ROW_OF.get(ch) ?? null;
-}
-
-/** その字がこの入力方式で打てるか。お題の検算に使う */
-export function canType(ch) {
-  return ROW_OF.has(ch);
-}
-
-/**
  * トグル入力の状態機械。
  *
  * 持つ状態は2つだけ。
@@ -95,26 +70,10 @@ export class ToggleEngine {
     this.pending = null; // { row, ringIndex, markIndex, at, gapMs }
     /** 直近に受け付けた踏みの時刻。字をまたいで持ち越す（間隔を測る基準） */
     this.lastPressAt = null;
-    /**
-     * お題の字。null なら自由入力（従来どおり）。
-     * 入っているあいだは動きが3つ変わる。
-     *   - その字を出せない行の面は受け付けない（rejected を返す）
-     *   - お題と一致した瞬間に確定する（待たない）
-     *   - 時間切れの自動確定をしない（違う字が確定してしまうため）
-     */
-    this.expected = null;
   }
 
   /** 確定済みの文字列。chars から組み立てる（外からはこれまでどおり文字列に見える） */
   get committed() { return this.chars.map((c) => c.ch).join(''); }
-
-  /** お題の字を設定する。null に戻すと自由入力に戻る */
-  setExpected(ch) {
-    this.expected = ch ?? null;
-    return this;
-  }
-
-  get gated() { return this.expected !== null; }
 
   // ── 入力 ──────────────────────────────────────────────────
 
@@ -125,13 +84,6 @@ export class ToggleEngine {
    */
   press(row, now = performance.now()) {
     if (!RINGS[row]) return this.snapshot(now);
-
-    // お題の字を出せない行は受け付けない。
-    // トグルは目的の字に着くまで必ず違う字を経由する（「う」は あ・い を通る）ので、
-    // 弾けるのは「行が違う」ところまで。段のほうは一致するまで回してよい
-    if (this.gated && row !== rowForChar(this.expected)) {
-      return { ...this.snapshot(now), rejected: true };
-    }
 
     if (this.pending && this.pending.row === row) {
       // 同じ面 → 環を1つ進める。印はここで落ちる（は→ば のあと踏めば ひ になる）
@@ -149,7 +101,7 @@ export class ToggleEngine {
     }
     this.pending.at = now;
     this.lastPressAt = now;
-    return this.#settle(now);
+    return this.snapshot(now);
   }
 
   /**
@@ -167,12 +119,8 @@ export class ToggleEngine {
         this.pending.at = now; // 印を踏むのも「踏み」なので確定を待ち直す
         this.lastPressAt = now;
       }
-      return this.#settle(now);
+      return this.snapshot(now);
     }
-
-    // お題モードでは、確定済みの字は「正解として通った字」なので後から変えさせない。
-    // 掛ける相手が無いのに印を踏んだ＝踏み間違いなので、行違いと同じくミスとして返す
-    if (this.gated) return { ...this.snapshot(now), rejected: true };
 
     if (this.chars.length > 0) {
       const tail = this.chars[this.chars.length - 1];
@@ -194,13 +142,8 @@ export class ToggleEngine {
     return this.snapshot(now);
   }
 
-  /**
-   * 時間経過。最後の踏みから commitMs 過ぎていれば自動確定する。
-   * お題モードでは何もしない。放っておくと、目的の字に着く前の字が確定してしまうため
-   * （確定はお題と一致した瞬間だけ、#settle が行う）。
-   */
+  /** 時間経過。最後の踏みから commitMs 過ぎていれば自動確定する */
   tick(now = performance.now()) {
-    if (this.gated) return this.snapshot(now);
     if (this.pending && now - this.pending.at >= this.commitMs) this.#commit(now);
     return this.snapshot(now);
   }
@@ -226,8 +169,7 @@ export class ToggleEngine {
     const base = this.pending ? this.#baseChar() : null;
 
     // 確定までの残り。保留が無ければ 0（メーターは空になる）
-    // お題モードは時間切れ確定をしないので、メーターは常に空にしておく
-    const elapsed = this.pending && !this.gated ? now - this.pending.at : this.commitMs;
+    const elapsed = this.pending ? now - this.pending.at : this.commitMs;
     const remain = Math.max(0, this.commitMs - elapsed);
 
     return {
@@ -248,8 +190,8 @@ export class ToggleEngine {
       markRing: base ? (MARK_RING[base] ?? null) : null,
       markIndex: this.pending?.markIndex ?? 0,
       /** 確定までの進み具合 0〜1。1 になった瞬間に確定する */
-      commitProgress: this.pending && !this.gated ? Math.min(1, elapsed / this.commitMs) : 0,
-      remainMs: this.pending && !this.gated ? remain : 0,
+      commitProgress: this.pending ? Math.min(1, elapsed / this.commitMs) : 0,
+      remainMs: this.pending ? remain : 0,
     };
   }
 
@@ -266,19 +208,6 @@ export class ToggleEngine {
     const ring = MARK_RING[base];
     if (!ring) return base;
     return ring[this.pending.markIndex % ring.length];
-  }
-
-  /**
-   * 踏んだ直後の後始末。
-   * お題モードで、いま出ている字がお題と一致していたら、待たずにその場で確定する。
-   * @returns {object} スナップショット（一致して進んだときだけ matched: true）
-   */
-  #settle(now) {
-    if (this.gated && this.pending && this.#pendingChar() === this.expected) {
-      this.#commit(now);
-      return { ...this.snapshot(now), matched: true };
-    }
-    return this.snapshot(now);
   }
 
   /**

@@ -4,8 +4,7 @@
 //  MatReader（マットとキーボード）→ ToggleEngine（かなの状態機械）→ ui（描画）
 //  を繋ぐだけの薄い層。判断はここに書かず、上の3つに置く。
 //
-//  モードの分岐もここだけ。mat.js はモードを知らず、
-//  toggle-core.js も「お題の字」を1つ受け取るだけで、進行は game.js に閉じている。
+//  モードの分岐もここだけ。mat.js も toggle-core.js もモードを知らない。
 // ============================================================
 
 import {
@@ -13,20 +12,11 @@ import {
   DEFAULT_MODE, MODE_SLOTS, STORAGE_KEY,
 } from './config.js';
 import { MatReader } from './mat.js';
-import { ToggleEngine, canType } from './toggle-core.js';
-import { TimeAttack } from './game.js';
+import { ToggleEngine } from './toggle-core.js';
 import { DuoEngine, SIDE } from './duo.js';
-import { PHRASES, validatePhrases } from './phrases.js';
 import * as ui from './ui.js';
 
 const THEME_KEY = 'dancetoggle.theme.v1';
-
-// お題に打てない字が混じっていないかを起動時に確かめる。
-// phrases.js を書き換えたときに、踏んでみて初めて気づく事故を防ぐ
-const badPhrases = validatePhrases(canType);
-if (badPhrases.length) {
-  console.warn('[DanceToggle] 打てない字を含むお題があります:', badPhrases);
-}
 
 // ── 設定の保持 ──────────────────────────────────────────────
 
@@ -64,7 +54,6 @@ const settings = loadSettings();
 // ── 組み立て ────────────────────────────────────────────────
 
 let mode = DEFAULT_MODE;
-let game = null; // タイムアタック中だけ入る
 
 const engine = new ToggleEngine(settings.commitMs);
 const duo = new DuoEngine(settings.pairMs);
@@ -94,23 +83,8 @@ reader.keyboardEnabled = settings.keyboard;
 function handlePress(key, slot) {
   if (mode === 'duo') { handleDuoPress(key, slot); return; }
 
-  // タイムアタックでは、最初の踏みで計測が始まる（正解でもミスでも）。
-  // 位置につくまでの時間を計らないため、モードに入った時点では始めない
-  if (game && !game.finished) game.startClock();
-
   const row = MAT_TO_ROW[key];
-  const snap = row ? engine.press(row) : null;
-  if (!snap || !game || game.finished) return;
-
-  // お題の字を出せない行だった → 入力は通っていない。ミスとして数えて面を光らせる
-  if (snap.rejected) {
-    game.miss();
-    ui.flashMiss(key);
-    return;
-  }
-
-  // お題と一致して確定した → 次の字へ進める
-  if (snap.matched) advanceGame();
+  if (row) engine.press(row);
 }
 
 /**
@@ -142,10 +116,7 @@ function handleHomeDouble(slot) {
     if (slot === 0) duo.pressMark();   // 濁点は子音マット側だけ
     return;
   }
-  const snap = engine.pressMark();
-  if (!game || game.finished) return;
-  if (snap.rejected) { game.miss(); ui.flashMiss('center'); return; }
-  if (snap.matched) advanceGame();
+  engine.pressMark();
 }
 
 /** SELECT + START の同時踏み */
@@ -156,28 +127,12 @@ function handleBoth(slot) {
     return;
   }
 
-  // タイムアタックでは確定済み＝正解として通った字なので、消させない。
-  //
-  // なお、お題モードでは目的の字を通り過ぎることが起きない（通った瞬間に確定するため）。
-  // ここが要るのは「回している途中で分からなくなったので頭からやり直したい」ときで、
-  // 出かかっている字を捨てて環の先頭に戻す逃げ道として残してある
-  if (game && !game.finished) {
-    if (engine.pending) engine.backspace();
-    return;
-  }
   engine.backspace();
-}
-
-/** 1字進める。文を打ち切ったら次の文、全部打ち切ったら終了 */
-function advanceGame() {
-  const what = game.advance();
-  if (what === 'phrase' || what === 'finish') engine.clear();
-  engine.setExpected(game.expected); // 終了時は null が入り、自由入力の挙動に戻る
 }
 
 // ── モード ──────────────────────────────────────────────────
 
-function setMode(next, { restart = false } = {}) {
+function setMode(next) {
   const changed = next !== mode;
   mode = next;
 
@@ -185,23 +140,9 @@ function setMode(next, { restart = false } = {}) {
   reader.slotCount = MODE_SLOTS[mode] ?? 1;
   if (changed) reader.resetInputs();
 
-  if (mode === 'duo') {
-    game = null;
-    engine.setExpected(null);
-    engine.clear();
-    if (changed || restart) duo.clear();
-  } else if (mode === 'game') {
-    // 同じモードのまま押し直したときは引き直さない（誤操作で記録が消えないように）
-    if (changed || restart || !game) {
-      game = new TimeAttack(PHRASES);
-      engine.clear();
-      engine.setExpected(game.expected);
-    }
-  } else {
-    game = null;
-    engine.setExpected(null);
-    engine.clear();
-  }
+  // 打ちかけを持ち越さない。どちらのモードも空から始める
+  if (changed) { engine.clear(); duo.clear(); }
+
   ui.setMode(mode);
   draw();
 }
@@ -215,9 +156,7 @@ function draw() {
     ui.renderDuo(d, duo.pairMs, settings.shiftMode, settings.duoWidth);
     return;
   }
-  const snap = engine.tick();
-  ui.render(snap, reader.pressed, reader.holdProgress);
-  if (game) ui.renderGame(game.snapshot(), snap.pendingChar, snap.chars);
+  ui.render(engine.tick(), reader.pressed, reader.holdProgress);
 }
 
 // ── 画面 ────────────────────────────────────────────────────
@@ -236,10 +175,7 @@ ui.bindSettings({
   },
   onDebounceMs: (v) => { reader.releaseDebounceMs = v; settings.releaseDebounceMs = v; saveSettings(settings); },
   onKeyboard: (v) => { reader.keyboardEnabled = v; settings.keyboard = v; saveSettings(settings); },
-  onClear: () => {
-    engine.clear(); duo.clear();
-    if (game) engine.setExpected(game.expected);
-  },
+  onClear: () => { engine.clear(); duo.clear(); },
 }, settings);
 
 ui.bindShiftMode((v) => { settings.shiftMode = v; saveSettings(settings); draw(); }, settings.shiftMode);

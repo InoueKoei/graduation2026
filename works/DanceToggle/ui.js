@@ -5,7 +5,7 @@
 // ============================================================
 
 import {
-  PANEL_GRID, MAT_TO_ROW, HOME_KEY, TIMING_RANGE, GAME,
+  PANEL_GRID, MAT_TO_ROW, HOME_KEY, TIMING_RANGE,
   VOWEL_PANEL_GRID, MAT_TO_VOWEL, DUO_RANGE, TIME_WIDTH, DUO_BLUR, DUO_SLICE,
   DUO_SIZE, DUO_WIDTH,
 } from './config.js';
@@ -34,22 +34,9 @@ const el = {
   debounceOut: $('debounce-out'),
   keyboardCheck: $('keyboard-check'),
   clearBtn: $('clear-btn'),
-  newrunBtn: $('newrun-btn'),
 
   freeView: $('free-view'),
-  gameView: $('game-view'),
   modeBtns: [...document.querySelectorAll('.mode-btn')],
-  gameTime: $('game-time'),
-  gameMiss: $('game-miss'),
-  gameProgress: $('game-progress'),
-  gameBar: $('game-bar'),
-  phrase: $('phrase'),
-  gameHint: $('game-hint'),
-  gameResult: $('game-result'),
-  resultTime: $('result-time'),
-  resultMiss: $('result-miss'),
-  resultPer: $('result-per'),
-  retryBtn: $('retry-btn'),
 
   boardTitle: $('board-title'),
   vowelWrap: $('vowel-wrap'),
@@ -106,8 +93,7 @@ function widthForMs(ms) {
  * 足りない／余る分を `margin-right` で足し引きして字送りを合わせる。
  * かなは全角＝1em 送りなので、半分に縮めた字は右へ 0.5em 詰める。
  *
- * 箱そのものの幅はいじらない。下線（未確定の字）や枠（お題のいま狙う字）は
- * 箱に付いているので、字と同じ倍率で一緒に伸び縮みしてくれる。
+ * 箱そのものの幅はいじらない。箱に付いた飾りが、字と同じ倍率で一緒に伸び縮みするため。
  * 大きさ（font-size）は動かさないため、行の高さは揃ったまま。
  */
 function widthStyle(ms) {
@@ -456,10 +442,8 @@ export function bindTheme(storageKey) {
 export function setMode(mode) {
   const duo = mode === 'duo';
 
-  el.freeView.hidden = mode !== 'free';
-  el.gameView.hidden = mode !== 'game';
+  el.freeView.hidden = duo;
   el.duoView.hidden = !duo;
-  el.newrunBtn.hidden = mode !== 'game';
 
   // 右カラム：二人モードだけ盤面を2枚出し、トグルの環は引っこめる
   el.vowelWrap.hidden = !duo;
@@ -482,82 +466,12 @@ export function bindModes(onChange) {
   for (const btn of el.modeBtns) {
     btn.addEventListener('click', () => onChange(btn.dataset.mode));
   }
-  el.retryBtn.addEventListener('click', () => onChange('game', { restart: true }));
-  el.newrunBtn.addEventListener('click', () => onChange('game', { restart: true }));
 }
 
 /** マットの入れ替えボタン。2台とも同じ VID/PID で、どちらが子音側かは列挙順まかせなので要る */
 export function bindSwap(onSwap) {
   el.swapBtn.addEventListener('click', onSwap);
 }
-
-// ── タイムアタックの描画 ────────────────────────────────────
-
-/**
- * @param {object} g game.js のスナップショット
- * @param {string|null} pendingChar いま出ている未確定の字
- */
-export function renderGame(g, pendingChar, chars = []) {
-  el.gameTime.textContent = secs(g.elapsed);
-  el.gameMiss.textContent = g.misses;
-  el.gameProgress.textContent = `${Math.min(g.phraseIndex + 1, g.phraseCount)} / ${g.phraseCount}`;
-  el.gameBar.style.width = `${(g.totalChars ? (g.doneChars / g.totalChars) * 100 : 0).toFixed(1)}%`;
-
-  renderPhrase(g, pendingChar, chars);
-
-  el.gameHint.hidden = g.started;
-  el.gameResult.hidden = !g.finished;
-  if (g.finished) {
-    el.resultTime.textContent = secs(g.elapsed);
-    el.resultMiss.textContent = g.misses;
-    el.resultPer.textContent = secs(g.msPerChar);
-  }
-}
-
-/**
- * お題を1字ずつ組む。打ち終えた字は墨、これから踏む字は薄墨、いま狙う字だけ枠で囲む。
- *
- * 狙う字の直後に、いま出ている未確定の字を薄く添える。
- * トグルは目的の字に着くまで環を回るので、「いまどこまで来たか」が見えないと
- * あと何回踏めばよいか分からなくなる（右の環表示と同じことを、目線を動かさずに読めるように）。
- */
-function renderPhrase(g, pendingChar, chars) {
-  const signature = `${g.phrase}|${g.typed.length}|${pendingChar ?? ''}|${g.finished}`;
-  if (el.phrase.dataset.signature === signature) return;
-  el.phrase.dataset.signature = signature;
-
-  el.phrase.innerHTML = '';
-  const cursor = g.typed.length;
-  [...g.phrase].forEach((ch, i) => {
-    const span = document.createElement('span');
-    span.className = 'phrase-char' + (i < cursor ? ' done' : i === cursor ? ' now' : '');
-    span.textContent = ch;
-    // 打ち終えた字は、その字を踏みはじめる前に止まっていた時間で幅が決まる。
-    // どこで手が止まったかが、打ち終えた文にそのまま残る
-    if (TIME_WIDTH.inGame && i < cursor && chars[i]) {
-      Object.assign(span.style, widthStyle(chars[i].ms));
-    }
-    el.phrase.appendChild(span);
-
-    if (i === cursor && pendingChar) {
-      const p = document.createElement('span');
-      p.className = 'phrase-pending';
-      p.textContent = `（${pendingChar}）`;
-      el.phrase.appendChild(p);
-    }
-  });
-}
-
-/** お題に無い面を踏んだことを一瞬だけ見せる */
-export function flashMiss(key) {
-  const cell = cells.get(key);
-  if (!cell) return;
-  cell.classList.remove('miss');
-  void cell.offsetWidth; // アニメーションを取り直すための強制リフロー
-  cell.classList.add('miss');
-  setTimeout(() => cell.classList.remove('miss'), GAME.missFlashMs);
-}
-
 
 // ── 二人モードの描画 ────────────────────────────────────────
 

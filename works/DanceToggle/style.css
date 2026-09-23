@@ -25,7 +25,6 @@ body {
   width: min(1000px, 100%);
   display: flex; align-items: center; gap: 12px;
 }
-.title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .04em; }
 .status {
   margin: 0; flex: 1;
   font-size: 12.5px; color: var(--color-text-placeholder);
@@ -250,62 +249,18 @@ body {
 .mode-btn:hover { background: var(--color-muted); }
 .mode-btn.is-on { background: var(--color-accent-strong); color: var(--color-background); }
 
-/* ── タイムアタック ───────────────────────────────────── */
-#free-view, #game-view { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+/* ── 画面の見出し（モード名＋数字） ─────────────────────── */
+#free-view { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
 
-.game-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.game-stats { display: flex; gap: 16px; align-items: baseline; font-size: 12px; color: var(--color-text-placeholder); }
-.game-stats .stat { display: inline-flex; align-items: baseline; gap: 3px; }
-.game-stats b { font-size: 17px; color: var(--color-text-primary); font-variant-numeric: tabular-nums; font-weight: 700; }
+.view-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.view-stats { display: flex; gap: 16px; align-items: baseline; font-size: 12px; color: var(--color-text-placeholder); }
+.view-stats .stat { display: inline-flex; align-items: baseline; gap: 3px; }
+.view-stats b { font-size: 17px; color: var(--color-text-primary); font-variant-numeric: tabular-nums; font-weight: 700; }
 .unit { font-size: 11px; color: var(--color-text-placeholder); }
-
-.phrase-meter { height: 3px; border-radius: 999px; background: var(--color-muted); overflow: hidden; }
-.phrase-meter > i { display: block; height: 100%; width: 0; background: var(--color-accent-default); transition: width .12s linear; }
-
-/* お題。打ち終えた字は墨、これから踏む字は薄墨、いま狙う字だけ枠で囲む */
-.phrase {
-  font-family: var(--font-kana);
-  flex: 1; min-height: 160px;
-  font-size: 40px; line-height: 1.9; letter-spacing: .06em;
-  word-break: break-all;
-}
-.phrase-char { color: var(--color-disabled); }
-.phrase-char.done { color: var(--color-text-primary); }
-.phrase-char.now {
-  color: var(--color-accent-strong);
-  box-shadow: inset 0 -3px 0 var(--color-accent-default);
-}
-/* いま出ている未確定の字。狙う字の直後に薄く添えて、あと何回踏むかを見当づける */
-.phrase-pending { color: var(--color-text-placeholder); }
-
-.game-hint { margin: 0; font-size: 12px; color: var(--color-text-placeholder); }
-
-.game-result {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  padding: 16px; border: 1px solid var(--color-accent-strong); border-radius: var(--radius);
-}
-.result-label { font-size: 11px; letter-spacing: .12em; color: var(--color-text-placeholder); }
-.result-time b { font-size: 46px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-.result-detail { display: flex; gap: 18px; font-size: 13px; color: var(--color-text-secondary); }
-.result-detail b { font-variant-numeric: tabular-nums; }
-
-/* お題に無い面を踏んだとき。反転させたうえで一瞬だけ強く見せる */
-.cell.miss, .cell.miss.on {
-  background: var(--color-text-primary);
-  border-color: var(--color-text-primary);
-  color: var(--color-background);
-  animation: miss-flash .26s ease-out;
-}
-@keyframes miss-flash {
-  0%   { transform: scale(1); }
-  30%  { transform: scale(0.94); }
-  100% { transform: scale(1); }
-}
 
 @media (max-width: 800px) {
   .topbar { flex-wrap: wrap; }
   .status { order: 3; width: 100%; }
-  .phrase { font-size: 30px; min-height: 110px; }
 }
 
 /* ── 二人モード ───────────────────────────────────────── */
@@ -351,7 +306,6 @@ body {
    inline-block でないと transform が効かない。左端を起点にするのは、
    縮めた字が左に詰まって、字送りの補正と向きを揃えるため */
 .text-buffer .ch,
-.phrase-char,
 .pending {
   display: inline-block;
   transform-origin: left center;
