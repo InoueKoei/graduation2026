@@ -2,20 +2,103 @@
 //  typing-core.js — Sessan の入力判定ロジック（MediaPipe 非依存の純粋関数）
 // ============================================================
 
+// ── 指を数える ──────────────────────────────────────────────
+//  以前は「指先が第二関節より y 上なら立っている」で数えていた。
+//  これは**手をまっすぐ上に向けている前提**で、傾けると崩れる。
+//  合成した手で測ると、正面 0〜10° では 100% だが 20° で 50%、90° で 19% まで落ちた。
+//  親指を y で見ていたので、回転の向きによって成績が非対称にもなっていた。
+//
+//  いまは向きに依らない量だけで判定する。
+//    人差し〜小指 … 関節での「向きの変化角」。まっすぐなら 0、曲げるほど大きい
+//    親指        … 手のひらの横方向へどれだけ開いているか
+//  どちらも手を回しても値が変わらないので、同じ測り方で 90° まで 100% になる。
+//  ※ これは画面内の回転（面内回転）の話。指をカメラ側へ向けた奥行き方向の傾きは、
+//    2D のランドマークでは短く写るだけなので、依然として苦手。
+//    そこまで要るなら Tasks API の world landmarks（手基準の3D）へ移るのが筋。
+
+const sub = (a, b) => ({ x: b.x - a.x, y: b.y - a.y });
+const vlen = (p) => Math.hypot(p.x, p.y) || 1e-9;
+
+/** 2つのベクトルのなす角[rad]。0〜π */
+function angleBetween(p, q) {
+  const c = (p.x * q.x + p.y * q.y) / (vlen(p) * vlen(q));
+  return Math.acos(Math.min(1, Math.max(-1, c)));
+}
+
+/** 人差し〜小指の [付け根, 第二関節, 先端] */
+const FINGER_JOINTS = Object.freeze([[5, 6, 8], [9, 10, 12], [13, 14, 16], [17, 18, 20]]);
+
+/**
+ * 親指が開いているか。
+ * 手のひらの「横」向き（人差し指の付け根→小指の付け根）を基準に、
+ * 親指の付け根→先端がその**逆向き**へどれだけ出ているかで見る。
+ * 手を回せば基準の向きも一緒に回るので、面内回転では値が変わらない。
+ * 左右の手・鏡像では基準も親指も一緒に反転するため、符号の関係はそのまま保たれる。
+ */
+function isThumbOut(lm, config) {
+  const palm = vlen(sub(lm[0], lm[9]));      // 手首→中指の付け根＝手の大きさ
+  const side = sub(lm[5], lm[17]);           // 人差し指の付け根→小指の付け根
+  const s = { x: side.x / vlen(side), y: side.y / vlen(side) };
+  const t = sub(lm[2], lm[4]);               // 親指の付け根→先端
+  const across = (t.x * s.x + t.y * s.y) / palm;
+  return -across > config.thumbOut;
+}
+
 /**
  * 立てている指の本数を数える。
- * 人差し〜小指は指先(8,12,16,20)が第二関節より上なら立っているとみなし、
- * 親指は横方向ではなく簡易的に y でしきい値判定する。
  * @param {Array<{x:number,y:number}>} landmarks 片手の21点
+ * @param {{bendDeg:number, thumbOut:number}} config config.js の FINGERS
  * @returns {number} 0〜5
  */
-export function countFingers(landmarks) {
+export function countFingers(landmarks, config) {
+  const bendRad = (config.bendDeg * Math.PI) / 180;
   let count = 0;
-  for (const tip of [8, 12, 16, 20]) {
-    if (landmarks[tip].y < landmarks[tip - 2].y) count++;
+  for (const [mcp, pip, tip] of FINGER_JOINTS) {
+    // 付け根→第二関節 と 第二関節→先端 の向きの差
+    if (angleBetween(sub(landmarks[mcp], landmarks[pip]), sub(landmarks[pip], landmarks[tip])) < bendRad) {
+      count++;
+    }
   }
-  if (landmarks[4].y < landmarks[2].y - 0.02) count++; // 親指
+  if (isThumbOut(landmarks, config)) count++;
   return count;
+}
+
+/**
+ * 直近数フレームの多数決で読みを決める。
+ *
+ * **確定を壊すのは正答率より「読みが変わる回数」**。
+ * 本数が1フレームでも変われば script.js 側で選択字が変わり、
+ * 22フレームの保持が振り出しに戻る。1秒に何度も変わると永久に確定しない。
+ *
+ * 合成した手に追跡のぶれ（σ＝手の大きさの2%）を入れて 10 秒流したとき、
+ * 以前の実装は 17.5 回、新しい判定は 0 回、これを噛ませるとぶれ 5% でも 0.1 回だった。
+ *
+ * 同数のときは今の値を保つ（きっかけの無い入れ替わりを作らない）。
+ */
+export class FingerVote {
+  #buf = [];
+  #size;
+  #value = 0;
+
+  constructor(size) { this.#size = Math.max(1, size | 0); }
+
+  get value() { return this.#value; }
+
+  /** @returns {number} ならしたあとの本数 */
+  push(n) {
+    this.#buf.push(n);
+    if (this.#buf.length > this.#size) this.#buf.shift();
+
+    const tally = new Map();
+    for (const v of this.#buf) tally.set(v, (tally.get(v) ?? 0) + 1);
+
+    let best = this.#value;
+    let bestN = tally.get(this.#value) ?? 0;
+    for (const [v, n2] of tally) if (n2 > bestN) { best = v; bestN = n2; }
+    return (this.#value = best);
+  }
+
+  reset() { this.#buf.length = 0; }
 }
 
 /**

@@ -11,9 +11,11 @@
 import {
   CAMERA, HOLD_FRAMES, GOJUON, GYO_NAMES, DAKUTEN, HANDAKUTEN,
   VOWEL_TARGETS, EYE_TARGETS, HOLISTIC_OPTIONS, CALIBRATION, HEARTBEAT, SNAPSHOT,
-  GLYPH, TUNING,
+  GLYPH, TUNING, FINGERS,
 } from './config.js';
-import { countFingers, analyzeFace, classifyVowel, isEyeClosed, withModifier, HoldGate } from './typing-core.js';
+import {
+  countFingers, analyzeFace, classifyVowel, isEyeClosed, withModifier, HoldGate, FingerVote,
+} from './typing-core.js';
 import { Calibration, loadTargets, saveTargets, clearTargets, hasSaved } from './calibration.js';
 import { Renderer } from './renderer.js';
 import { HeartSim } from './heartbeat.js';
@@ -44,6 +46,11 @@ let vowelTargets = loadTargets(CALIBRATION.storageKey, VOWEL_TARGETS);
 const charGate = new HoldGate(HOLD_FRAMES.char);
 const bsGate = new HoldGate(HOLD_FRAMES.backspace);
 const modGate = new HoldGate(HOLD_FRAMES.modifier);
+
+// 本数の読みを数フレームの多数決でならす。
+// 1フレームぶれるだけで選択字が変わり、保持が振り出しに戻るのを防ぐ。
+const fingerVote = new FingerVote(FINGERS.voteFrames);
+const fistVote = new FingerVote(FINGERS.voteFrames);
 
 ui.setCalibrationState(hasSaved(CALIBRATION.storageKey));
 
@@ -100,10 +107,11 @@ function onResults(results) {
     return;
   }
 
-  const leftF = results.leftHandLandmarks ? countFingers(results.leftHandLandmarks) : -1;
-  const rightF = results.rightHandLandmarks ? countFingers(results.rightHandLandmarks) : -1;
-  const totalF = (leftF > 0 ? leftF : 0) + (rightF > 0 ? rightF : 0);
-  const fistCount = (leftF === 0 ? 1 : 0) + (rightF === 0 ? 1 : 0);
+  const leftF = results.leftHandLandmarks ? countFingers(results.leftHandLandmarks, FINGERS) : -1;
+  const rightF = results.rightHandLandmarks ? countFingers(results.rightHandLandmarks, FINGERS) : -1;
+  // 読みは生のままでは使わない。多数決を通してから行と修飾を決める
+  const totalF = fingerVote.push((leftF > 0 ? leftF : 0) + (rightF > 0 ? rightF : 0));
+  const fistCount = fistVote.push((leftF === 0 ? 1 : 0) + (rightF === 0 ? 1 : 0));
 
   if (metrics) {
     const vowel = classifyVowel(metrics, vowelTargets);

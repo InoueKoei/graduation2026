@@ -77,8 +77,8 @@ export class Renderer {
     this.#srcH = h;
     this.canvas.width = w;
     this.canvas.height = h;
-    this.stage.style.aspectRatio = `${w} / ${h}`;
-    // CSS が「高さ上限 × 比」で幅を決められるよう、数値の比も渡す
+    // 比は CSS 変数だけで渡す。ステージの寸法は CSS（と、ドラッグで変えたときは JS）が決める。
+    // ここで aspectRatio を inline で書くと、つまみで変えた縦横を上書きしてしまう
     document.documentElement.style.setProperty('--cam-ar', (w / h).toFixed(4));
   }
 

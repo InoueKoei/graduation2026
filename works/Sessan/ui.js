@@ -209,6 +209,91 @@ export function setCalibrationState(calibrated) {
   $('reset-cal-btn').hidden = !calibrated;
 }
 
+// ── ステージの大きさをドラッグで変える ──────────────────────
+//  右下のつまみを引くと縦横が変わる。映像は canvas の object-fit: contain なので
+//  比が変わっても歪まない（入りきらないぶんは地色の帯になる）。
+//  カメラの比に近づいたら吸い付かせるので、帯の出ない大きさは取りやすい。
+const STAGE_SIZE_KEY = 'sessan.stageSize.v1';
+const STAGE_MIN = Object.freeze({ w: 220, h: 165 });
+/** カメラの比とこれくらい近ければ、ぴたりと合わせる */
+const SNAP_RATIO = 0.06;
+
+const stageLimits = () => ({
+  maxW: Math.max(STAGE_MIN.w, window.innerWidth - 24),
+  maxH: Math.max(STAGE_MIN.h, window.innerHeight - 24),
+});
+
+/** null を渡すと inline 指定を外して CSS の既定へ戻す */
+function applyStageSize(w, h) {
+  const root = document.documentElement.style;
+  if (w == null) {
+    root.removeProperty('--stage-w');
+    root.removeProperty('--stage-h');
+    return;
+  }
+  root.setProperty('--stage-w', `${Math.round(w)}px`);
+  root.setProperty('--stage-h', `${Math.round(h)}px`);
+}
+
+function camAspect() {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cam-ar'));
+  return Number.isFinite(v) && v > 0 ? v : 4 / 3;
+}
+
+function bindStageResize() {
+  const handle = $('stage-resize');
+  if (!handle) return;
+
+  // 前回の大きさ。画面が小さくなっていることもあるので、その場で挟み直す
+  try {
+    const saved = JSON.parse(localStorage.getItem(STAGE_SIZE_KEY) ?? 'null');
+    if (saved?.w > 0 && saved?.h > 0) {
+      const { maxW, maxH } = stageLimits();
+      applyStageSize(
+        Math.min(maxW, Math.max(STAGE_MIN.w, saved.w)),
+        Math.min(maxH, Math.max(STAGE_MIN.h, saved.h)),
+      );
+    }
+  } catch { /* 読めなくても既定の大きさで動く */ }
+
+  let start = null;
+
+  handle.addEventListener('pointerdown', (e) => {
+    const r = stage.getBoundingClientRect();
+    start = { x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const { maxW, maxH } = stageLimits();
+    const w = Math.min(maxW, Math.max(STAGE_MIN.w, start.w + (e.clientX - start.x)));
+    let h = Math.min(maxH, Math.max(STAGE_MIN.h, start.h + (e.clientY - start.y)));
+    const ar = camAspect();
+    if (Math.abs(w / h - ar) / ar < SNAP_RATIO) h = w / ar; // 帯の出ない比へ吸い付く
+    applyStageSize(w, h);
+  });
+
+  const finish = (e) => {
+    if (!start) return;
+    start = null;
+    try { handle.releasePointerCapture(e.pointerId); } catch { /* 既に解放済み */ }
+    const r = stage.getBoundingClientRect();
+    try {
+      localStorage.setItem(STAGE_SIZE_KEY, JSON.stringify({ w: r.width, h: r.height }));
+    } catch { /* 憶えられなくても動きは変わらない */ }
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+
+  // ダブルクリック／ダブルタップで既定の大きさへ戻す
+  handle.addEventListener('dblclick', () => {
+    applyStageSize(null);
+    try { localStorage.removeItem(STAGE_SIZE_KEY); } catch { /* 消せなくてよい */ }
+  });
+}
+
 // ── 配線 ────────────────────────────────────────────────────
 export function bindControls(handlers) {
   $('toggle-hud-btn').addEventListener('click', () => $('hud').classList.toggle('hidden'));
@@ -222,6 +307,8 @@ export function bindControls(handlers) {
   let saved = null;
   try { saved = localStorage.getItem('sessan.filmstripView.v1'); } catch { /* 読めなくてよい */ }
   setFilmstripView(saved ?? filmstrip.dataset.view);
+
+  bindStageResize();
 
   // sumi は data-theme で反転する
   $('theme-toggle').addEventListener('click', () => {

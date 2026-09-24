@@ -15,7 +15,7 @@
     <canvas id="output_canvas" width="640" height="480"></canvas>
 
     <div class="stage-controls">
-      <button id="calibrate-btn" class="icon-btn" title="口形を較正する" aria-label="較正">◎</button>
+      <button id="calibrate-btn" class="text-btn" title="口形を較正する">較正</button>
       <button id="reset-cal-btn" class="icon-btn" title="較正を初期値に戻す" aria-label="較正を戻す" hidden>↺</button>
       <button id="toggle-hud-btn" class="icon-btn" title="HUD 表示切替" aria-label="HUD切替">⚙</button>
       <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
@@ -43,6 +43,9 @@
     </div>
 
     <div id="status" class="status">カメラを準備中…</div>
+
+    <div id="stage-resize" class="stage-resize" role="separator" aria-label="表示サイズを変える（ダブルタップで既定に戻す）"
+         title="ドラッグで大きさを変える / ダブルタップで既定に戻す"></div>
   </main>
 
   <section class="panel">

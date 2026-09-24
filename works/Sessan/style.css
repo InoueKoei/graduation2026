@@ -6,8 +6,11 @@
 :root {
   --cam-ar: 1.3333;      /* カメラの比（JS が実映像から更新。既定 4:3） */
   --stage-max-h: 44vh;   /* ステージ高さの上限。iPad 縦置きで縦に伸びすぎないための要 */
-  /* 「高さ上限 × 比」で幅を逆算 → 切り抜きも余白もなしに高さを抑えられる */
-  --content-w: min(560px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
+  /* 「高さ上限 × 比」で幅を逆算 → 切り抜きも余白もなしに高さを抑えられる。
+     ドラッグで変えたときは JS が :root に px を直接入れて、この既定を上書きする */
+  --stage-w: min(560px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
+  --stage-h: calc(var(--stage-w) / var(--cam-ar));
+  --content-w: var(--stage-w); /* 下のパネルはステージの幅に揃える */
 }
 
 body {
@@ -18,26 +21,46 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
 }
 
-/* sumi アイコンボタン（Secondary/Icon 相当・ピル） */
-.icon-btn {
-  width: 36px; height: 36px; flex: 0 0 auto;
+/* sumi ボタン（Secondary 相当・ピル）。アイコンは正円、文字は横に伸びる */
+.icon-btn, .text-btn {
+  height: 36px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 16px; line-height: 1;
+  font: inherit; line-height: 1;
   background: color-mix(in srgb, var(--color-surface) 86%, transparent);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border); border-radius: 999px;
   cursor: pointer; backdrop-filter: blur(6px);
   transition: background .15s, border-color .15s;
 }
-.icon-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
-.icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent-strong); }
+.icon-btn { width: 36px; font-size: 16px; }
+.text-btn { padding: 0 15px; font-size: 13px; font-weight: 700; }
+.icon-btn:hover, .text-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+.icon-btn:focus-visible, .text-btn:focus-visible {
+  outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent-strong);
+}
 
 /* カメラステージ — 映像はネイティブ比のまま等倍。高さ上限から幅を逆算するので縦に伸びすぎない */
 .stage {
-  position: relative; width: var(--content-w); aspect-ratio: var(--cam-ar);
+  position: relative; width: var(--stage-w); height: var(--stage-h);
   background: var(--color-muted);
   border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden;
 }
+
+/* 右下のつまみ。ドラッグで縦横を変える（映像は contain なので歪まない） */
+.stage-resize {
+  position: absolute; right: 0; bottom: 0; z-index: 25;
+  width: 28px; height: 28px;
+  cursor: nwse-resize; touch-action: none;   /* touch-action 無しだと iPad で画面がスクロールする */
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  border-top: 1px solid var(--color-border); border-left: 1px solid var(--color-border);
+  border-top-left-radius: 10px; backdrop-filter: blur(6px);
+}
+.stage-resize::after {
+  content: ""; position: absolute; right: 6px; bottom: 6px; width: 10px; height: 10px;
+  border-right: 2px solid var(--color-text-placeholder);
+  border-bottom: 2px solid var(--color-text-placeholder);
+}
+.stage-resize:hover::after { border-color: var(--color-accent-strong); }
 #webcam { display: none; }               /* 本体は隠して Canvas に描く */
 #output_canvas {
   width: 100%; height: 100%; display: block;
@@ -49,7 +72,10 @@ body {
 
 /* HUD（半透明の墨パネル） */
 .hud {
-  position: absolute; top: 12px; left: 12px; z-index: 10; width: 200px;
+  position: absolute; top: 12px; left: 12px; z-index: 10;
+  /* 右上のボタン列（較正＋アイコン2つ＋余白）に必ず場所を残す。
+     「較正」を文字にしたぶんボタン列が広くなったので、狭い画面では HUD を詰める */
+  width: min(200px, calc(100% - 180px));
   display: flex; flex-direction: column; gap: 6px;
   padding: 12px 14px; border-radius: 12px;
   background: color-mix(in srgb, var(--color-surface) 86%, transparent);
@@ -81,7 +107,7 @@ body {
 
 /* 現在字（半透明チップに墨文字） */
 .current-char {
-  position: absolute; bottom: 12px; right: 12px; z-index: 10;
+  position: absolute; bottom: 12px; right: 36px; z-index: 10; /* 右下はつまみに譲る */
   min-width: 80px; text-align: center;
   padding: 2px 16px; border-radius: 12px;
   background: color-mix(in srgb, var(--color-surface) 82%, transparent);

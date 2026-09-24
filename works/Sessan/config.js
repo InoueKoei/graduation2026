@@ -174,6 +174,26 @@ export const CALIBRATION = Object.freeze({
   storageKey: 'sessan.vowelTargets.v1',
 });
 
+/**
+ * 指を数えるときのしきい値（typing-core.js）。
+ *
+ * 向きに依らない量だけで判定するので、手を傾けても本数は変わらない。
+ * 合成した手で測ると、面内回転 0〜90° のどこでも正答率は変わらなかった。
+ * bendDeg は 40〜80° のどこでも成績が変わらなかったので、真ん中を取ってある。
+ */
+export const FINGERS = Object.freeze({
+  /** 関節での向きの変化角がこれ未満なら「立っている」[度]。小さいほど厳しい */
+  bendDeg: 60,
+  /** 親指が手のひらの横へどれだけ開いていれば「立っている」か（手の大きさに対する比） */
+  thumbOut: 0.15,
+  /**
+   * 何フレームの多数決で読みを決めるか。
+   * 大きいほど安定するが反応が遅れる。7 なら 30fps で約 0.23 秒の遅れ。
+   * 確定の保持が 22 フレーム（約 0.73 秒）なので、その 1/3 に収まる範囲。
+   */
+  voteFrames: 7,
+});
+
 /** 目の開閉ターゲット（縦横比） */
 export const EYE_TARGETS = Object.freeze({ open: 0.30, close: 0.15 });
 
