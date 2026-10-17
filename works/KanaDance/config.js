@@ -10,6 +10,13 @@ export const APP_CONFIG = Object.freeze({
    * （内蔵カメラ・外付け・iPad でそれぞれ違うサイズが来る）。
    */
   video: { width: 1280, height: 720 },
+
+  /**
+   * カメラ映像の濃さ（0〜1）。1 で通常、0 で映像が消えて墨の線だけが残る。
+   * 投影や記録では身体を写したくないことがあるので、UI のスライダーで変えられる。
+   * 消しても姿勢推定は動き続ける（映っていないだけで、見えてはいる）。
+   */
+  videoOpacity: 1,
   /** これ未満の平均正規化誤差なら「一致」とみなす（小さいほど厳しい）。実運用では 1.0 前後が目安 */
   matchThreshold: 1.0,
   /**
@@ -80,14 +87,4 @@ export const DEFAULT_KANA_LINES = Object.freeze({
   ア: ['LH-RH', 'H-W', 'W-LL'],
   イ: ['H-W', 'RE-W', 'W-RL'],
   サ: ['LH-RH', '[LH_RH]-W', 'RE-RK-RL'],
-});
-
-/**
- * Supabase 接続情報。
- * anonKey は「クライアントに埋め込む前提」の公開キー。
- * 実データの保護は Supabase 側の Row Level Security(RLS) で行う。
- */
-export const SUPABASE = Object.freeze({
-  url: 'https://aawkwvxyylioorbeyydx.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhd2t3dnh5eWxpb29yYmV5eWR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MzEzMTYsImV4cCI6MjA5NTAwNzMxNn0.WWdP8PD0fGA-kqidf4kLGilYAfGBTGVdnKc9w5oQ9gA',
 });

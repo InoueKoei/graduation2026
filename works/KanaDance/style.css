@@ -6,7 +6,9 @@
 :root {
   --cam-ar: 1.7778;   /* カメラの比。映像が来たら JS が実解像度から上書きする（既定は仮） */
   --stage-max-h: 52vh;
-  --content-w: min(760px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
+  /* 既定の幅。ステージの右端をドラッグすると JS が --stage-w を立てて、こちらが優先される */
+  --auto-w: min(760px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
+  --content-w: var(--stage-w, var(--auto-w));
 }
 
 body {
@@ -35,16 +37,53 @@ body {
 
 /* カメラステージ（映像と canvas は鏡像） */
 .stage {
-  position: relative; width: var(--content-w); aspect-ratio: var(--cam-ar);
+  position: relative; width: var(--content-w);
+  /* --stage-h が立っていればそちらが勝ち、比はカメラから外れる（縦長にもできる）。
+     立っていなければ aspect-ratio がカメラの比を保つ。 */
+  aspect-ratio: var(--cam-ar);
+  height: var(--stage-h, auto);
   background: var(--color-muted);
   border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden;
 }
+
+/* 端のつまみ。右＝幅、下＝高さ、右下＝両方。
+   幅と高さを別々に変えられるので、縦長カメラに合わせて縦の箱にもできる。
+   ダブルクリック（または Esc）でカメラの比の既定サイズに戻る。 */
+.stage-resizer {
+  position: absolute; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;                      /* iPad で掴んだときに画面が動かないように */
+  background: transparent; border: 0; padding: 0;
+  opacity: .35; transition: opacity .15s;  /* 気づけるよう常に薄く出す */
+}
+.stage:hover .stage-resizer,
+.stage-resizer:focus-visible,
+.stage-resizer.dragging { opacity: 1; }
+.stage-resizer:focus-visible { outline: none; }
+
+.stage-resizer[data-axis="x"]  { top: 0; right: 0; width: 18px; height: 100%; cursor: ew-resize; }
+.stage-resizer[data-axis="y"]  { left: 0; bottom: 0; height: 18px; width: 100%; cursor: ns-resize; }
+.stage-resizer[data-axis="xy"] { right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize; z-index: 31; }
+
+/* つまみの見た目 */
+.stage-resizer::before {
+  content: ''; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent-strong) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-background) 55%, transparent);
+}
+.stage-resizer[data-axis="x"]::before  { width: 4px; height: 44px; }
+.stage-resizer[data-axis="y"]::before  { width: 44px; height: 4px; }
+.stage-resizer[data-axis="xy"]::before { width: 10px; height: 10px; }
+.stage-resizer:focus-visible::before,
+.stage-resizer.dragging::before { background: var(--color-accent-strong); }
 .stage video, .stage canvas {
   position: absolute; left: 0; top: 0; width: 100%; height: 100%;
   transform: scaleX(-1);
-  /* ステージの比は実解像度に合わせてあるので普段はぴったり収まる。
-     映像が来る前の一瞬など、比がずれている間に引き伸ばさないための保険 */
-  object-fit: contain;
+  /* 箱の形がカメラの比と違うときの収め方。
+     cover = はみ出す分を切って埋める（余白なし）／contain = 全体を入れる（余白あり）。
+     映像と canvas は同じ内在比なので、どちらでも同じように変形する。
+     ＝線が身体からずれることはない。 */
+  object-fit: var(--fit, cover);
 }
 
 /* 判定中の字（半透明チップに墨文字） */
@@ -100,6 +139,11 @@ body {
 .ctrl { display: grid; grid-template-columns: 7.5em 1fr 5em; align-items: center; gap: 12px; margin: 6px 0; }
 .ctrl label { font-size: 13px; color: var(--color-text-secondary); }
 .ctrl output { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+.ctrl select {
+  font: inherit; font-size: 13px; height: 32px; padding: 0 10px; width: 100%;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 999px; cursor: pointer;
+}
 
 /* レンジ（sumi の墨スライダー） */
 .ctrl input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; cursor: pointer; }

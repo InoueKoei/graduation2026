@@ -7,17 +7,13 @@
 //  隣り合う字形の間を補間して重ねる（Illustrator のブレンドツールのイメージ）。
 // ============================================================
 
-import { PoseLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs';
 import { APP_CONFIG } from './config.js';
+import { RUNTIME } from './runtime-config.js';
 import { loadReferencePoses, savePose } from './pose-store.js';
 import { normalizePose, toPixelPoints, matchLetter } from './pose-matcher.js';
 import { PoseHistory } from './pose-history.js';
 import { Renderer } from './renderer.js';
 import * as ui from './ui.js';
-
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm';
-const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 ui.setupLayout();
 const renderer = new Renderer(ui.canvas);
@@ -51,10 +47,12 @@ ui.bindControls({
   }
 
   // 3) 姿勢推定モデル（判別・描画に必要。無くてもカメラ映像は出る）
+  //    取得元は runtime-config.js。USB 版では同梱した vendor/ を指す。
   try {
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+    const { PoseLandmarker, FilesetResolver } = await import(RUNTIME.assets.visionBundle);
+    const vision = await FilesetResolver.forVisionTasks(RUNTIME.assets.wasmRoot);
     poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+      baseOptions: { modelAssetPath: RUNTIME.assets.poseModel, delegate: 'GPU' },
       runningMode: 'VIDEO',
     });
   } catch (err) {

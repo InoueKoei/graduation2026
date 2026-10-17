@@ -20,6 +20,12 @@
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
     <div id="current-char" class="current-char" hidden></div>
+    <button class="stage-resizer" data-axis="x" aria-label="幅を変える（ダブルクリックで戻す）"
+            title="ドラッグで幅を変える／ダブルクリックで戻す"></button>
+    <button class="stage-resizer" data-axis="y" aria-label="高さを変える（ダブルクリックで戻す）"
+            title="ドラッグで高さを変える／ダブルクリックで戻す"></button>
+    <button class="stage-resizer" data-axis="xy" aria-label="幅と高さを変える（ダブルクリックで戻す）"
+            title="ドラッグで縦横比ごと変える／ダブルクリックで戻す"></button>
   </main>
 
   <div id="status" class="status">カメラを許可して、ポーズをとってください…</div>
@@ -35,7 +41,28 @@
   </div>
 
   <section id="panel" class="panel">
-    <div class="panel-label">判別</div>
+    <div class="panel-label">表示</div>
+    <div class="ctrl">
+      <label for="video-opacity">映像の濃さ</label>
+      <input type="range" id="video-opacity" min="0" max="1" step="0.01" />
+      <output id="video-opacity-value"></output>
+    </div>
+    <p class="note">0 にするとカメラ映像が消え、墨の線だけが残る。姿勢の推定は続くので、線はそのまま出る。</p>
+
+    <div class="ctrl">
+      <label for="fit-mode">箱に収める</label>
+      <select id="fit-mode">
+        <option value="cover">はみ出す分を切る</option>
+        <option value="contain">全体を入れる</option>
+      </select>
+      <output></output>
+    </div>
+    <p class="note">
+      映像の端（右・下・右下の角）をドラッグすると、大きさと縦横比を変えられる。
+      カメラの比と違う形にしたとき、切って埋めるか、余白を付けて全体を見せるか。
+    </p>
+
+    <div class="panel-label div">判別</div>
     <div class="ctrl">
       <label for="match-threshold">一致しやすさ</label>
       <input type="range" id="match-threshold" min="0.1" max="2" step="0.01" />

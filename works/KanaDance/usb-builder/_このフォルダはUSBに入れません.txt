@@ -1,0 +1,14 @@
+このフォルダ（usb-builder/）は、USB 版を「作る」ための道具です。
+USB にコピーするものではありません。
+
+  ここにあるもの … build.sh（組み立て手順）、server.py、起動用 .bat、
+                   ローカル用の runtime-config、説明書のひな形
+  ここに無いもの … 本体(app)、MediaPipe、Python、登録済みポーズ
+                   ※ これらは build.sh が集めてきます
+
+USB に入れるのは、build.sh が作る出力フォルダのほうです。
+
+  ./build.sh                      → ~/Downloads/KanaDance-USB を作る
+  ./build.sh /Volumes/USB名/Kana  → USB に直接作る
+
+出来上がったフォルダを、フォルダごと USB にコピーしてください。
