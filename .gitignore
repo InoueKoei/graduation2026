@@ -12,6 +12,7 @@ out/
 .next/
 .vinext/
 .wrangler/
+.build/
 .vercel/
 *.tsbuildinfo
 next-env.d.ts

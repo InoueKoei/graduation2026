@@ -19,6 +19,7 @@
 | [GabunHeizon](works/GabunHeizon/) | からだと組版 |
 | [MojiHakobi](works/MojiHakobi/) | 文字運び — 字面の黒量を重さにして、重い文字は二人で同時に掴まないと運べない共同運搬型のかな入力 |
 | [boin-shiin-mvp](works/boin-shiin-mvp/) | 母音子音 — かな1文字を子音（PCキーボード）と母音（RP2040マクロパッド）に割って二人で入力。ふたつの時間差の分だけ文字がぼやける |
+| [Yomare](works/Yomare/) | 読まれ字 — タイポスの12エレメントを白い面に並べて字を組む。真上のカメラで切り出しただけの画像を macOS の OCR に読ませ、読めたときだけ光り、置き続けると組んだ形が読まれた字を見出しにして端へ並ぶ |
 
 ## experiments — 技術検証
 
