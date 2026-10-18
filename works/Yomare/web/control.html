@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yomare 操作</title>
+<style>
+  :root {
+    --bg: #f4f3ef; --panel: #fff; --ink: #1d1d1b; --sub: #7a786f; --line: #e2e0d8;
+    --part: #e5484d; --small: #3e9be0; --edge: #f0a020; --ok: #2f9e44; --accent: #1d1d1b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.6 "Hiragino Sans", sans-serif; }
+  header {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; letter-spacing: .08em; }
+  button, select {
+    font: inherit; padding: 5px 12px; border: 1px solid var(--line); border-radius: 6px;
+    background: #fff; color: var(--ink); cursor: pointer;
+  }
+  button:hover { border-color: #bbb; }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 14px; padding: 14px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  h2 { font-size: 12px; font-weight: 600; color: var(--sub); margin: 0 0 8px; letter-spacing: .05em; }
+  canvas { display: block; width: 100%; border-radius: 6px; }
+  #cam { background: #222; cursor: crosshair; touch-action: none; }
+  #rect { background: #000; image-rendering: pixelated; }
+  #hist { height: 110px; cursor: ew-resize; touch-action: none; background: #faf9f6; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .row label { color: var(--sub); }
+  input[type=range] { flex: 1; min-width: 120px; }
+  .num { font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; color: var(--sub); }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  #state { display: flex; align-items: center; gap: 12px; }
+  #stateDot { width: 14px; height: 14px; border-radius: 50%; background: #ccc; flex: none; }
+  #stateText { font-size: 18px; font-weight: 600; }
+  #stateSub { color: var(--sub); }
+  #bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  #bar div { height: 100%; width: 0; background: var(--ink); transition: width .1s linear; }
+  #crop { max-width: 100%; max-height: 160px; display: block; margin-top: 6px; border: 1px solid var(--line); background: #fafafa; }
+  #log { list-style: none; padding: 0; margin: 8px 0 0; max-height: 220px; overflow: auto; font-variant-numeric: tabular-nums; }
+  #log li { padding: 2px 0; border-top: 1px dashed var(--line); display: flex; gap: 10px; }
+  #log li time { color: var(--sub); }
+  #log li.miss b { color: var(--sub); font-weight: 400; }
+  .hint { color: var(--sub); font-size: 12px; margin: 6px 0 0; }
+  .warn { color: #b44; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Yomare 読まれ字</h1>
+  <button id="openSurface">白い面を開く</button>
+  <select id="camSel" title="カメラ"></select>
+  <button id="calib">四隅を合わせる</button>
+  <button id="wipe">残したものを消す</button>
+  <span id="server" class="hint"></span>
+</header>
+
+<main>
+  <div>
+    <section>
+      <div id="state"><div id="stateDot"></div><div><div id="stateText">起動中</div><div id="stateSub"></div></div></div>
+      <div id="bar"><div></div></div>
+    </section>
+    <section>
+      <h2>カメラ — 丸 1〜4 を白い面の四隅に重ねる</h2>
+      <canvas id="cam" width="960" height="540"></canvas>
+      <p class="hint">「四隅を合わせる」を押すと白い面に 1〜4 の角が出る。同じ番号の丸をドラッグして重ねる。点線の内側が置く場。</p>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>見えているもの</h2>
+      <canvas id="rect"></canvas>
+      <div class="row legend">
+        <span><i style="background:var(--part)"></i>部品</span>
+        <span><i style="background:var(--small)"></i>小さいので無視</span>
+        <span><i style="background:var(--edge)"></i>縁に触れたので無視</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>閾値 — 線をドラッグして、2つの山のあいだに置く</h2>
+      <canvas id="hist" width="512" height="110"></canvas>
+      <div class="row">
+        <span>閾値 <b class="num" id="thrVal"></b></span>
+        <button id="otsu">自動で決める</button>
+        <button id="polarity"></button>
+      </div>
+      <p class="hint" id="histNote"></p>
+    </section>
+
+    <section>
+      <h2>小さい塊を無視する</h2>
+      <div class="row">
+        <input type="range" id="minArea" min="0.01" max="1" step="0.01">
+        <span class="num" id="minAreaVal"></span>
+      </div>
+      <p class="hint" id="counts"></p>
+    </section>
+
+    <section>
+      <h2>白い面</h2>
+      <div class="row">
+        <label for="level">明るさ</label>
+        <input type="range" id="level" min="0" max="255" step="1">
+        <span class="num" id="levelVal"></span>
+      </div>
+      <div class="row">
+        <label for="glow">読めた合図の光</label>
+        <input type="color" id="glow">
+        <span class="hint">光が部品として拾われていないか、上の「見えているもの」で確かめる</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>読ませたもの</h2>
+      <div id="lastRead" class="hint">まだ読ませていない</div>
+      <img id="crop" alt="" hidden>
+      <ul id="log"></ul>
+    </section>
+  </div>
+</main>
+
+<script type="module" src="control.js"></script>
+</body>
+</html>
