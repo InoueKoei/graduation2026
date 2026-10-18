@@ -24,7 +24,6 @@
 
 | プロジェクト | 内容 |
 |---|---|
-| [KumiJi](experiments/KumiJi/) | 組み字 — タイポスの12エレメントを3Dプリントした部品を並べて字を組むと、機械が最も近い規格に丸めて隣に出す |
 | [TsumamiJi](experiments/TsumamiJi/) | つまみ字 — 文字の辺や丸みをつまむとゴムのように伸び、離すと元の字形にもどる |
 | [stamps3_kana_dial](experiments/stamps3_kana_dial/) | つまみ字盤 — つまみを回してかなを選び、押して確定する文字入力機。M5Stamp S3 と 4.2インチ電子ペーパー |
 | [GlassType](experiments/GlassType/) | 呼気の窓 |
@@ -40,6 +39,14 @@
 | [cores3_sessan_cam](experiments/cores3_sessan_cam/) | CoreS3 を MJPEG カメラにして Sessan の判定に使う構成 |
 | [cores3_cam_effects](experiments/cores3_cam_effects/) | CoreS3 カメラのエフェクト |
 | [cores3_fluid](experiments/cores3_fluid/) / [cores3_ink_brush](experiments/cores3_ink_brush/) / [cores3_voice_bloom](experiments/cores3_voice_bloom/) | CoreS3 の表現習作 |
+
+## archive — 役目を終えたもの
+
+動かすためではなく、経緯を残すために置いてある。新しい作業はここに足さない。
+
+| プロジェクト | 内容 | 後継 |
+|---|---|---|
+| [KumiJi](archive/KumiJi/) | 組み字 — タイポスの12エレメントを3Dプリントした部品を並べて字を組むと、機械が最も近い規格に丸めて隣に出す（Python + OpenCV） | works/Yomare |
 
 ## 動かし方
 
