@@ -1,0 +1,398 @@
+#include "ATOM_PRINTER.h"
+#include "ATOM_PRINTER_WEB.h"
+#include "ATOM_PRINTER_CONFIG.h"
+#include "ATOM_PRINTER_WIFI.h"
+#include "ATOM_PRINTER_HTML.h"
+#include "ATOM_PRINTER_MQTT.h"
+#include <Preferences.h>
+#include <ArduinoJson.h>
+
+extern Preferences preferences;
+extern ATOM_PRINTER printer;
+extern String ssid_html;
+extern WebServer webServer;
+extern DNSServer dnsServer;
+extern DynamicJsonDocument payload;
+extern String mqtt_topic;
+extern uint8_t bmp_buffer[BMP_BUFFER_LIMIT];
+extern int bmp_data_offset;
+extern int bmp_data_size;
+extern int bmp_width;
+extern int bmp_height;
+
+extern PubSubClient mqttClient;
+extern xSemaphoreHandle xMQTTMutex;
+
+// 保存网页获取的数据
+String Pdata, newLine, QRCode, AdjustLevel, printType, BarCode, BarType, Position;
+
+// 改変：画像印刷（/bmp_size → /bmp）の状態
+static int bmp_feed          = 3;
+static bool bmp_overflow     = false;
+static int bmp_result_code   = 400;
+static String bmp_result_msg = "Error: no upload";
+
+String urlDecode(String input)
+{
+    String s = input;
+    s.replace("%20", " ");
+    s.replace("+", " ");
+    s.replace("%21", "!");
+    s.replace("%22", "\"");
+    s.replace("%23", "#");
+    s.replace("%24", "$");
+    s.replace("%25", "%");
+    s.replace("%26", "&");
+    s.replace("%27", "\'");
+    s.replace("%28", "(");
+    s.replace("%29", ")");
+    s.replace("%30", "*");
+    s.replace("%31", "+");
+    s.replace("%2C", ",");
+    s.replace("%2E", ".");
+    s.replace("%2F", "/");
+    s.replace("%2C", ",");
+    s.replace("%3A", ":");
+    s.replace("%3A", ";");
+    s.replace("%3C", "<");
+    s.replace("%3D", "=");
+    s.replace("%3E", ">");
+    s.replace("%3F", "?");
+    s.replace("%40", "@");
+    s.replace("%5B", "[");
+    s.replace("%5C", "\\");
+    s.replace("%5D", "]");
+    s.replace("%5E", "^");
+    s.replace("%5F", "-");
+    s.replace("%60", "`");
+    return s;
+}
+
+void handleRoot()
+{
+    webServer.send(200, "text/html", (char*)printer_html);
+}
+
+void handleWiFiConfig()
+{
+    Serial.println("Handling WiFi config request");
+
+    // 检查是否有请求体
+    if (!webServer.hasArg("plain")) {
+        webServer.send(400, "text/plain", "Bad Request: No JSON data");
+        return;
+    }
+
+    // 解析JSON数据
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, webServer.arg("plain"));
+
+    if (error) {
+        Serial.print("JSON parse failed: ");
+        Serial.println(error.c_str());
+        webServer.send(400, "text/plain", "Bad Request: Invalid JSON");
+        return;
+    }
+
+    String ssid     = doc["ssid"].as<String>();
+    String password = doc["password"].as<String>();
+
+    Serial.println("Received WiFi config:");
+    Serial.print("SSID: ");
+    Serial.println(ssid);
+    Serial.print("Password: ");
+    Serial.println(password);
+
+    // 验证SSID
+    if (ssid.length() == 0) {
+        webServer.send(400, "text/plain", "Error: SSID cannot be empty");
+        return;
+    }
+
+    // 尝试连接WiFi
+    bool connectSuccess = wifiConnect(ssid, password, 5000);
+
+    if (connectSuccess) {
+        webServer.send(200, "text/plain", "OK");
+        Serial.println("WiFi connected successfully");
+    } else {
+        webServer.send(500, "text/plain", "Error: Failed to connect to WiFi");
+        Serial.println("WiFi connection failed");
+    }
+}
+
+void handleStatusConfig()
+{
+    Serial.println("Handling status request");
+
+    DynamicJsonDocument doc(1024);
+
+    // WiFi状态
+    if (WiFi.status() == WL_CONNECTED) {
+        doc["WIFI_STATE"] = true;
+        doc["SSID"]       = WiFi.SSID();
+        doc["IP"]         = WiFi.localIP().toString();
+        doc["RSSI"]       = WiFi.RSSI();
+
+        // MQTT状态
+        xSemaphoreTake(xMQTTMutex, portMAX_DELAY);
+        if (mqttClient.connected()) {
+            doc["MQTT_STATE"]  = "Connected";
+            doc["MQTT_BROKER"] = mqtt_broker;
+            doc["MQTT_TOPIC"]  = mqtt_topic;
+        } else {
+            doc["MQTT_STATE"] = "Disconnected";
+        }
+        xSemaphoreGive(xMQTTMutex);
+    } else {
+        doc["WIFI_STATE"] = false;
+        doc["MQTT_STATE"] = "Disconnected";
+    }
+
+    // 可用的WiFi网络列表
+    doc["WIFI_HTML"] = ssid_html;
+
+    // 发送响应
+    String response;
+    serializeJson(doc, response);
+    webServer.send(200, "application/json", response);
+
+    Serial.println("Status response sent");
+}
+
+void handleMQTTConfig()
+{
+    Serial.println("Handling MQTT config request");
+
+    // 检查是否有请求体
+    if (!webServer.hasArg("plain")) {
+        webServer.send(400, "text/plain", "Bad Request: No JSON data");
+        return;
+    }
+
+    // 解析JSON数据
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, webServer.arg("plain"));
+
+    if (error) {
+        Serial.print("JSON parse failed: ");
+        Serial.println(error.c_str());
+        webServer.send(400, "text/plain", "Bad Request: Invalid JSON");
+        return;
+    }
+
+    String broker   = doc["mqtt_broker"].as<String>();
+    int port        = doc["mqtt_port"].as<int>();
+    String id       = doc["mqtt_id"].as<String>();
+    String user     = doc["mqtt_user"].as<String>();
+    String password = doc["mqtt_password"].as<String>();
+    String topic    = doc["mqtt_topic_info"].as<String>();
+
+    Serial.println("Received MQTT config:");
+    Serial.print("Broker: ");
+    Serial.println(broker);
+    Serial.print("Port: ");
+    Serial.println(port);
+    Serial.print("Client ID: ");
+    Serial.println(id);
+    Serial.print("User: ");
+    Serial.println(user);
+    Serial.print("Topic: ");
+    Serial.println(topic);
+
+    // 验证输入
+    if (broker.length() == 0 || port <= 0 || port > 65535) {
+        webServer.send(400, "text/plain", "Error: Invalid broker or port");
+        return;
+    }
+
+    xSemaphoreTake(xMQTTMutex, portMAX_DELAY);
+    mqtt_topic          = topic;
+    bool connectSuccess = mqttConnect(broker, port, id, user, password, 2000);
+    xSemaphoreGive(xMQTTMutex);
+
+    if (connectSuccess) {
+        String response = "Server:" + broker + "\nPort:" + String(port) + "\nTopic:" + topic;
+        webServer.send(200, "text/plain", response);
+        Serial.println("MQTT connected successfully");
+    } else {
+        webServer.send(500, "text/plain", "Error: Failed to connect to MQTT broker");
+        Serial.println("MQTT connection failed");
+    }
+}
+
+void handleBMPSize()
+{
+    Serial.println("Handling BMP size request");
+
+    // 检查是否有请求体
+    if (!webServer.hasArg("plain")) {
+        webServer.send(400, "text/plain", "Bad Request: No JSON data");
+        return;
+    }
+
+    // 解析JSON数据
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, webServer.arg("plain"));
+
+    if (error) {
+        Serial.print("JSON parse failed: ");
+        Serial.println(error.c_str());
+        webServer.send(400, "text/plain", "Bad Request: Invalid JSON");
+        return;
+    }
+
+    bmp_width  = doc["bmp_width"].as<int>();
+    bmp_height = doc["bmp_height"].as<int>();
+    bmp_feed   = doc["feed"] | 3;  // 改変：印刷後に送る改行数。長い画像を分割して送るときは途中を0にする
+
+    Serial.print("BMP width: ");
+    Serial.println(bmp_width);
+    Serial.print("BMP height: ");
+    Serial.println(bmp_height);
+
+    webServer.send(200, "text/plain", "OK");
+}
+
+// 改変：元はアップロード完了時と本体ハンドラの両方で send しており、1回の要求に2回返事していた。
+// アップロード側では印刷だけして結果を覚え、返事は handleBMPDone で1回だけ返す。
+// また容量オーバー時も途中までのデータを印刷していたので、その場合は刷らない。
+
+void handleBMP()
+{
+    HTTPUpload& upload = webServer.upload();
+
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.print("BMP upload started. Filename: ");
+        Serial.println(upload.filename);
+        bmp_data_offset = 0;
+        bmp_overflow    = false;
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        size_t chunkSize = upload.currentSize;
+        if (bmp_data_offset + chunkSize > BMP_BUFFER_LIMIT) {
+            bmp_overflow = true;
+            return;
+        }
+        memcpy(bmp_buffer + bmp_data_offset, upload.buf, chunkSize);
+        bmp_data_offset += chunkSize;
+    } else if (upload.status == UPLOAD_FILE_END) {
+        bmp_data_size = bmp_data_offset;
+        Serial.print("BMP upload completed. Total size: ");
+        Serial.println(bmp_data_size);
+
+        int expected = (bmp_width / 8) * bmp_height;
+        if (bmp_overflow) {
+            bmp_result_code = 413;
+            bmp_result_msg  = "Error: BMP larger than " + String(BMP_BUFFER_LIMIT) + " bytes";
+        } else if (bmp_width <= 0 || bmp_height <= 0 || bmp_width % 8 != 0) {
+            bmp_result_code = 400;
+            bmp_result_msg  = "Error: BMP dimensions not set";
+        } else if (bmp_data_size != expected) {
+            bmp_result_code = 400;
+            bmp_result_msg  = "Error: size mismatch, got " + String(bmp_data_size) + " expected " + String(expected);
+        } else {
+            // 改変：init 直後に画像を送ると最初の帯の頭をプリンタが取りこぼし、
+            // その帯が文字として刷られた。初期化が終わるまで待ってから送る。
+            // CTS（G19）はプリンタの BUSY 出力。極性が分からないので今は読んでログに出すだけ
+            pinMode(19, INPUT);
+            Serial.printf("CTS before init: %d\n", digitalRead(19));
+            printer.init();
+            Serial.printf("CTS just after init: %d\n", digitalRead(19));
+            delay(300);
+            Serial.printf("CTS after 300ms: %d\n", digitalRead(19));
+            printer.printBMP(0, bmp_width, bmp_height, bmp_buffer);
+            Serial.printf("CTS after bitmap: %d\n", digitalRead(19));
+            if (bmp_feed > 0) printer.newLine(bmp_feed);
+            bmp_result_code = 200;
+            bmp_result_msg  = "OK";
+        }
+        Serial.println(bmp_result_msg);
+    }
+}
+
+void handleBMPDone()
+{
+    webServer.send(bmp_result_code, "text/plain", bmp_result_msg);
+    bmp_result_code = 400;
+    bmp_result_msg  = "Error: no upload";
+}
+
+void handlePrint()
+{
+    Serial.println("Handling print request");
+
+    // 获取打印类型
+    printType = urlDecode(webServer.arg("printType"));
+    Serial.print("Print type: ");
+    Serial.println(printType);
+
+    // 根据打印类型处理不同的数据
+    if (printType == "ASCII") {
+        Pdata   = urlDecode(webServer.arg("Pdata"));
+        newLine = urlDecode(webServer.arg("newLine"));
+
+        Serial.print("ASCII data: ");
+        Serial.println(Pdata);
+        Serial.print("New line: ");
+        Serial.println(newLine);
+
+        printer.init();
+        printer.printASCII(Pdata);
+    } else if (printType == "QRCode") {
+        QRCode  = urlDecode(webServer.arg("QRCode"));
+        newLine = urlDecode(webServer.arg("newLine"));
+
+        Serial.print("QRCode data: ");
+        Serial.println(QRCode);
+
+        printer.init();
+        printer.printQRCode(QRCode);
+    } else if (printType == "BarCode") {
+        BarCode = urlDecode(webServer.arg("BarCode"));
+        newLine = urlDecode(webServer.arg("newLine"));
+
+        Serial.print("Barcode data: ");
+        Serial.println(BarCode);
+
+        printer.init();
+        printer.setBarCodeHRI(HIDE);
+        printer.printBarCode(CODE128, BarCode);
+    } else {
+        webServer.send(400, "text/plain", "Error: Invalid print type");
+        return;
+    }
+
+    // 处理换行
+    if (newLine == "on") {
+        printer.newLine(1);
+    }
+
+    webServer.send(200, "text/plain", "OK");
+    Serial.println("Print request completed");
+}
+
+void webServerInit()
+{
+    // 启动DNS服务器
+    dnsServer.start(DNS_PORT, "*", apIP);
+
+    // 设置路由处理器
+    webServer.onNotFound(handleRoot);
+    webServer.on("/", HTTP_GET, handleRoot);
+    webServer.on("/print", HTTP_GET, handlePrint);
+    webServer.on("/wifi_config", HTTP_POST, handleWiFiConfig);
+    webServer.on("/mqtt_config", HTTP_GET, handleMQTTConfig);
+    webServer.on("/device_status", HTTP_GET, handleStatusConfig);
+    webServer.on("/bmp_size", HTTP_POST, handleBMPSize);
+    webServer.on("/bmp", HTTP_POST, handleBMPDone, handleBMP);
+
+    // 改変：Mac 側の studio ページ（別オリジン）から結果を読めるようにする
+    webServer.enableCORS(true);
+
+    // 启动Web服务器
+    webServer.begin();
+
+    Serial.println("HTTP server started");
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
+}
