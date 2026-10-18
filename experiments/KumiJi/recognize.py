@@ -154,15 +154,75 @@ def crop_raw(gray, parts, pad=None, roi=None):
                 max(lx, x0 - px):min(hx, x1 + px)]
 
 
-def recognize_vision_raw(gray, parts, targets=None, pad=None, roi=None):
-    """生の切り出しをそのまま Vision に渡す。加工は切り出しだけ。
+# =============================================================================
+#  読みの規則 —— 「何を受けるか」はここだけで決める
+#
+#  一度、同じ規則が三箇所に散っていた。目録で絞るのが _read_once、仮名かどうかを
+#  見るのが recognize_vision_raw、字数と確信度を見るのが main。順番も見えないし、
+#  片方だけ直して食い違う事故が実際に起きた（回した向きの選び方で、別の向きの
+#  仮名を捨てていた）。**規則が割れていると、直したつもりが直らない。**
+# =============================================================================
+def fold_kana(text):
+    """カタカナをひらがなへ寄せる。ァ〜ヶ だけ（ー や ・ は触らない）。
 
-    戻り値は (読めた文字列, 信頼度)。読めなければ ("", 0.0)。
-    **読めなかったことも結果**なので、無理に何かを返さない。
+    この装置の主題は機械が「いちばん近い規格に丸める」ことなので、
+    **リ と り を別物として落とすのは筋が悪い。** 形はほぼ同じで、規格の
+    系統が違うだけ。実機で「くり」が「Cリ」と読まれ、丸ごと捨てられていた。
     """
-    crop = crop_raw(gray, parts, pad, roi)
-    if crop is None or crop.size == 0:
-        return ("", 0.0)
+    out = []
+    for c in text:
+        o = ord(c)
+        out.append(chr(o - 0x60) if 0x30A1 <= o <= 0x30F6 else c)
+    return "".join(out)
+
+
+def normalize(text, targets=None):
+    """Vision の答えを、この装置の文字に正す。
+
+      1. 空白を落とす
+      2. カタカナをひらがなへ寄せる
+      3. 目録（既定は46字）にある字だけ残す
+
+    目録の字が一つも無ければ、**元のまま返す**。捨てるかどうかは accept が
+    決めることで、ここでは判断しない（誤読をログに残すため）。
+    """
+    import config
+    text = "".join(text.split())
+    if getattr(config, "READ_FOLD_KATAKANA", False):
+        text = fold_kana(text)
+    if targets is None:
+        targets = getattr(config, "REFERENCE_CHARS", None)
+    if targets:
+        kept = "".join(c for c in text if c in targets)
+        if kept:
+            return kept
+    return text
+
+
+def accept(text, conf):
+    """この読みを受けるか。受けないなら理由も返す。
+
+    戻り値: (受けるか, 理由の文)。**理由は必ず言う。**
+    黙って落とすと、実機で「なぜ読まないのか」を探る時間が丸ごと無駄になる。
+    """
+    import config
+    if not text:
+        return (False, "")
+    if not in_charset(text):
+        return (False, f"「{text}」は仮名でないので捨てる"
+                       f"（READ_CHARSET={config.READ_CHARSET!r}）"
+                       "— 部品ではなく周りのものを見ている可能性が高い")
+    if len(text) < config.READ_MIN_CHARS:
+        return (False, f"「{text}」は{len(text)}字なので捨てる"
+                       f"（READ_MIN_CHARS={config.READ_MIN_CHARS}）")
+    if conf < config.READ_MIN_CONF:
+        return (False, f"「{text}」は確信度 {conf:.2f} で切り捨て"
+                       f"（READ_MIN_CONF={config.READ_MIN_CONF}）")
+    return (True, "")
+
+
+def _ask_vision(crop):
+    """1枚の画像を Vision に渡す。生のまま。読めなければ ("", 0.0)。"""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         tmp = f.name
     try:
@@ -172,13 +232,102 @@ def recognize_vision_raw(gray, parts, targets=None, pad=None, roi=None):
         os.unlink(tmp)
     if not results:
         return ("", 0.0)
-    text, conf = results[0]
-    text = "".join(text.split())
-    if targets:
-        kept = "".join(c for c in text if c in targets)
-        if kept:
-            return (kept, conf)
-    return (text, conf)
+    return (results[0][0], results[0][1])
+
+
+class Reading:
+    """読んだ結果。読めなかったことも結果なので、同じ形で返す。
+
+      char … 読めた字。読めなければ ""
+      conf … 確信度（かたちで寄せたときは重なりの割合）
+      how  … "読み"（Vision）/ "かたち"（IoU）/ ""（読めず）
+      note … 人に見せる1行。捨てた理由もここに入る
+      crop … OCR に渡した画像（詰まったときに見るため）
+    """
+
+    def __init__(self, char="", conf=0.0, how="", note="", crop=None):
+        self.char, self.conf, self.how = char, conf, how
+        self.note, self.crop = note, crop
+
+    def __bool__(self):
+        return bool(self.char)
+
+
+def read(gray, parts, mask=None, roi=None, pad=None, rotations=None):
+    """組み上がったものを読む。**この関数が読みの入口。**
+
+    順番はこう。
+      1. 切り出す（加工は切り出しだけ）
+      2. Vision に 0/90/180/270 で読ませる —— 字が回っていると読まないので
+      3. それぞれの答えを normalize で正し、accept で受けるか決める
+      4. 受けたものの中でいちばん確信度の高いものを採る
+      5. 一つも無ければ、かたちで寄せる（IoU）
+      6. それも寄らなければ読めず。**何もしない。**
+
+    向きの選び方に注意。確信度だけで選ぶと壊れる。回した向きのどれかで
+    Vision がラテン文字を高い確信度で返すことがあり（実機で「+5」「9Y」が
+    続出した）、同じ切り出しの別の向きに仮名の読みがあってもそちらが捨て
+    られる。**受けられるかで先に選び、確信度はその中での順位づけに使う。**
+    """
+    import config
+    crop = crop_raw(gray, parts, pad, roi)
+    if crop is None or crop.size == 0:
+        return Reading(note="切り出せない")
+    if rotations is None:
+        rotations = getattr(config, "READ_ROTATIONS", (0,))
+
+    best, rejected = None, None
+    for deg in (rotations or (0,)):
+        img = crop if deg == 0 else np.rot90(crop, (deg // 90) % 4).copy()
+        text, conf = _ask_vision(img)
+        if not text:
+            continue
+        text = normalize(text)
+        ok, why = accept(text, conf)
+        if ok:
+            if best is None or conf > best[1]:
+                best = (text, conf)
+            if conf >= 1.0:
+                break                   # これ以上良くならない
+        elif rejected is None and why:
+            rejected = why              # 最初に落ちた理由だけ覚えておく
+    if best:
+        return Reading(best[0], best[1], "読み", "", crop)
+
+    ch, score, note = _by_shape(mask)
+    if ch:
+        return Reading(ch, score, "かたち", note, crop)
+    return Reading(note=note or rejected or "", crop=crop)
+
+
+def _by_shape(mask):
+    """かたちで寄せる。戻り値は (字, 重なり, 1行)。寄らなければ字は ""。
+
+    Vision が仮名を返さなかったときだけ通る。実機で円と縦棒を組んだ形を
+    Vision は「6」と読んだ——形としては正しく、機械がいちばん近い規格に
+    丸めた結果だが、丸めた先が数字だった。同じ形を46字に対して測れば
+    「の」に寄る。学習ではなく、形の重なりを測っているだけ。
+
+    **IoU は必ず最近傍を返す。** そのままでは何を置いても何かが定着して
+    しまい「読めなければ何もしない」が壊れるので、点数と2位との差で切る。
+    かたまりは点数が高くても差がほぼ無い（実測 0.004）のが見分けになる。
+    """
+    import config
+    if mask is None or not getattr(config, "READ_FALLBACK_IOU", False):
+        return ("", 0.0, "")
+    ranked = iou_scores(mask, targets=config.REFERENCE_CHARS)
+    if not ranked:
+        return ("", 0.0, "")
+    ch, score = ranked[0]
+    ch2, score2 = ranked[1] if len(ranked) > 1 else ("", 0.0)
+    margin = score - score2
+    if score >= config.IOU_MIN_SCORE and margin >= config.IOU_MIN_MARGIN:
+        return (ch, score,
+                f"かたちで寄せた: {ch} {score:.2f}"
+                f"（次点 {ch2} {score2:.2f}、差 {margin:.2f}）")
+    # 寄らなかったときも数値を出す。実物の部品で IOU_MIN_* を決め直せるように。
+    return ("", 0.0,
+            f"かたちでも寄らない（1位 {ch} {score:.2f}、次点との差 {margin:.2f}）")
 
 
 def recognize_vision(mask, targets=None):
@@ -333,7 +482,10 @@ def in_charset(text, kind=None):
         return True
     for c in text:
         o = ord(c)
-        kana = 0x3041 <= o <= 0x3096 or 0x309D <= o <= 0x309F or o == 0x30FC
+        # ー（U+30FC）は入れない。46字の目録に無く、ひらがなでもない。
+        # 実機で「ー 0.30」を読みとして受けてしまった。仮名を組む装置なので、
+        # **目録の外の記号を受けるのは筋が通らない。**
+        kana = 0x3041 <= o <= 0x3096 or 0x309D <= o <= 0x309F
         if kind == "kana":
             if not kana:
                 return False

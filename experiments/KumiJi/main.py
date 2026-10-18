@@ -39,7 +39,8 @@ from probe_contour import (
     open_camera, list_cameras, extract_parts, draw_overlay,
     on_mouse, drag, _rect, roi_stats, auto_tune,
 )
-from view import View, zone_rect, roi_pt_to_canvas, parts_mask_canvas
+from view import (View, zone_rect, roi_pt_to_canvas, parts_mask_canvas,
+                  canvas_size)
 from state import Piece, centroids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -342,42 +343,57 @@ def switch_camera(cap, idx):
 
 
 # --- 読む ---------------------------------------------------------------------
-def do_read(piece, gray, parts, roi):
-    """静止した配置を1回だけ読む。読めなければ何もしない。
+_fail_at = {"t": 0.0}
 
-    ふるいは3枚。どれで落ちたかを必ず言う——黙って落とすと、実機で
-    「なぜ読まないのか」を探る時間が丸ごと無駄になる。
+
+def save_fail(now, crop, mask):
+    """読めなかったときの画像を残す。**上書きで1枚だけ。**
+
+    「読めず」はいちばん多い失敗なのに、その画を後から見る手段が `s` を押す
+    ことしか無かった。押し忘れると原因が分からないまま次の実験に持ち越す。
+    続けて失敗しても SAVE_FAIL_SEC より短い間隔では書かないので溜まらない。
+    """
+    if not getattr(C, "SAVE_FAILS", False) or crop is None:
+        return False
+    if now - _fail_at["t"] < getattr(C, "SAVE_FAIL_SEC", 2.0):
+        return False
+    _fail_at["t"] = now
+    try:
+        cv2.imwrite(os.path.join(SAVE_DIR, "_last_fail_ocr.png"), crop)
+        if mask is not None:
+            cv2.imwrite(os.path.join(SAVE_DIR, "_last_fail_mask.png"), mask)
+    except Exception as e:
+        print(f"  （画像を残せなかった: {e}）")
+        return False
+    return True
+
+
+
+def do_read(piece, gray, parts, roi, mask=None):
+    """静止した配置を1回だけ読む。**規則は recognize.read が持っている。**
+
+    ここは「読み手に渡して、言われたことをそのまま出す」だけ。
+    以前は仮名かどうか・字数・確信度・かたちで寄せるかを main が自分で
+    判断していて、同じ規則が recognize 側にもあった。片方だけ直して
+    食い違う事故が実際に起きたので、判断は向こうに寄せてある。
     """
     piece.begin_read()
-    crop = R.crop_raw(gray, parts, roi=roi)
-    size = "×" if crop is None else f"{crop.shape[1]}x{crop.shape[0]}"
-    ch, conf = R.recognize_vision_raw(gray, parts,
-                                      targets=C.REFERENCE_CHARS, roi=roi)
-    if ch and not R.in_charset(ch):
-        print(f"  読み「{ch}」は仮名でないので捨てる "
-              f"（READ_CHARSET={C.READ_CHARSET!r}）"
-              "— 部品ではなく周りのものを見ている可能性が高い")
-        ch = ""
-    if ch and len(ch) < C.READ_MIN_CHARS:
-        print(f"  読み「{ch}」は{len(ch)}字なので捨てる "
-              f"（READ_MIN_CHARS={C.READ_MIN_CHARS}）")
-        ch = ""
-    if ch and conf < C.READ_MIN_CONF:
-        print(f"  読み「{ch}」は確信度 {conf:.2f} で切り捨て "
-              f"（READ_MIN_CONF={C.READ_MIN_CONF}）")
-        ch = ""
-    return crop, size, ch, conf
+    r = R.read(gray, parts, mask=mask, roi=roi)
+    size = "×" if r.crop is None else f"{r.crop.shape[1]}x{r.crop.shape[0]}"
+    if r.note:
+        print(f"  {r.note}")
+    return r, size
 
 
-def do_react(piece, ch, conf, parts, roi, now):
+def do_react(piece, ch, conf, parts, roi, now, cw, ch_px):
     """読めた語への反応。出すかどうかの判断は Piece が持っている。"""
     hits = match_emoji(ch)
     if piece.maybe_react(now, ch, hits):
         xs = [q["bbox"][0] + q["bbox"][2] / 2 for q in parts]
         ys = [q["bbox"][1] + q["bbox"][3] / 2 for q in parts]
         ctr = roi_pt_to_canvas((sum(xs) / len(xs), sum(ys) / len(ys)),
-                               roi, C.CANVAS_W, C.CANVAS_H)
-        piece.react = start_reaction(hits, ctr, now, (C.CANVAS_W, C.CANVAS_H))
+                               roi, cw, ch_px)
+        piece.react = start_reaction(hits, ctr, now, (cw, ch_px))
         ttl = current_title(len(piece.found))
         print(f"    → {hits[0]} が流れる"
               f"  見つけた語 {len(piece.found)}/{len(C.EMOJI_WORDS)}"
@@ -392,7 +408,7 @@ def do_react(piece, ch, conf, parts, roi, now):
 
 
 # --- 定着する -----------------------------------------------------------------
-def decide_fix(piece, cur_c, pmask, now):
+def decide_fix(piece, cur_c, pmask, now, cw, ch):
     """濃くなりきった痕跡を、別の場所へ移しはじめる。
 
     読めたものしかここへ来ないので、**定着したものには必ず見出しがある**。
@@ -414,7 +430,7 @@ def decide_fix(piece, cur_c, pmask, now):
     ys, xs = np.nonzero(pmask)
     src = (int(xs.min()), int(ys.min()),
            int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1))
-    dst = fit_rect(mark, fix_cell_rect(piece.slot(), C.CANVAS_W, C.CANVAS_H)) or src
+    dst = fit_rect(mark, fix_cell_rect(piece.slot(), cw, ch)) or src
     nth = len(piece.fixed) + 1      # begin_travel の前に数える（瞬間移動でも合う）
     piece.begin_travel(now, mark, piece.char, src, dst)
     print(f"  定着: 「{piece.char}」（{nth}枚目）")
@@ -427,14 +443,14 @@ def decide_fix(piece, cur_c, pmask, now):
 
 
 # --- 画面を描く ---------------------------------------------------------------
-def compose(piece, pmask, now, progress):
+def compose(piece, pmask, now, progress, cw, ch):
     """作品の画面を1枚描く。
 
     置く場は検出の地なので、閾値より明るい色しか描けない。だから「濃くして
     いく」には限界がある。その限界があるからこそ、濃くなりきったものは
     別の場所へ移して定着する。制約が形式を決めている。
     """
-    canvas = np.full((C.CANVAS_H, C.CANVAS_W, 3), C.CANVAS_BG, np.uint8)
+    canvas = np.full((ch, cw, 3), C.CANVAS_BG, np.uint8)
     if pmask is not None and progress > 0:
         draw_halo(canvas, pmask, progress)
     draw_fix_zone(canvas, piece.fixed)
@@ -455,8 +471,21 @@ def compose(piece, pmask, now, progress):
     return canvas
 
 
+_stats = {"at": 0.0, "roi": None, "val": (0, 0, 0, 0.0)}
+
+
+def _stats_cache(gray, roi, every=0.25):
+    """ROI の明るさの統計。間引いて使い回す。ROI が変わったら計り直す。"""
+    t = time.time()
+    if roi != _stats["roi"] or t - _stats["at"] >= every:
+        _stats["val"] = roi_stats(gray, roi)
+        _stats["at"], _stats["roi"] = t, roi
+    return _stats["val"]
+
+
 def debug_view(frame, mask, parts, roi, view_roi, piece, now, progress,
-               thr, drops, min_area, use_otsu, cam, vw, show_mask, gray):
+               thr, thr_offset, drops, min_area, use_otsu, cam, vw,
+               show_mask, gray):
     """確認用の窓。**なぜ検出されないのかが数字で分かること**を第一にする。"""
     if show_mask:
         view = draw_overlay(cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR),
@@ -473,7 +502,8 @@ def debug_view(frame, mask, parts, roi, view_roi, piece, now, progress,
 
     still = piece.still(now)
     cv2.putText(view,
-                f"parts {len(parts)}  thr {thr}({'otsu' if use_otsu else 'fix'})"
+                f"parts {len(parts)}  thr {thr}"
+                f"({'otsu' if use_otsu else 'fix'}{thr_offset:+d})"
                 f"  still {still:.1f}s  fixed {len(piece.fixed)}"
                 + ("  [moving]" if piece.move_since is not None else ""),
                 (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
@@ -500,7 +530,9 @@ def debug_view(frame, mask, parts, roi, view_roi, piece, now, progress,
                 (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (170, 170, 170), 1)
 
     # 閾値を勘で動かさずに済むよう、いま何と何を分けようとしているかを出す。
-    ink, ground, otsu, frac = roi_stats(gray, roi)
+    # ただし**これは読み物**で、制御には使っていない。4K だと 10ms かかるので
+    # 毎フレーム計らず、間引いて前の値を使い回す。目で追う速さには足りる。
+    ink, ground, otsu, frac = _stats_cache(gray, roi)
     lo, hi = sorted((ink, ground))
     gap = abs(ink - ground)
     bad = not (lo <= thr <= hi)
@@ -535,10 +567,31 @@ def debug_view(frame, mask, parts, roi, view_roi, piece, now, progress,
 
 
 # --- 本体 --------------------------------------------------------------------
+def build_stamp():
+    """読み込んだソースの更新時刻を並べる。
+
+    **走らせているのが新しい版かどうかを一目で分かるようにする。**
+    編集した直後に起動すると、書き終わる前のものを掴むことがある。
+    実機の症状が「直したはずなのに変わらない」になり、原因を別のところに
+    探しに行ってしまう（この罠で三度時間を使った）。
+    """
+    import datetime
+    out = []
+    for name in ("main.py", "config.py", "state.py", "view.py",
+                 "recognize.py", "probe_contour.py"):
+        try:
+            t = os.path.getmtime(os.path.join(HERE, name))
+            out.append(f"{name} {datetime.datetime.fromtimestamp(t):%m-%d %H:%M:%S}")
+        except OSError:
+            pass
+    return "  ".join(out)
+
+
 def main():
     os.makedirs(SAVE_DIR, exist_ok=True)
     if jp_font_path() is None:
         sys.exit("日本語フォントが見つからない。")
+    print("版: " + build_stamp())
 
     available = list_cameras()
     if not available:
@@ -558,11 +611,17 @@ def main():
     print("写す範囲を合わせる: Z X（拡縮）H J K L（位置）g（枠の表示）W（config へ保存）")
     print("そのほかの調整は config.py を編集して `r` で読み直す。\n")
 
+    # 画面の大きさは**実際の画面に合わせる**。決め打ちにすると、比が違う
+    # モニタで全画面にしたときに黒い帯が出る（16:9 の画を 16:10 に出すと
+    # 上下が余る）。置く場は検出の地なので、帯があると地が割れてしまう。
+    cw, ch_px = canvas_size(verbose=True)
+
     piece = Piece()                 # 作品の状態（state.py）
     vw = View()                     # 画角と写す範囲（view.py）
     vw.try_optical(cap)
     min_area, thr_offset = C.MIN_AREA, C.THRESHOLD_OFFSET
     use_otsu = C.USE_OTSU
+    last_roi = None                 # ROI が変わったら最小面積を取り直す
     last_crop = None                # 直近に OCR へ渡した画像（`s` で保存する）
     last = None                     # 反応中に使い回す検出結果
     show_debug, show_mask, fullscreen = True, False, False
@@ -584,6 +643,16 @@ def main():
         H, W = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         roi = vw.resolve_roi(gray, W, H)
+
+        # ROI が変わったら最小面積を取り直す。画素数の絶対値で持ったままだと、
+        # 小さく囲ったときに「最小面積 > ROI 面積」になって必ず 0個になる。
+        if roi != last_roi:
+            min_area = int(np.clip(roi[2] * roi[3] * C.MIN_AREA_RATIO,
+                                   C.MIN_AREA_MIN, C.MIN_AREA_MAX))
+            if last_roi is not None:
+                print(f"  MIN_AREA = {min_area}"
+                      f"（ROI {roi[2]}x{roi[3]} の {C.MIN_AREA_RATIO * 100:.1f}%）")
+            last_roi = roi
 
         now = time.time()
         reacting = piece.reacting(now)
@@ -608,33 +677,38 @@ def main():
         if not reacting:
             piece.observe(now, cur_c)
             if piece.wants_read(now, bool(parts)):
-                last_crop, size, ch, conf = do_read(piece, gray, parts, roi)
-                if ch:
-                    piece.accept_read(now, ch, conf)
-                    print(f"  読めた: {ch} {conf:.2f}   部品{len(parts)}個")
-                    do_react(piece, ch, conf, parts, roi, now)
+                r, size = do_read(piece, gray, parts, roi, mask)
+                last_crop = r.crop
+                if r:
+                    piece.accept_read(now, r.char, r.conf)
+                    print(f"  読めた: {r.char} {r.conf:.2f}   部品{len(parts)}個"
+                          + ("" if r.how == "読み" else f"（{r.how}で寄せた）"))
+                    do_react(piece, r.char, r.conf, parts, roi, now, cw, ch_px)
                 else:
                     piece.reject_read(now)
+                    kept = save_fail(now, last_crop, mask)
                     print(f"  読めず（部品{len(parts)}個 / OCRに渡した画像 {size}）"
-                          f"— 何もしない。`s` でその画像を保存できる")
+                          + "— 何もしない。"
+                          + ("画像を残した: outputs/_last_fail_ocr.png" if kept
+                             else "`s` でその画像を保存できる"))
 
         progress = piece.progress(now, bool(parts))
         if piece.update_presence(now, bool(parts)):
             # ここが出ていないのに同じものが二度定着したら、原因は別にある。
             print("  全部どけた（定着と反応の抑止を解いた）")
 
-        pmask = (parts_mask_canvas(mask, C.CANVAS_W, C.CANVAS_H)
+        pmask = (parts_mask_canvas(mask, cw, ch_px)
                  if parts and progress > 0 else None)
         if pmask is not None and progress >= 1.0:
-            decide_fix(piece, cur_c, pmask, now)
+            decide_fix(piece, cur_c, pmask, now, cw, ch_px)
 
-        canvas = compose(piece, pmask, now, progress)
+        canvas = compose(piece, pmask, now, progress, cw, ch_px)
         cv2.imshow(OUT, vw.present(canvas))
 
         if show_debug:
             cv2.imshow(DBG, debug_view(frame, mask, parts, roi, vw.view_roi,
-                                       piece, now, progress, thr, drops,
-                                       min_area, use_otsu, cam, vw,
+                                       piece, now, progress, thr, thr_offset,
+                                       drops, min_area, use_otsu, cam, vw,
                                        show_mask, gray))
 
         key = cv2.waitKey(1) & 0xFF
@@ -646,6 +720,7 @@ def main():
             importlib.reload(C)
             min_area, thr_offset = C.MIN_AREA, C.THRESHOLD_OFFSET
             vw.reload()
+            cw, ch_px = canvas_size(verbose=True)
             print(f"config 読み直し  FIX_SECONDS={C.FIX_SECONDS} "
                   f"閾値={C.FIXED_THRESHOLD} HALO輝度={luma(C.HALO_COLOR):.0f}\n"
                   f"  絵文字: {C.EMOJI_SOURCE}  数={C.EMOJI_COUNT} "

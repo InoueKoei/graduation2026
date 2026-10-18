@@ -37,9 +37,47 @@ def open_camera(index):
     if not cap.isOpened():
         cap.release()
         return None
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, C.FRAME_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, C.FRAME_HEIGHT)
+    pick_frame_size(cap)
     return cap
+
+
+def pick_frame_size(cap, sizes=None, quiet=False):
+    """出せる中でいちばん大きい取り込みモードを選ぶ。
+
+    頼んだ大きさが無いとき、カメラは「近いもの」に落ちてくれるとは限らない。
+    実機で 3840x2160 を頼んだら **1552x1552**（正方形）を返した。画角が
+    切れるうえ画素も減る。同じカメラに 1920x1080 を頼めば素直に出た。
+
+    だから順に試して、**画素が多くて画角の比がまともなもの**を選ぶ。
+    比を見るのは、上の正方形のような「頼んでいないモード」を弾くため。
+    """
+    sizes = sizes or getattr(C, "FRAME_SIZES", None) \
+        or [(C.FRAME_WIDTH, C.FRAME_HEIGHT)]
+    best, tried = None, []
+    for w, h in sizes:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        gw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        gh = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if gw <= 0 or gh <= 0:
+            continue
+        tried.append(((w, h), (gw, gh)))
+        ratio = gw / gh
+        if not (1.2 <= ratio <= 2.1):       # 正方形や極端に横長は採らない
+            continue
+        if best is None or gw * gh > best[0] * best[1]:
+            best = (gw, gh)
+    if best is None:                        # 全部おかしいなら最後の設定のまま
+        best = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, best[0])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, best[1])
+    if not quiet:
+        odd = [f"{w}x{h}→{gw}x{gh}" for (w, h), (gw, gh) in tried
+               if (w, h) != (gw, gh)]
+        print(f"  取り込み {best[0]}x{best[1]}"
+              + (f"（頼んで違うものが来た: {', '.join(odd)}）" if odd else ""))
+    return best
 
 
 def try_optical_zoom(cap, zoom):
@@ -322,7 +360,11 @@ def auto_screen_roi(gray, margin=0.03):
 
 
 # --- マウスドラッグで ROI を切る（別ウィンドウを開かないので macOS で確実） -----
-drag = {"p0": None, "cur": None, "done": None, "active": False}
+# raw は「コールバックが渡してきた生の座標」。これを控えておくのは、
+# WINDOW_NORMAL の窓を拡大表示しているとき、OpenCV が画像座標を返すのか
+# 窓座標を返すのかが環境で違うため。実機で囲った範囲が毎回極端に小さく
+# 出たので、どちらなのかを数字で確かめられるようにしてある。
+drag = {"p0": None, "cur": None, "done": None, "active": False, "raw": None}
 
 
 def _rect(a, b):
@@ -339,6 +381,7 @@ def on_mouse(event, x, y, flags, param):
     elif event == cv2.EVENT_LBUTTONUP and drag["active"]:
         drag["active"] = False
         r = _rect(drag["p0"], (x, y))
+        drag["raw"] = (drag["p0"], (x, y))
         if r[2] > 20 and r[3] > 20:
             drag["done"] = r
 

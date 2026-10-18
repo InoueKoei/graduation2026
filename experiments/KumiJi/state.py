@@ -134,9 +134,10 @@ class Piece:
         if self.cleared_at == self.empty_since:
             return False            # この「無くなり」ではもう解いてある
         self.cleared_at = self.empty_since
+        had = self.fixed_c is not None or bool(self.react_word)
         self.fixed_c = None
         self.react_word, self.react_at = "", 0.0
-        return True
+        return had              # 解くものが無かったなら言うことも無い
 
     # --- 読み ---------------------------------------------------------------
     def wants_read(self, now, has_parts):

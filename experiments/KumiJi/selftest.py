@@ -177,6 +177,10 @@ def test_run():
     import recognize as R
     import page_server
 
+    # 画面の大きさは既定では OS に聞く。**それだと指紋が機械ごとに変わる**ので
+    # ここでは固定する。作品のふるまいを見るのが目的で、画面の比は別の話。
+    C.CANVAS_SIZE = (1920, 1080)
+
     # 時計を偽物にする。実時間で回すと結果が毎回変わって比べられない。
     box = {"i": 0}
     M.time.time = lambda: 1_000_000.0 + box["i"] / 30.0
@@ -192,13 +196,16 @@ def test_run():
     M.list_cameras = lambda *a, **k: [0]
 
     # 認識器も台本どおりに答える（Vision を呼ばない＝毎回同じ）
-    def read(gray, parts, targets=None, pad=None, roi=None):
+    import numpy as _np
+
+    def read(gray, parts, mask=None, roi=None, pad=None, rotations=None):
+        crop = R.crop_raw(gray, parts, pad, roi)
         if not parts:
-            return ("", 0.0)
+            return R.Reading(crop=crop)
         w = answers[min(box["i"], len(answers) - 1)]
-        return (w, 1.0) if w else ("", 0.0)
-    R.recognize_vision_raw = read
-    M.R.recognize_vision_raw = read
+        return R.Reading(w, 1.0, "読み", "", crop) if w else R.Reading(crop=crop)
+    R.read = read
+    M.R.read = read
 
     pushes = []
     page_server.start = lambda *a, **k: None

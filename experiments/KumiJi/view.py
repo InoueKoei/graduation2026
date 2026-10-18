@@ -29,6 +29,61 @@ from probe_contour import (
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+# --- 画面の大きさ ------------------------------------------------------------
+def list_displays():
+    """繋がっている画面の (幅, 高さ) を並べて返す。取れなければ空。
+
+    macOS の AppKit に聞く。pyobjc は Vision のために既に入っているので
+    追加のインストールは要らない。
+    """
+    try:
+        from AppKit import NSScreen
+    except Exception:
+        return []
+    out = []
+    for sc in NSScreen.screens():
+        f = sc.frame()
+        out.append((int(f.size.width), int(f.size.height)))
+    return out
+
+
+def canvas_size(verbose=False):
+    """描いて投影する画面の大きさを決める。
+
+    **比が合っていないと全画面で黒い帯が出る。** 16:9 で描いた画を 16:10 の
+    モニタに出すと上下が余り、そこは何も描いていないので黒くなる。置く場は
+    検出の地なので、黒い帯があると地が割れて閾値の意味が変わってしまう。
+    だから決め打ちにせず、実際の画面に合わせる。
+    """
+    if C.CANVAS_SIZE:
+        w, h = C.CANVAS_SIZE
+        if verbose:
+            print(f"画面 {w}x{h}（config.CANVAS_SIZE、比 {w / h:.3f}）")
+        return (int(w), int(h))
+
+    screens = list_displays()
+    if not screens:
+        if verbose:
+            print(f"画面 {C.CANVAS_W}x{C.CANVAS_H}"
+                  "（OS に聞けなかったので config の値）")
+        return (C.CANVAS_W, C.CANVAS_H)
+
+    if verbose:
+        for i, (w, h) in enumerate(screens):
+            print(f"  画面[{i}] {w}x{h}  比 {w / h:.3f}")
+    i = C.CANVAS_DISPLAY
+    if 0 <= i < len(screens):
+        w, h = screens[i]
+        why = f"CANVAS_DISPLAY={i}"
+    else:
+        w, h = max(screens, key=lambda s: s[0] * s[1])
+        why = "いちばん画素の多い画面"
+    if verbose:
+        print(f"画面 {w}x{h}（{why}、比 {w / h:.3f}）"
+              "  ← 全画面にしたときここに合う")
+    return (w, h)
+
+
 # --- 画面の中の領域 ----------------------------------------------------------
 def zone_rect(zone, cw, ch):
     """正規化された領域 (x,y,w,h) を画面の画素座標へ。"""
@@ -190,25 +245,23 @@ def out_keys(key, rect):
 
 
 def warn_roi(roi, fw, fh):
-    """検出範囲が狭すぎないか見る。
+    """検出範囲について言うべきことがあれば言う。
 
-    ここが小さいと OCR に渡る画像も小さくなり、Vision はテキスト行として
-    拾わない。実機で 60x57 まで絞ってしまい、閾値も面積も合っているのに
-    何も読めない状態になった。**先に言う方がよい。**
+    もともと「300x300 以上、フレーム幅の 1/3 以上」と言っていたが、これは
+    **測る前に決めた目安**で、大きすぎた。実測では字の高さ 20px（切り出し
+    72x52）でも Vision は読む。4K に上げたあと、403x264 という十分な範囲に
+    まで「狭い」と言い続けていた。測ったことに合わせて下げる。
+
+    フレームに対する割合はもう見ない。4K なら紙が画の 10% でも画素は足りる。
     """
     w, h = roi[2], roi[3]
     pw = int(w * C.PLACE_ZONE[2])        # 実際に検出されるのはこの幅だけ
     ph = int(h * C.PLACE_ZONE[3])
-    if w < 300 or h < 300:
+    if pw < 120 or ph < 120:
         print(f"  ★ 検出範囲が狭い（{w}x{h}、置く場は {pw}x{ph}）。"
-              "OCR に渡る画像が小さすぎて読まれない。")
+              "実測では置く場が 120px を切ると苦しい。")
         print("     囲うのは**文字ではなく紙**。縁に触れた塊は捨てる設定なので"
               "（DROP_BORDER）、文字にぴったり寄せると部品ごと落ちる。")
-        print(f"     カメラを寄せるか、紙を大きくするか、広く囲い直す"
-              f"（目安 300x300 以上、フレーム幅 {fw} の 1/3 以上）。")
-    elif w < fw / 3:
-        print(f"  （検出範囲がフレーム幅の {w / fw * 100:.0f}%、"
-              f"置く場は {pw}x{ph}。投影面がもっと大きく写る方が読みやすい）")
 
 
 def save_view_config(zoom, center, rect, roi=None):
@@ -289,10 +342,29 @@ class View:
         # そのとき自動検出はフレーム全部を返したり、関係ない塊を掴んだりする。
         if drag["done"]:
             self.screen_roi = crop_to_full(drag["done"], self.crop)
+            got = drag["done"]
+            raw = drag.get("raw")
             drag["done"] = None
             print(f"画面 ROI = {self.screen_roi}（手動・元フレーム座標）")
             print(f"  config.py に固定するなら  SCREEN_ROI = {self.screen_roi}"
                   "   （`W` キーでも書ける）")
+            # 囲った範囲が画に対して極端に小さいときは、座標の取り違えを疑う。
+            # WINDOW_NORMAL の窓を拡大表示していると、OpenCV が画像座標を
+            # 返すのか窓座標を返すのかが環境で違う。数字を並べて出す。
+            if got[2] < W * 0.15 or got[3] < H * 0.15:
+                disp = None
+                try:
+                    disp = cv2.getWindowImageRect("KumiJi / monitor")
+                except Exception:
+                    pass
+                print(f"  【座標の確認】囲った矩形 {got}  /  画の大きさ {W}x{H}"
+                      f"  /  窓に映っている大きさ {disp}")
+                if raw:
+                    print(f"    ドラッグの生の点: {raw[0]} → {raw[1]}")
+                print("    窓の大きさと画の大きさが違うのに、生の点が画の"
+                      "範囲に収まっているなら座標は正しい＝小さく囲っただけ。")
+                print("    生の点が画の範囲より小さい側に偏っているなら"
+                      "座標がずれている。この行をそのまま伝えて。")
             warn_roi(self.screen_roi, W, H)
 
         vr = full_to_crop(self.screen_roi, self.crop)
