@@ -8,14 +8,15 @@ export const CHANNEL = 'yomare';
 export const PLACE = { inset: 0.03 };
 
 // 集まる場。残した形が中心へ引かれて塊になる。カメラはここを見ない。
+// 半径は操作画面で変えられる（設定の gatherR）。ここにあるのは変えられる範囲。
 // 円の外に MARGIN だけ余裕を取って、塊の縁を部品と取り違えないようにする
-export const GATHER = { x: 0.5, y: 0.5, r: 0.27, margin: 0.025 };
+export const GATHER = { x: 0.5, y: 0.5, rMin: 0.12, rMax: 0.38, margin: 0.025 };
 
-// (u, v) が置く場の中か
-export function inPlace(u, v) {
+// (u, v) が置く場の中か。r は集まる場の半径
+export function inPlace(u, v, r) {
   const i = PLACE.inset;
   if (u < i || v < i || u > 1 - i || v > 1 - i) return false;
-  return Math.hypot(u - GATHER.x, v - GATHER.y) > GATHER.r + GATHER.margin;
+  return Math.hypot(u - GATHER.x, v - GATHER.y) > r + GATHER.margin;
 }
 
 export const TIME = {
@@ -39,5 +40,6 @@ export const DEFAULTS = {
   minAreaPct: 0.05,   // 置く場の面積に対して、これ未満の塊は捨てる（%）。てん が消えない大きさに
   surfaceLevel: 255,  // 白い面の明るさ
   glow: '#ffb01f',    // 読めた合図の光の色
+  gatherR: 0.27,      // 集まる場（中央の円）の半径。正方形の一辺に対する割合
   ink: '#151515',     // 残した形と見出しの色
 };

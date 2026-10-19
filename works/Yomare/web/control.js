@@ -22,7 +22,7 @@ function save() {
 }
 function pushSurfaceSettings() {
   ch.postMessage({ type: 'settings', settings: {
-    surfaceLevel: S.surfaceLevel, glow: S.glow, ink: S.ink, calib: S.calib,
+    surfaceLevel: S.surfaceLevel, glow: S.glow, ink: S.ink, calib: S.calib, gatherR: S.gatherR,
   } });
 }
 
@@ -153,7 +153,7 @@ function rebuildLut() {
   for (let y = zone.y0; y < zone.y1; y++) {
     for (let x = zone.x0; x < zone.x1; x++) {
       const u = (x + 0.5) / gw, v = (y + 0.5) / gh;
-      if (!inPlace(u, v)) continue;     // 中央の円は集まる場。見ない（円の縁に触れた塊は捨てられる）
+      if (!inPlace(u, v, S.gatherR)) continue;     // 中央の円は集まる場。見ない（円の縁に触れた塊は捨てられる）
       const [px, py] = project(u, v);
       const sx = Math.round(px * kx), sy = Math.round(py * ky);
       if (sx < 0 || sy < 0 || sx >= small.width || sy >= small.height) continue;
@@ -493,7 +493,7 @@ function drawCam(det) {
     camCtx.restore();
   };
   poly([P(0, 0), P(1, 0), P(1, 1), P(0, 1)], 'rgba(255,255,255,.9)');
-  const i = PLACE.inset, R = GATHER.r + GATHER.margin;
+  const i = PLACE.inset, R = S.gatherR + GATHER.margin;
   poly([P(i, i), P(1 - i, i), P(1 - i, 1 - i), P(i, 1 - i)], 'rgba(255,255,255,.7)', [6, 6], 1.5);
   poly(Array.from({ length: 48 }, (_, k) => P(GATHER.x + R * Math.cos(k / 48 * Math.PI * 2), GATHER.y + R * Math.sin(k / 48 * Math.PI * 2))),
     'rgba(255,255,255,.7)', [6, 6], 1.5);
@@ -641,6 +641,16 @@ $('level').value = S.surfaceLevel;
 $('level').oninput = e => { S.surfaceLevel = +e.target.value; save(); pushSurfaceSettings(); };
 $('glow').value = S.glow;
 $('glow').oninput = e => { S.glow = e.target.value; save(); pushSurfaceSettings(); };
+$('gather').min = GATHER.rMin; $('gather').max = GATHER.rMax;
+$('gather').value = S.gatherR;
+// 動かしているあいだも検出の範囲を作り直す（格子1枚ぶんの射影なので、手で動かす速さなら追いつく）
+$('gather').oninput = e => {
+  S.gatherR = +e.target.value;
+  rebuildLut();
+  resetArrangement();
+  pushSurfaceSettings();
+};
+$('gather').onchange = () => save();
 
 $('calib').onclick = () => {
   S.calib = !S.calib;
@@ -677,6 +687,7 @@ function loop() {
     $('counts').textContent = `部品 ${counts.part}　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}`;
     $('minAreaVal').textContent = `${S.minAreaPct.toFixed(2)}%`;
     $('levelVal').textContent = S.surfaceLevel;
+    $('gatherVal').textContent = S.gatherR.toFixed(2);
   }
   requestAnimationFrame(loop);
 }
