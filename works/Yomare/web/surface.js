@@ -2,10 +2,13 @@
 //
 //   read  … 読めた。部品のまわりに光を出す（保持するほど強くなる）
 //   clear … 動かされた。光を消す
-//   fix   … 置かれ続けた。組んだ形を端へ移し、読まれた字を見出しにして並べる
+//   fix   … 置かれ続けた。組んだ形を中央へ移し、読まれた字を見出しにして塊に加える
 //   emoji … 特定の語。絵文字を流す
+//
+// 白い面は窓の中央の正方形。外側は黒＝プロジェクターでは何も投げない。
+// 外周の帯が置く場、中央の円が集まる場。
 
-import { CHANNEL, PLACE, SHELF, TIME, DEFAULTS } from './common.js';
+import { CHANNEL, GATHER, TIME, DEFAULTS } from './common.js';
 
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
@@ -14,10 +17,18 @@ const ch = new BroadcastChannel(CHANNEL);
 
 const S = { ...DEFAULTS, calib: false };
 let W = 0, H = 0, dpr = 1;
+let side = 0, ox = 0, oy = 0;   // 正方形の一辺と左上（画素）
 
-let reading = null;   // { id, text, t0, glowCanvas, shape, bbox, fading }
-const shelf = [];     // { text, shapeCanvas, aspect, y, born, from }
+let reading = null;   // { id, text, t0, glowCanvas, shapeCanvas, bbox, fading }
+const bodies = [];    // 塊に加わった形
 const particles = [];
+
+// 塊の決まり
+const HEAD_PX = 12;           // 見出しの大きさ（CSS px）
+const SHRINK_TO = 0.45;       // 置いた大きさに対する、塊の中での大きさ
+const SIZE_MIN = 0.05, SIZE_MAX = 0.10;   // 塊の中での長辺（正方形に対する割合）
+const FILL_MAX = 0.62;        // 円の面積のうち、これ以上埋まったら古いものから消す
+const SHOW_RING = true;       // 集まる場の輪郭をごく薄く出す（何も無いときに、中央が置く場でないと分かるように）
 
 // ---------------------------------------------------------------- 大きさ
 
@@ -26,7 +37,11 @@ function resize() {
   W = Math.round(innerWidth * dpr);
   H = Math.round(innerHeight * dpr);
   cv.width = W; cv.height = H;
-  ch.postMessage({ type: 'hello', w: innerWidth, h: innerHeight });
+  side = Math.min(W, H);
+  ox = Math.round((W - side) / 2);
+  oy = Math.round((H - side) / 2);
+  // 操作画面には正方形の大きさを伝える（検出の格子もこの比で作られる）
+  ch.postMessage({ type: 'hello', w: side / dpr, h: side / dpr });
 }
 addEventListener('resize', resize);
 resize();
@@ -42,6 +57,10 @@ document.addEventListener('fullscreenchange', () => {
   hint.style.opacity = document.fullscreenElement ? 0 : 1;
 });
 
+// 正規化座標 → 画素
+const X = u => ox + u * side;
+const Y = v => oy + v * side;
+
 // ---------------------------------------------------------------- 受信
 
 ch.onmessage = ({ data: m }) => {
@@ -54,7 +73,7 @@ ch.onmessage = ({ data: m }) => {
   }
   if (m.type === 'fix') { fix(m.id); return; }
   if (m.type === 'emoji') { spawnEmoji(m.ch); return; }
-  if (m.type === 'wipe') { shelf.length = 0; return; }
+  if (m.type === 'wipe') { bodies.length = 0; return; }
 };
 
 const now = () => performance.now() / 1000;
@@ -91,29 +110,32 @@ function startReading(m) {
   };
 }
 
+// 置かれていた場所から、置かれていた大きさのまま塊に加わり、引かれながら縮む
 function fix(id) {
   if (!reading || reading.id !== id) return;
   const b = reading.bbox;
-  shelf.unshift({
+  const w0 = b.x1 - b.x0, h0 = b.y1 - b.y0;
+  const long = Math.max(w0, h0);
+  const k = Math.min(SIZE_MAX, Math.max(SIZE_MIN, long * SHRINK_TO)) / long;
+  const ph = Math.random() * Math.PI * 2;
+  bodies.push({
     text: reading.text,
-    shapeCanvas: reading.shapeCanvas,
-    aspect: (b.y1 - b.y0) * H / ((b.x1 - b.x0) * W),
-    born: now(),
-    from: { x: b.x0 * W, y: b.y0 * H, w: (b.x1 - b.x0) * W, h: (b.y1 - b.y0) * H },
-    y: null,
+    canvas: reading.shapeCanvas,
+    w0, h0, w: w0 * k, h: h0 * k,
+    x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2,
+    vx: 0, vy: 0,
+    born: now(), dying: 0, ph,
   });
-  if (shelf.length > 40) shelf.length = 40;
   reading.fading = now();
-  reading.flash = now();
+  reading.flash = true;
 }
 
 function spawnEmoji(e) {
   const t = now();
-  const n = 28;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < 28; i++) {
     particles.push({
       ch: e,
-      x: PLACE.x0 + Math.random() * (PLACE.x1 - PLACE.x0),
+      x: Math.random(),
       y: 1.05 + Math.random() * 0.35,
       vy: -(0.28 + Math.random() * 0.3),
       vx: (Math.random() - 0.5) * 0.06,
@@ -125,10 +147,87 @@ function spawnEmoji(e) {
   }
 }
 
-// ---------------------------------------------------------------- 描画
+// ---------------------------------------------------------------- 塊の動き
 
-const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const ease = x => 1 - Math.pow(1 - x, 3);
 const clamp01 = x => Math.max(0, Math.min(1, x));
+
+// いまの大きさ（縮みきるまでは置いた大きさから補間）と、消えかけの度合い
+function sizeOf(b, t) {
+  const s = ease(clamp01((t - b.born) / TIME.SHRINK_SEC));
+  const fade = b.dying ? clamp01((t - b.dying) / 1.5) : 0;
+  const k = 1 - fade;
+  return {
+    s, fade,
+    w: (b.w0 + (b.w - b.w0) * s) * k,
+    h: (b.h0 + (b.h - b.h0) * s) * k,
+  };
+}
+
+// ぶつかり合いは円で近似する。字形の外接矩形には余白があるので、対角線より少し小さく取る。
+// 見出しのぶんだけ上下に余裕を足す
+function radiusOf(sz) {
+  return 0.5 * Math.hypot(sz.w, sz.h) * 0.78 + (HEAD_PX * dpr / side) * 0.6 * (1 - sz.fade);
+}
+
+function stepBodies(t, dt) {
+  const R = GATHER.r;
+  // 埋まりすぎたら古いものから消す（塊が円からあふれると、カメラが見る帯にはみ出すため）
+  let fill = 0;
+  for (const b of bodies) if (!b.dying) { const r = radiusOf({ w: b.w, h: b.h, fade: 0 }); fill += r * r; }
+  for (const b of bodies) {
+    if (fill <= FILL_MAX * R * R) break;
+    if (b.dying) continue;
+    b.dying = t;
+    const r = radiusOf({ w: b.w, h: b.h, fade: 0 });
+    fill -= r * r;
+  }
+  for (let i = bodies.length - 1; i >= 0; i--) {
+    if (bodies[i].dying && t - bodies[i].dying > 1.5) bodies.splice(i, 1);
+  }
+
+  const n = bodies.length;
+  const sz = bodies.map(b => sizeOf(b, t));
+  const rad = sz.map(radiusOf);
+  for (let i = 0; i < n; i++) {
+    const b = bodies[i];
+    // 中心へ引く。ごく弱く揺らして、塊がいつまでも少しずつ動くようにする
+    const ax = (GATHER.x - b.x) * 5 + Math.sin(t * 0.6 + b.ph) * 0.012;
+    const ay = (GATHER.y - b.y) * 5 + Math.cos(t * 0.45 + b.ph * 1.7) * 0.012;
+    b.vx = (b.vx + ax * dt) * Math.exp(-4 * dt);
+    b.vy = (b.vy + ay * dt) * Math.exp(-4 * dt);
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+  }
+  // 重なりを押し分ける（位置で直す。速さは少し削る）
+  for (let it = 0; it < 4; it++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = bodies[i], b = bodies[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        const min = rad[i] + rad[j];
+        if (d >= min) continue;
+        if (d < 1e-6) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy); }
+        const push = (min - d) / 2;
+        dx /= d; dy /= d;
+        a.x -= dx * push; a.y -= dy * push;
+        b.x += dx * push; b.y += dy * push;
+        a.vx *= 0.9; a.vy *= 0.9; b.vx *= 0.9; b.vy *= 0.9;
+      }
+    }
+    // 縮みきったものは円の内側に留める
+    for (let i = 0; i < n; i++) {
+      if (sz[i].s < 1) continue;
+      const b = bodies[i];
+      const dx = b.x - GATHER.x, dy = b.y - GATHER.y, d = Math.hypot(dx, dy);
+      const lim = R - rad[i];
+      if (d > lim && d > 0) { b.x = GATHER.x + dx / d * lim; b.y = GATHER.y + dy / d * lim; }
+    }
+  }
+}
+
+// ---------------------------------------------------------------- 描画
 
 function drawGlow(t) {
   if (!reading) return;
@@ -150,7 +249,7 @@ function drawGlow(t) {
   for (const [blur, k] of [[70, 1], [30, 1], [12, 0.8]]) {
     ctx.shadowBlur = blur * dpr;
     ctx.shadowColor = rgba(S.glow, clamp01(a * k));
-    ctx.drawImage(reading.glowCanvas, -off, 0, W, H);
+    ctx.drawImage(reading.glowCanvas, ox - off, oy, side, side);
   }
   ctx.restore();
 }
@@ -160,64 +259,55 @@ function rgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function drawShelf(t) {
-  const x0 = SHELF.x0 * W, x1 = SHELF.x1 * W, sw = x1 - x0;
-  const headPx = Math.round(sw * 0.17);
-  const gap = sw * 0.12;
-  const maxShapeH = sw * 0.75;
-
-  // 仕切り。カメラの見ない側なので、線を引いても部品と取り違えない
-  ctx.fillStyle = 'rgba(0,0,0,0.08)';
-  ctx.fillRect(Math.round((PLACE.x1 + SHELF.x0) / 2 * W), SHELF.y0 * H, Math.max(1, dpr), (SHELF.y1 - SHELF.y0) * H);
-
-  let y = SHELF.y0 * H;
-  for (const e of shelf) {
-    let w = sw * 0.8, h = w * e.aspect;
-    if (h > maxShapeH) { h = maxShapeH; w = h / e.aspect; }
-    const blockH = headPx * 1.5 + h + gap;
-    if (e.y === null) e.y = y;
-    e.y += (y - e.y) * 0.18;           // 新しいものが上に入ると、古いものは下へずれる
-    if (e.y > SHELF.y1 * H) { y += blockH; continue; }
-
-    const tx = x0 + (sw - w) / 2, ty = e.y + headPx * 1.5;
-    const f = clamp01((t - e.born) / TIME.FLY_SEC);
-    const k = ease(f);
-    const fx = e.from.x + (tx - e.from.x) * k;
-    const fy = e.from.y + (ty - e.from.y) * k;
-    const fw = e.from.w + (w - e.from.w) * k;
-    const fh = e.from.h + (h - e.from.h) * k;
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(e.shapeCanvas, fx, fy, fw, fh);
-    ctx.restore();
-
-    // 見出しは着地してから出る
-    const ha = clamp01((t - e.born - TIME.FLY_SEC * 0.8) / 0.5);
+function drawBodies(t) {
+  const head = HEAD_PX * dpr;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.font = `500 ${head}px "Hiragino Mincho ProN", "Hiragino Sans", serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = S.ink;
+  for (const b of bodies) {
+    const sz = sizeOf(b, t);
+    const w = sz.w * side, h = sz.h * side;
+    const cx = X(b.x), cy = Y(b.y);
+    ctx.globalAlpha = 1 - sz.fade;
+    ctx.drawImage(b.canvas, cx - w / 2, cy - h / 2, w, h);
+    // 見出しは縮みきる手前から出る
+    const ha = clamp01((sz.s - 0.7) / 0.3) * (1 - sz.fade);
     if (ha > 0) {
-      ctx.save();
       ctx.globalAlpha = ha;
-      ctx.fillStyle = S.ink;
-      ctx.font = `600 ${headPx}px "Hiragino Mincho ProN", "Hiragino Sans", serif`;
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-      ctx.fillText(e.text, x0, e.y, sw);
-      ctx.restore();
+      ctx.fillText(b.text, cx, cy - h / 2 - head * 0.25);
     }
-    y += blockH;
   }
+  ctx.restore();
+}
+
+function drawRing() {
+  if (!SHOW_RING) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = Math.max(1, dpr);
+  ctx.beginPath();
+  ctx.arc(X(GATHER.x), Y(GATHER.y), (GATHER.r + GATHER.margin) * side, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawParticles(t, dt) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, side, side);
+  ctx.clip();
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     if (t < p.t0) continue;
     p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
     if (p.y < -0.15 || t - p.t0 > TIME.EMOJI_SEC + 1.5) { particles.splice(i, 1); continue; }
-    const s = p.size * H;
+    const s = p.size * side;
     ctx.save();
-    ctx.translate(p.x * W, p.y * H);
+    ctx.translate(X(p.x), Y(p.y));
     ctx.rotate(p.rot);
     ctx.font = `${s}px "Apple Color Emoji", sans-serif`;
     ctx.textAlign = 'center';
@@ -225,12 +315,13 @@ function drawParticles(t, dt) {
     ctx.fillText(p.ch, 0, 0);
     ctx.restore();
   }
+  ctx.restore();
 }
 
 // 四隅合わせ。操作画面のカメラ映像で、この 1〜4 の角に印を重ねてもらう
 function drawCalib() {
-  const L = Math.min(W, H) * 0.09, th = Math.max(6, Math.min(W, H) * 0.012);
-  const corners = [[0, 0, 1, 1], [W, 0, -1, 1], [W, H, -1, -1], [0, H, 1, -1]];
+  const L = side * 0.09, th = Math.max(6, side * 0.012);
+  const corners = [[ox, oy, 1, 1], [ox + side, oy, -1, 1], [ox + side, oy + side, -1, -1], [ox, oy + side, 1, -1]];
   ctx.fillStyle = '#000';
   ctx.font = `700 ${L * 0.8}px "Hiragino Sans", sans-serif`;
   ctx.textAlign = 'center';
@@ -242,21 +333,25 @@ function drawCalib() {
   });
   ctx.font = `${L * 0.3}px "Hiragino Sans", sans-serif`;
   ctx.fillStyle = '#666';
-  ctx.fillText('四隅合わせ中 — このあいだは読まない', W / 2, H / 2);
+  ctx.fillText('四隅合わせ中 — このあいだは読まない', X(0.5), Y(0.5));
 }
 
 let last = now();
 function frame() {
   const t = now(), dt = Math.min(0.05, t - last);
   last = t;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
   const lv = S.surfaceLevel | 0;
   ctx.fillStyle = `rgb(${lv},${lv},${lv})`;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(ox, oy, side, side);
   if (S.calib) {
     drawCalib();
   } else {
+    stepBodies(t, dt);
+    drawRing();
     drawGlow(t);
-    drawShelf(t);
+    drawBodies(t);
     drawParticles(t, dt);
   }
   requestAnimationFrame(frame);

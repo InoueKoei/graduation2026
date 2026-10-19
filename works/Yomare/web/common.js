@@ -1,21 +1,30 @@
 // 操作画面（control）と白い面（surface）が共有する決まりごと。
-// 座標はすべて「白い面の正規化座標」（左上 0,0 ／ 右下 1,1）で持つ。
+// 白い面は正方形。座標はすべてその正規化座標（左上 0,0 ／ 右下 1,1）で持つ。
 
 export const CHANNEL = 'yomare';
 
-// 置く場。ここに置かれたものだけを検出する。縁に触れた塊（腕・ベゼル）は捨てる
-export const PLACE = { x0: 0.03, y0: 0.05, x1: 0.76, y1: 0.95 };
+// 置く場は、正方形の外周の帯。正方形の縁から INSET だけ内側から、中央の円の外まで。
+// ここに置かれたものだけを検出する。縁（正方形の縁・円の縁）に触れた塊は捨てる
+export const PLACE = { inset: 0.03 };
 
-// 残す場。組んだ形が見出しつきで並ぶ。カメラはここを見ない
-export const SHELF = { x0: 0.80, x1: 0.97, y0: 0.05, y1: 0.95 };
+// 集まる場。残した形が中心へ引かれて塊になる。カメラはここを見ない。
+// 円の外に MARGIN だけ余裕を取って、塊の縁を部品と取り違えないようにする
+export const GATHER = { x: 0.5, y: 0.5, r: 0.27, margin: 0.025 };
+
+// (u, v) が置く場の中か
+export function inPlace(u, v) {
+  const i = PLACE.inset;
+  if (u < i || v < i || u > 1 - i || v > 1 - i) return false;
+  return Math.hypot(u - GATHER.x, v - GATHER.y) > GATHER.r + GATHER.margin;
+}
 
 export const TIME = {
   STILL_SEC: 1.0,        // これだけ動かなければ「静止」とみなして読ませる
-  HOLD_SEC: 3.0,         // 読めてからこれだけ置かれ続けたら、端へ移して残す
+  HOLD_SEC: 3.0,         // 読めてからこれだけ置かれ続けたら、中央へ移して残す
   MOVE_CONFIRM_SEC: 0.35,// 変化がこれだけ続いたら「動かした」とみなす（際のちらつきを無視する）
   EMOJI_SEC: 2.6,        // 絵文字が流れている時間。このあいだカメラは見ない
   EMOJI_COOLDOWN_SEC: 8, // 同じ語でまた流すまでの間
-  FLY_SEC: 1.1,          // 端へ移る動きの長さ
+  SHRINK_SEC: 1.2,       // 置いた大きさから、塊の中の大きさへ縮むまで
 };
 
 // 恣意的に決めた6語。完全一致のときだけ流す
