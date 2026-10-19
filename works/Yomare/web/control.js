@@ -4,7 +4,7 @@
 // 輪郭（二値化と連結成分）は「静止したか」「どこに置かれたか」を知るためだけに使う。
 // OCR へ渡すのはカメラ映像を矩形で切り出しただけの画像で、二値化したものではない。
 
-import { CHANNEL, PLACE, TIME, EMOJI, DEFAULTS } from './common.js';
+import { CHANNEL, PLACE, GATHER, inPlace, TIME, EMOJI, DEFAULTS } from './common.js';
 
 const $ = id => document.getElementById(id);
 const ch = new BroadcastChannel(CHANNEL);
@@ -107,7 +107,8 @@ const SMALL_W = 960;          // 毎フレームの検出はこの幅に縮め�
 const GRID_W = 560;           // 白い面を この幅の格子に直して見る
 let surf = { w: 1920, h: 1200 };
 let gw = GRID_W, gh = 350;
-let zone = null;              // 置く場の格子範囲
+let zone = null;              // 置く場を囲む格子範囲（中央の円はこの中でさらに外す）
+let placeArea = 1;            // 置く場の画素数
 let lut = null;               // 格子 → 縮小映像の画素位置（-1 は映像の外）
 const small = document.createElement('canvas');
 const sctx = small.getContext('2d', { willReadFrequently: true });
@@ -130,8 +131,8 @@ function onVideoSize() {
 function rebuild() {
   gh = Math.round(gw * surf.h / surf.w);
   zone = {
-    x0: Math.ceil(PLACE.x0 * gw), x1: Math.floor(PLACE.x1 * gw),
-    y0: Math.ceil(PLACE.y0 * gh), y1: Math.floor(PLACE.y1 * gh),
+    x0: Math.ceil(PLACE.inset * gw), x1: Math.floor((1 - PLACE.inset) * gw),
+    y0: Math.ceil(PLACE.inset * gh), y1: Math.floor((1 - PLACE.inset) * gh),
   };
   const n = gw * gh;
   luma = new Uint8Array(n); bin = new Uint8Array(n); mask = new Uint8Array(n);
@@ -148,12 +149,16 @@ function rebuildLut() {
   Hm = homography(S.corners.map(([x, y]) => [x * video.videoWidth, y * video.videoHeight]));
   lut = new Int32Array(gw * gh).fill(-1);
   const kx = small.width / video.videoWidth, ky = small.height / video.videoHeight;
+  placeArea = 0;
   for (let y = zone.y0; y < zone.y1; y++) {
     for (let x = zone.x0; x < zone.x1; x++) {
-      const [px, py] = project((x + 0.5) / gw, (y + 0.5) / gh);
+      const u = (x + 0.5) / gw, v = (y + 0.5) / gh;
+      if (!inPlace(u, v)) continue;     // 中央の円は集まる場。見ない（円の縁に触れた塊は捨てられる）
+      const [px, py] = project(u, v);
       const sx = Math.round(px * kx), sy = Math.round(py * ky);
       if (sx < 0 || sy < 0 || sx >= small.width || sy >= small.height) continue;
       lut[y * gw + x] = (sy * small.width + sx) * 4;
+      placeArea++;
     }
   }
 }
@@ -176,8 +181,7 @@ function detect() {
   }
 
   // 連結成分（4近傍）
-  const zoneArea = (zone.x1 - zone.x0) * (zone.y1 - zone.y0);
-  const minArea = Math.max(4, zoneArea * S.minAreaPct / 100);
+  const minArea = Math.max(4, placeArea * S.minAreaPct / 100);
   comps = [{}];
   const stack = new Int32Array(gw * gh);
   for (let y = zone.y0; y < zone.y1; y++) {
@@ -314,6 +318,8 @@ function step(det, t, dt) {
     st.name = 'fixed';
     st.lastFixed = { ref: st.ref, refDil: st.refDil, refArea: st.refArea, text: st.text };
     ch.postMessage({ type: 'fix', id: st.id });
+    // 形が置く場を横切って中央へ縮んでいくあいだは、それを部品と取り違えないよう見ない
+    st.pausedUntil = Math.max(st.pausedUntil, t + TIME.SHRINK_SEC + 0.3);
     log(st.text, '残した');
   }
 }
@@ -487,7 +493,10 @@ function drawCam(det) {
     camCtx.restore();
   };
   poly([P(0, 0), P(1, 0), P(1, 1), P(0, 1)], 'rgba(255,255,255,.9)');
-  poly([P(PLACE.x0, PLACE.y0), P(PLACE.x1, PLACE.y0), P(PLACE.x1, PLACE.y1), P(PLACE.x0, PLACE.y1)], 'rgba(255,255,255,.7)', [6, 6], 1.5);
+  const i = PLACE.inset, R = GATHER.r + GATHER.margin;
+  poly([P(i, i), P(1 - i, i), P(1 - i, 1 - i), P(i, 1 - i)], 'rgba(255,255,255,.7)', [6, 6], 1.5);
+  poly(Array.from({ length: 48 }, (_, k) => P(GATHER.x + R * Math.cos(k / 48 * Math.PI * 2), GATHER.y + R * Math.sin(k / 48 * Math.PI * 2))),
+    'rgba(255,255,255,.7)', [6, 6], 1.5);
   if (det && det.bbox) {
     const b = det.bbox;
     poly([P(b.x0 / gw, b.y0 / gh), P((b.x1 + 1) / gw, b.y0 / gh), P((b.x1 + 1) / gw, (b.y1 + 1) / gh), P(b.x0 / gw, (b.y1 + 1) / gh)],
