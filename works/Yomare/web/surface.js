@@ -65,7 +65,11 @@ const Y = v => oy + v * side;
 
 ch.onmessage = ({ data: m }) => {
   if (m.type === 'ping') { resize(); return; }
-  if (m.type === 'settings') { Object.assign(S, m.settings); return; }
+  if (m.type === 'settings') {
+    if (m.settings.gatherR !== S.gatherR) ringShownAt = now();   // 大きさを変えている最中は輪郭を濃く出す
+    Object.assign(S, m.settings);
+    return;
+  }
   if (m.type === 'read') { startReading(m); return; }
   if (m.type === 'clear') {
     if (reading && reading.id === m.id && !reading.fading) reading.fading = now();
@@ -171,7 +175,7 @@ function radiusOf(sz) {
 }
 
 function stepBodies(t, dt) {
-  const R = GATHER.r;
+  const R = S.gatherR;
   // 埋まりすぎたら古いものから消す（塊が円からあふれると、カメラが見る帯にはみ出すため）
   let fill = 0;
   for (const b of bodies) if (!b.dying) { const r = radiusOf({ w: b.w, h: b.h, fade: 0 }); fill += r * r; }
@@ -284,13 +288,16 @@ function drawBodies(t) {
   ctx.restore();
 }
 
-function drawRing() {
-  if (!SHOW_RING) return;
+let ringShownAt = -1e9;
+function drawRing(t) {
+  // 変えた直後は濃く、2秒かけてふだんの薄さへ戻る
+  const k = clamp01(1 - (t - ringShownAt - 0.5) / 1.5);
+  if (!SHOW_RING && k === 0) return;
   ctx.save();
-  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-  ctx.lineWidth = Math.max(1, dpr);
+  ctx.strokeStyle = `rgba(0,0,0,${(SHOW_RING ? 0.06 : 0) + 0.6 * k})`;
+  ctx.lineWidth = Math.max(1, dpr) * (1 + 2 * k);
   ctx.beginPath();
-  ctx.arc(X(GATHER.x), Y(GATHER.y), (GATHER.r + GATHER.margin) * side, 0, Math.PI * 2);
+  ctx.arc(X(GATHER.x), Y(GATHER.y), (S.gatherR + GATHER.margin) * side, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 }
@@ -349,7 +356,7 @@ function frame() {
     drawCalib();
   } else {
     stepBodies(t, dt);
-    drawRing();
+    drawRing(t);
     drawGlow(t);
     drawBodies(t);
     drawParticles(t, dt);
