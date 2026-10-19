@@ -181,7 +181,7 @@ function detect() {
   }
 
   // 連結成分（4近傍）
-  const minArea = Math.max(4, placeArea * S.minAreaPct / 100);
+  const minArea = minAreaPx();
   comps = [{}];
   const stack = new Int32Array(gw * gh);
   for (let y = zone.y0; y < zone.y1; y++) {
@@ -635,8 +635,13 @@ $('otsu').onclick = () => { const o = otsu(); if (o !== null) { S.threshold = o;
 function renderPolarity() { $('polarity').textContent = S.darkParts ? '部品は地より暗い' : '部品は地より明るい'; }
 $('polarity').onclick = () => { S.darkParts = !S.darkParts; renderPolarity(); save(); resetArrangement(); };
 
-$('minArea').value = S.minAreaPct;
-$('minArea').oninput = e => { S.minAreaPct = +e.target.value; save(); };
+// 小さい塊の目盛りは対数。0.001〜1% を均等に割ると、使う 0.01〜0.1% が左端に潰れてしまう
+const AREA_LO = Math.log10(0.001), AREA_HI = Math.log10(1);
+const areaToPos = pct => Math.round((Math.log10(Math.max(0.001, pct)) - AREA_LO) / (AREA_HI - AREA_LO) * 1000);
+const posToArea = pos => Math.pow(10, AREA_LO + (AREA_HI - AREA_LO) * pos / 1000);
+function minAreaPx() { return Math.max(2, placeArea * S.minAreaPct / 100); }
+$('minArea').value = areaToPos(S.minAreaPct);
+$('minArea').oninput = e => { S.minAreaPct = posToArea(+e.target.value); save(); };
 $('level').value = S.surfaceLevel;
 $('level').oninput = e => { S.surfaceLevel = +e.target.value; save(); pushSurfaceSettings(); };
 $('glow').value = S.glow;
@@ -685,7 +690,8 @@ function loop() {
     const counts = { part: 0, small: 0, edge: 0 };
     for (let i = 1; i < comps.length; i++) counts[comps[i].kind]++;
     $('counts').textContent = `部品 ${counts.part}　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}`;
-    $('minAreaVal').textContent = `${S.minAreaPct.toFixed(2)}%`;
+    const p = S.minAreaPct;
+    $('minAreaVal').textContent = `${p < 0.1 ? p.toFixed(3) : p.toFixed(2)}%（${Math.round(minAreaPx())}画素未満）`;
     $('levelVal').textContent = S.surfaceLevel;
     $('gatherVal').textContent = S.gatherR.toFixed(2);
   }
