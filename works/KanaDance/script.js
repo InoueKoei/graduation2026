@@ -7,10 +7,14 @@
 //  隣り合う字形の間を補間して重ねる（Illustrator のブレンドツールのイメージ）。
 // ============================================================
 
-import { APP_CONFIG } from './config.js';
+import { APP_CONFIG, POSE_SETS, LANDMARK_SETS, BODY_CALIBRATION } from './config.js';
 import { RUNTIME } from './runtime-config.js';
 import { loadReferencePoses, savePose } from './pose-store.js';
-import { normalizePose, toPixelPoints, matchLetter } from './pose-matcher.js';
+import {
+  normalizePose, toPixelPoints, matchLetter,
+  lengthRatios, rescalePose, isFacingFront, allVisible,
+} from './pose-matcher.js';
+import { BodyCalibration } from './body-calibration.js';
 import { PoseHistory } from './pose-history.js';
 import { Renderer } from './renderer.js';
 import * as ui from './ui.js';
@@ -18,19 +22,36 @@ import * as ui from './ui.js';
 ui.setupLayout();
 const renderer = new Renderer(ui.canvas);
 const history = new PoseHistory(APP_CONFIG.limits.bufferMs);
+const calibration = new BodyCalibration(BODY_CALIBRATION);
 
 // ── 状態 ────────────────────────────────────────────────────
 let poseLandmarker = null;
-let references = { poses: {}, lines: {} };
+let references = { poses: {}, lines: {}, pending: [] };
 let latestNormalized = null;   // 直近フレームの正規化ポーズ（登録に使う）
 let lastVideoTime = -1;
 // 直近に一致した字。動いている最中は一致が外れやすいので、
 // さかのぼる時間ぶんだけ保持して、尾のブレンドを描き切る。
 let latched = { letter: null, atMs: -Infinity };
+// 体型合わせの倍率（体節ごと）。null なら合わせていない＝登録ポーズをそのまま使う
+let ratios = null;
+// 判定に使う登録ポーズ。体型を合わせたときは、その人の体型に組み直したもの
+let activeRefs = {};
 
 ui.bindControls({
   onRegister: registerCurrentPose,
   onThemeChange: () => renderer.syncTheme(),
+  onPoseSetChange: () => reloadReferences(),
+  onCalibrate: startCalibration,
+  onCancelCalibration: () => {
+    calibration.cancel();
+    ui.hideCalibration();
+  },
+  onResetCalibration: () => {
+    ratios = null;
+    applyCalibration();
+    ui.setCalibrated(false);
+    ui.setStatus('体型合わせを解除しました');
+  },
 });
 
 // ── 初期化 ──────────────────────────────────────────────────
@@ -40,11 +61,7 @@ ui.bindControls({
   await startCamera();
 
   // 2) 参照ポーズ（失敗しても致命ではない：登録は可能・判別のみ不可）
-  try {
-    references = await loadReferencePoses();
-  } catch (err) {
-    ui.setError(`参照ポーズを読み込めません（判別不可・登録は可能）: ${err.message}`);
-  }
+  await reloadReferences();
 
   // 3) 姿勢推定モデル（判別・描画に必要。無くてもカメラ映像は出る）
   //    取得元は runtime-config.js。USB 版では同梱した vendor/ を指す。
@@ -96,15 +113,26 @@ function renderLoop() {
   renderer.clear();
   const now = performance.now();
   const results = poseLandmarker.detectForVideo(ui.video, now);
-  if (!results.landmarks?.length) return;
+  // 手足をどこで取るかは、いま選んでいる組が撮ったときの定義に合わせる
+  const indices = LANDMARK_SETS[POSE_SETS[ui.settings.poseSet].landmarks];
+
+  if (!results.landmarks?.length) {
+    if (calibration.active) stepCalibration(now, null, null, indices);
+    return;
+  }
 
   const landmarks = results.landmarks[0];
-  latestNormalized = normalizePose(landmarks);
+  latestNormalized = normalizePose(landmarks, indices);
 
-  const pixelPoints = toPixelPoints(landmarks, w, h);
+  const pixelPoints = toPixelPoints(landmarks, w, h, indices);
   history.push(now, pixelPoints);
 
   renderer.drawJoints(pixelPoints);
+
+  if (calibration.active) {
+    stepCalibration(now, latestNormalized, landmarks, indices);
+    return;
+  }
 
   if (ui.currentMode() !== 'detect') return;
   drawDetection(now);
@@ -112,14 +140,14 @@ function renderLoop() {
 
 /** 判別モードの描画とステータス表示 */
 function drawDetection(now) {
-  const refCount = Object.keys(references.poses).length;
+  const refCount = Object.keys(activeRefs).length;
   if (refCount === 0) {
-    ui.setStatus('参照ポーズが読み込めていません（DB未接続）');
+    ui.setStatus(`「${POSE_SETS[ui.settings.poseSet].label}」に登録済みの字がありません`);
     return;
   }
 
   const { matchThreshold, windowMs, intervalMs } = ui.settings;
-  const { letter, error } = matchLetter(latestNormalized, references.poses);
+  const { letter, error } = matchLetter(latestNormalized, activeRefs);
   const matched = letter && error < matchThreshold;
 
   if (matched) {
@@ -149,14 +177,87 @@ function drawDetection(now) {
   ui.setShapeCount(renderer.drawKanaBlend(lines, frames, ui.settings));
 }
 
+// ── 体型合わせ ──────────────────────────────────────────────
+// 体験の最初に、正面を向いてイのポーズで静止してもらい、その人の体節の長さを測る。
+// 登録したイと比べた倍率で、登録ポーズを全部その人の体型に組み直す。
+
+/** 判定に使う登録ポーズを作り直す（倍率が無ければそのまま） */
+function applyCalibration() {
+  activeRefs = ratios
+    ? Object.fromEntries(Object.entries(references.poses).map(([l, p]) => [l, rescalePose(p, ratios)]))
+    : references.poses;
+}
+
+function startCalibration() {
+  // 同じポーズ（イ）どうしで比べるので、イが登録されていないと倍率が出せない
+  if (!references.poses[BODY_CALIBRATION.letter]) {
+    ui.setError(`体型合わせには「${BODY_CALIBRATION.letter}」の登録が必要です`);
+    return;
+  }
+  calibration.start(performance.now());
+}
+
+/** 体型合わせ中の1フレーム。測り終えたら倍率を決めて判定に反映する */
+function stepCalibration(now, pose, landmarks, indices) {
+  const checks = landmarks
+    ? {
+      visible: allVisible(landmarks, indices, BODY_CALIBRATION.minVisibility),
+      facing: isFacingFront(landmarks, BODY_CALIBRATION.facingTol),
+    }
+    : { visible: false, facing: false };
+
+  const measured = calibration.feed(pose, now, checks);
+  ui.showCalibration(BODY_CALIBRATION.letter, calibration.phase, calibration.reason, calibration.progress(now));
+  if (!measured) return;
+
+  ratios = lengthRatios(measured, references.poses[BODY_CALIBRATION.letter]);
+  applyCalibration();
+  ui.hideCalibration();
+  ui.setCalibrated(true);
+  history.clear();
+  const arm = (ratios.upper_arm + ratios.forearm) / 2;
+  const leg = (ratios.thigh + ratios.shin) / 2;
+  ui.setStatus(`体型を合わせました（腕 ×${arm.toFixed(2)}・脚 ×${leg.toFixed(2)}・頭 ×${ratios.neck_head.toFixed(2)}）`);
+}
+
+// ── 参照ポーズの組 ──────────────────────────────────────────
+/** いま選ばれている組で参照ポーズを読み直す（組の切り替え・登録のあとにも呼ぶ） */
+async function reloadReferences() {
+  const setName = ui.settings.poseSet;
+  try {
+    references = await loadReferencePoses(setName);
+    applyCalibration();
+    ui.setPoseSetInfo({
+      label: POSE_SETS[setName].label,
+      ready: Object.keys(references.poses),
+      pending: references.pending,
+    });
+  } catch (err) {
+    references = { poses: {}, lines: {}, pending: [] };
+    applyCalibration();
+    ui.setError(`参照ポーズを読み込めません（判別不可・登録は可能）: ${err.message}`);
+  }
+  latched = { letter: null, atMs: -Infinity }; // 前の組で一致した字を引きずらない
+  // 組が変わると手足の取り方も変わりうるので、溜めた軌跡は捨てる（手首と指先が混ざって掃きが飛ぶ）
+  history.clear();
+  // 締め切り済みの組には登録させない（時刻は次の組に入るのに、取り方は前の組のまま、になるため）
+  const open = !POSE_SETS[setName].until;
+  ui.setRegisterAvailable(open, open ? '' : 'この組は締め切り済みです。登録は最新の組に切り替えてから');
+}
+
 // ── 登録 ────────────────────────────────────────────────────
 async function registerCurrentPose(letter) {
   if (!latestNormalized) { ui.setError('身体が検出されていません'); return; }
+  if (POSE_SETS[ui.settings.poseSet].until) {
+    ui.setError('この組は締め切り済みです。登録は最新の組に切り替えてから');
+    return;
+  }
 
   ui.setStatus('Supabase に送信中…');
   try {
-    await savePose(letter, latestNormalized);
-    references = await loadReferencePoses(); // 追加分を即反映
+    // 新ポーズの組なら、一覧にあるその字の線の結び方も一緒に保存される
+    await savePose(letter, latestNormalized, ui.settings.poseSet);
+    await reloadReferences(); // 追加分を即反映
     ui.clearKanaInput();
     ui.setStatus(`✅ 「${letter}」を登録しました`);
   } catch (err) {

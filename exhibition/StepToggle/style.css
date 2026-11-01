@@ -1,0 +1,277 @@
+/* ============================================================
+   StepToggle 展示版
+   数値は Figma「卒制_UIデザイン各種」ページ「ステップ」の 1920×1080 フレームから写したもの。
+   画面は .stage に原寸で組み、script.js が窓に合わせて丸ごと縮める（--fit）。
+   ============================================================ */
+
+:root {
+  --orange: #ed9209;   /* ヒント・足あと・ボタン */
+  --focus: #94a0ff;    /* 踏んでいる面・回している字 */
+  --ink: #333;         /* 文章 */
+  --pad-ink: #444;     /* 面の字 */
+  --tray: #e6e6e6;     /* 盤面の地 */
+  --floor: #f0f0f0;    /* 画面の地 */
+  --fit: 1;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%;
+  background: var(--floor);
+  overflow: hidden;
+}
+
+body {
+  /* Figma は Inter Medium 指定。かなは Inter に無いので、Mac の展示機ではヒラギノの W5 前後で出る */
+  font-family: "Inter", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-weight: 500;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+/* ── 原寸の舞台 ───────────────────────────────────────────── */
+
+.viewport { position: fixed; inset: 0; overflow: hidden; }
+
+.stage {
+  position: absolute; left: 50%; top: 50%;
+  width: 1920px; height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--fit));
+}
+
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: 80px;
+  background: var(--floor);
+}
+.screen[hidden] { display: none; }
+
+/* ── モード選択 ───────────────────────────────────────────── */
+
+.select {
+  align-items: center; justify-content: center; gap: 128px;
+  background: #fff;
+}
+.select-title { margin: 0; font-size: 80px; line-height: 1.4; }
+.select-row { display: flex; gap: 78px; }
+
+.pill {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 64px 78px;
+  border: 0; border-radius: 999px;
+  background: var(--orange); color: #fff;
+  line-height: 1; cursor: pointer;
+  transition: transform .12s ease;
+}
+.pill:active, .pill.is-pressed { transform: scale(.97); }
+.pill-main { font-size: 80px; }
+.pill-sub { font-size: 64px; }
+
+/* Figma には無い一行。マットで選べることを来場者に知らせるため足した */
+.select-foot {
+  position: absolute; left: 0; right: 0; bottom: 120px;
+  margin: 0; text-align: center;
+  font-size: 32px; color: #aaa;
+}
+
+/* ── 文章ウィンドウ（Figma のコンポーネント「文章ウィンドウ / オレンジ」） ── */
+
+.intro { align-items: center; justify-content: center; }
+
+.msg {
+  position: relative; flex: none;
+  width: 1760px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px 32px;
+  border-radius: 20px;
+  background: #fff;
+}
+.msg-tag {
+  position: absolute; left: 34px; top: -43px;
+  padding: 12px 24px; border-radius: 999px;
+  background: var(--orange); color: #fff;
+  font-size: 40px; line-height: 1;
+}
+.msg-body { display: flex; align-items: center; gap: 16px; margin: 0; }
+.msg-text { font-size: 48px; line-height: 1.5; white-space: pre; }
+/* Figma では補足が白文字（白地に消える）だったので、読める灰色にしてある */
+.msg-sub { font-size: 36px; line-height: 1.4; color: #999; white-space: pre; }
+.msg-sub:empty { display: none; }
+
+/* ── 盤面 ─────────────────────────────────────────────────── */
+/* --u は Figma の部品の倍率。チュートリアル1人=1（160×128）、2人=.75（120×96）、入力中=.5（80×64） */
+
+.board {
+  --u: 1;
+  display: inline-grid;
+  grid-template-columns: repeat(3, calc(160px * var(--u)));
+  grid-auto-rows: calc(128px * var(--u));
+  gap: calc(16px * var(--u));
+  padding: calc(48px * var(--u));
+  border-radius: calc(80px * var(--u));
+  background: var(--tray);
+}
+
+.pad {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: calc(32px * var(--u));
+  background: #fff;
+  overflow: hidden;
+}
+.pad-kana { font-size: calc(80px * var(--u)); line-height: 1; color: var(--pad-ink); }
+.pad-step, .pad-foot { display: none; }
+.pad-step { width: calc(96px * var(--u)); height: calc(96px * var(--u)); }
+.pad-foot { width: calc(47.5px * var(--u)); height: calc(92.5px * var(--u)); }
+
+/* 枠は box-shadow で内側に描く。border にすると面の大きさが変わって盤面がずれる */
+.pad.is-holding { box-shadow: inset 0 0 0 calc(8px * var(--u)) rgb(148 160 255 / calc(var(--hold, 0) * .6)); }
+.pad.is-focused { box-shadow: inset 0 0 0 calc(8px * var(--u)) var(--focus); }
+.pad.is-hint,
+.pad.is-step { box-shadow: inset 0 0 0 calc(12px * var(--u)) var(--orange); }
+
+.pad.is-step .pad-kana, .pad.has-foot .pad-kana { display: none; }
+.pad.is-step .pad-step { display: block; }
+.pad.has-foot:not(.is-step) .pad-foot { display: block; }
+
+/* マットに面が無い／使わない場所 */
+.pad.is-void { background: transparent; box-shadow: none; }
+
+/* ── 入力中の文字 ─────────────────────────────────────────── */
+
+.play { justify-content: space-between; }
+.play-main { display: flex; width: 100%; }
+
+.player { display: flex; flex-direction: column; align-items: center; flex: none; }
+.player-label { margin: 0; font-size: 40px; line-height: 1.4; white-space: nowrap; }
+
+.textcol { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; gap: 64px; }
+.text-label { margin: 0; font-size: 40px; line-height: 1.4; }
+
+.text-box {
+  flex: 1 1 0; min-height: 0;
+  padding: 48px;
+  border-radius: 48px;
+  background: #fff;
+  overflow: hidden;
+}
+.text-line {
+  margin: 0;
+  font-size: 112px; line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* 字幅は scaleX で伸び縮みさせる（ui.js）。inline-block でないと transform が効かない。
+   左端を起点にするのは、縮めた字が左に詰まって字送りの補正と向きを揃えるため */
+.text-line .ch,
+.pending { display: inline-block; transform-origin: left center; }
+
+/* 未確定の1字。踏んでいる面と同じ色にして「まだ回っている」ことを示す */
+.pending { color: var(--focus); }
+
+/* 次の字がどれだけの幅で出るかを長さで見せる線。待つほど伸びる */
+.caret {
+  display: inline-block;
+  vertical-align: -.12em;
+  margin-left: .1em;
+  width: .5em; height: .07em;
+  border-radius: 999px;
+  background: var(--focus);
+}
+.caret.full { background: #6b78ff; }
+.caret[hidden] { display: none; }
+/* チュートリアル中は Figma どおり何も出さない。字幅の話は入力中に見せれば足りる */
+.play[data-phase="tutorial"] .caret { display: none; }
+
+/* 短冊。土台の字は見えないまま字送りを持ち、その上に切った字を重ねる */
+.text-line .ch.slice { position: relative; line-height: 1.3; }
+.ch.slice .slice-base { visibility: hidden; }
+.ch.slice .slice-layer { position: absolute; inset: 0; white-space: pre; }
+
+/* ── 4つの組み方 ──────────────────────────────────────────── */
+
+/* 1人チュートリアル：大きな盤面＋入力欄、下に文章ウィンドウ */
+.play[data-mode="free"][data-phase="tutorial"] .play-main { gap: 80px; align-items: flex-start; height: 656px; }
+.play[data-mode="free"] .player-label,
+.play[data-mode="free"] .player-right { display: none; }
+.play[data-mode="free"][data-phase="tutorial"] .textcol { align-self: stretch; }
+
+/* 1人入力中：盤面は左下に小さく、入力欄が全面 */
+.play[data-phase="input"] .msg { display: none; }
+.play[data-mode="free"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; height: 920px; }
+.play[data-mode="free"][data-phase="input"] .board { --u: .5; }
+.play[data-mode="free"][data-phase="input"] .textcol { height: 100%; }
+.play[data-mode="free"][data-phase="input"] .text-line { font-size: 108px; }
+
+/* 2人チュートリアル：盤面を左右に、入力欄は中央 */
+.play[data-mode="duo"][data-phase="tutorial"] .play-main { gap: 80px; align-items: flex-end; }
+.play[data-mode="duo"][data-phase="tutorial"] .player { gap: 32px; }
+.play[data-mode="duo"][data-phase="tutorial"] .board { --u: .75; }
+.play[data-mode="duo"][data-phase="tutorial"] .textcol { align-items: center; }
+.play[data-mode="duo"][data-phase="tutorial"] .text-box { flex: none; width: 100%; height: 536px; text-align: center; }
+
+/* 2人入力中：盤面は両下に小さく、入力欄が全高 */
+.play[data-mode="duo"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; height: 920px; }
+.play[data-mode="duo"][data-phase="input"] .player { gap: 21.333px; }
+.play[data-mode="duo"][data-phase="input"] .player-label { font-size: 26.667px; }
+.play[data-mode="duo"][data-phase="input"] .board { --u: .5; }
+.play[data-mode="duo"][data-phase="input"] .textcol { height: 100%; align-items: center; }
+.play[data-mode="duo"][data-phase="input"] .text-box { width: 100%; }
+
+/* ── 調整（小さく隅に） ───────────────────────────────────── */
+/* 右上に置く。どの画面でもここは余白か入力欄の角で、盤面と文章ウィンドウにはかからない */
+
+.settings {
+  position: fixed; right: 6px; top: 6px; z-index: 10;
+  width: 236px; max-height: calc(100vh - 12px); overflow: auto;
+  padding: 4px 8px 6px;
+  border: 1px solid #ddd; border-radius: 8px;
+  background: rgb(255 255 255 / .88);
+  font-family: system-ui, sans-serif; font-weight: 400;
+  font-size: 10px; color: #555;
+  opacity: .75;
+  transition: opacity .15s;
+}
+.settings:hover { opacity: 1; }
+.settings:has(.settings-body[hidden]) { width: auto; padding: 2px 6px; }
+
+.settings-toggle {
+  border: 0; background: none; padding: 0;
+  font-size: 10px; font-weight: 600; color: #888; cursor: pointer;
+}
+.settings-body[hidden] { display: none; }
+
+.status { margin: 2px 0 4px; color: #c55; }
+.status.connected { color: #2a8a5a; }
+
+.settings-actions { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
+
+.mini-btn {
+  padding: 1px 6px;
+  border: 1px solid #ccc; border-radius: 999px;
+  background: #fff; font-size: 10px; cursor: pointer;
+}
+.mini-btn:hover { border-color: #999; }
+
+.setting {
+  display: grid; grid-template-columns: 78px 1fr 40px;
+  align-items: center; gap: 4px;
+  margin: 2px 0;
+}
+.setting input[type="range"] { width: 100%; height: 10px; margin: 0; }
+.setting output { text-align: right; font-variant-numeric: tabular-nums; }
+.setting:has(.shift-modes), .setting:has(#keyboard-check) { grid-template-columns: auto auto; justify-content: start; }
+.setting:has(#keyboard-check) { grid-template-columns: 1fr; }
+
+.setting-check { display: inline-flex; align-items: center; gap: 3px; }
+.setting-check input { margin: 0; }
+.setting code { font-size: 9px; }
+
+.shift-modes { display: inline-flex; border: 1px solid #ccc; border-radius: 999px; overflow: hidden; }
+.shift-btn { padding: 1px 6px; border: 0; background: #fff; font-size: 10px; cursor: pointer; }
+.shift-btn + .shift-btn { border-left: 1px solid #ccc; }
+.shift-btn.is-on { background: #555; color: #fff; }

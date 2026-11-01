@@ -11,6 +11,8 @@
   <header class="topbar">
     <h1>KanaDance</h1>
     <div class="topbar-actions">
+      <button id="calibrate-btn" class="icon-btn" title="体型合わせ（正面を向いてイで静止）" aria-label="体型合わせ">◎</button>
+      <button id="reset-cal-btn" class="icon-btn" title="体型合わせを解除する" aria-label="体型合わせを解除" hidden>↺</button>
       <button id="panel-toggle" class="icon-btn" title="調整パネル表示切替" aria-label="調整パネル切替">⚙</button>
       <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
     </div>
@@ -20,6 +22,14 @@
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
     <div id="current-char" class="current-char" hidden></div>
+
+    <div id="calibration" class="calibration" hidden>
+      <div class="cal-step">体型合わせ</div>
+      <div class="cal-letter" id="cal-letter">イ</div>
+      <div class="cal-phase" id="cal-phase">正面を向いて、このポーズをとってください</div>
+      <div class="cal-meter"><i id="cal-bar"></i></div>
+      <button id="cal-cancel-btn" class="btn-ghost">やめる</button>
+    </div>
     <button class="stage-resizer" data-axis="x" aria-label="幅を変える（ダブルクリックで戻す）"
             title="ドラッグで幅を変える／ダブルクリックで戻す"></button>
     <button class="stage-resizer" data-axis="y" aria-label="高さを変える（ダブルクリックで戻す）"
@@ -63,6 +73,12 @@
     </p>
 
     <div class="panel-label div">判別</div>
+    <div class="ctrl">
+      <label for="pose-set">ポーズの組</label>
+      <select id="pose-set"></select>
+      <output></output>
+    </div>
+    <p class="note" id="pose-set-info">読み込み中…</p>
     <div class="ctrl">
       <label for="match-threshold">一致しやすさ</label>
       <input type="range" id="match-threshold" min="0.1" max="2" step="0.01" />

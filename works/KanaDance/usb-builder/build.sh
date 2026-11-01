@@ -57,6 +57,9 @@ for f in index.html style.css sumi-tokens.css config.js pose-matcher.js pose-his
          renderer.js ui.js script.js pose-store.js store-local.js; do
   cp "$SRC/$f" "$OUT/app/$f"
 done
+# 新ポーズの字と線の結び方の一覧（既定の組が使う）
+mkdir -p "$OUT/app/pose-sets"
+cp "$SRC/pose-sets/"*.json "$OUT/app/pose-sets/"
 # store-supabase.js は入れない。ローカル版では読まれないうえ、
 # 置いておくと「ネットに出る経路が残っている」と誤解のもとになる
 
