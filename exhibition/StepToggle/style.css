@@ -210,7 +210,10 @@ button { font: inherit; color: inherit; }
 
 /* 1人入力中：盤面は左下に小さく、入力欄が全面 */
 .play[data-phase="input"] .msg { display: none; }
-.play[data-mode="free"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; height: 920px; }
+/* 入力中は下に拍のランプと BPM を置く（縦置きの Figma と同じく、40 空けて 48 の帯、下の余白 40）。
+   そのぶん入力欄と盤面の段が 920 → 872 に縮む */
+.play[data-phase="input"] { justify-content: flex-start; gap: 40px; padding-bottom: 40px; }
+.play[data-mode="free"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; flex: 1 1 0; min-height: 0; height: auto; }
 .play[data-mode="free"][data-phase="input"] .board { --u: .5; }
 .play[data-mode="free"][data-phase="input"] .textcol { height: 100%; }
 .play[data-mode="free"][data-phase="input"] .text-line { font-size: 108px; }
@@ -223,7 +226,7 @@ button { font: inherit; color: inherit; }
 .play[data-mode="duo"][data-phase="tutorial"] .text-box { flex: none; width: 100%; height: 536px; text-align: center; }
 
 /* 2人入力中：盤面は両下に小さく、入力欄が全高 */
-.play[data-mode="duo"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; height: 920px; }
+.play[data-mode="duo"][data-phase="input"] .play-main { gap: 48px; align-items: flex-end; flex: 1 1 0; min-height: 0; height: auto; }
 .play[data-mode="duo"][data-phase="input"] .player { gap: 21.333px; }
 .play[data-mode="duo"][data-phase="input"] .player-label { font-size: 26.667px; }
 .play[data-mode="duo"][data-phase="input"] .board { --u: .5; }
@@ -231,7 +234,7 @@ button { font: inherit; color: inherit; }
 .play[data-mode="duo"][data-phase="input"] .text-box { width: 100%; }
 
 /* ── メトロノームのランプ ─────────────────────────────────── */
-/* Figma は縦置きの入力中にだけ置いている。横置きには場所が無いので出さない（音は鳴る） */
+/* Figma は縦置きの入力中にだけ置いている。横置きも同じ部品を下に置く（入力中だけ） */
 
 .beat { display: none; flex: none; align-items: flex-end; justify-content: space-between; width: 100%; }
 .beat-dots { display: flex; gap: 24px; }
@@ -300,7 +303,7 @@ button { font: inherit; color: inherit; }
 :root[data-orient="portrait"] .msg-text,
 :root[data-orient="portrait"] .msg-sub { white-space: pre-wrap; word-break: auto-phrase; }
 
-:root[data-orient="portrait"] #screen-play[data-phase="input"] .beat { display: flex; }
+#screen-play[data-phase="input"] .beat { display: flex; }
 
 /* モード選択とチュートリアル-0 は縦置きの Figma フレームが無い。横置きの部品を縦に積み直しただけ */
 :root[data-orient="portrait"] .select-title { font-size: 64px; }
