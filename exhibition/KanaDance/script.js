@@ -17,12 +17,14 @@ import {
 import { BodyCalibration } from './body-calibration.js';
 import { PoseHistory } from './pose-history.js';
 import { Renderer } from './renderer.js';
+import { Recorder } from './recorder.js';
 import * as ui from './ui.js';
 
 ui.setupLayout();
 const renderer = new Renderer(ui.canvas);
 const history = new PoseHistory(APP_CONFIG.limits.bufferMs);
 const calibration = new BodyCalibration(BODY_CALIBRATION);
+const recorder = new Recorder(ui.records);
 
 // ── 状態 ────────────────────────────────────────────────────
 let poseLandmarker = null;
@@ -39,7 +41,8 @@ let activeRefs = {};
 
 ui.bindControls({
   onRegister: registerCurrentPose,
-  onThemeChange: () => renderer.syncTheme(),
+  onShutter: takeShot,
+  onClearRecords: () => recorder.clear(),
   onPoseSetChange: () => reloadReferences(),
   onCalibrate: startCalibration,
   onCancelCalibration: () => {
@@ -175,6 +178,27 @@ function drawDetection(now) {
 
   const frames = history.keyframes(windowMs, intervalMs, APP_CONFIG.limits.maxKeyframes);
   ui.setShapeCount(renderer.drawKanaBlend(lines, frames, ui.settings));
+}
+
+// ── シャッター ──────────────────────────────────────────────
+/**
+ * いま画面に出ている字を下の帯に記録する。
+ * 画面と同じ線（ブレンドの尾も含む）を描き直して写すので、関節の点やポーズの濃さは乗らない。
+ * 字が出ていないとき（一致していない・尾も描き切った）は撮らない。
+ */
+function takeShot() {
+  const now = performance.now();
+  const { windowMs, intervalMs } = ui.settings;
+  const live = ui.currentMode() === 'detect' && latched.letter && now - latched.atMs <= windowMs;
+  const ok = live && recorder.add({
+    letter: latched.letter,
+    lines: references.lines[latched.letter],
+    frames: history.keyframes(windowMs, intervalMs, APP_CONFIG.limits.maxKeyframes),
+    blend: ui.settings,
+    width: ui.canvas.width,
+    height: ui.canvas.height,
+  });
+  ui.showShutter(Boolean(ok));
 }
 
 // ── 体型合わせ ──────────────────────────────────────────────

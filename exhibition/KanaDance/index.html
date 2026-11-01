@@ -8,116 +8,124 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>KanaDance</h1>
-    <div class="topbar-actions">
-      <button id="calibrate-btn" class="icon-btn" title="体型合わせ（正面を向いてイで静止）" aria-label="体型合わせ">◎</button>
-      <button id="reset-cal-btn" class="icon-btn" title="体型合わせを解除する" aria-label="体型合わせを解除" hidden>↺</button>
-      <button id="panel-toggle" class="icon-btn" title="調整パネル表示切替" aria-label="調整パネル切替">⚙</button>
-      <button id="theme-toggle" class="icon-btn" title="ライト / ダーク切替" aria-label="テーマ切替">◐</button>
+  <!-- 画面は Figma「卒制_UIデザイン各種」のフレーム pose（1920×1080）で組み、窓の大きさに合わせて丸ごと縮める -->
+  <div class="viewport">
+    <div id="screen" class="screen">
+
+      <!-- 映像（上 840px）。映像と canvas は鏡像 -->
+      <main class="stage" role="img" aria-label="カメラ映像">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="output_canvas"></canvas>
+        <div id="flash" class="flash"></div>
+
+        <div class="now">
+          <p class="now-label">今のもじ</p>
+          <p id="current-char" class="now-char is-empty"></p>
+        </div>
+
+        <button id="shutter-btn" class="shutter" title="シャッター（Space / Enter）" aria-label="いまの字を記録する">
+          <img src="assets/camera.svg" alt="" />
+        </button>
+
+        <div id="calibration" class="calibration" hidden>
+          <div class="cal-step">体型合わせ</div>
+          <div class="cal-letter" id="cal-letter">イ</div>
+          <div class="cal-phase" id="cal-phase">正面を向いて、このポーズをとってください</div>
+          <div class="cal-meter"><i id="cal-bar"></i></div>
+          <button id="cal-cancel-btn" class="btn-ghost">やめる</button>
+        </div>
+      </main>
+
+      <!-- 記録。左から右へ並び、満杯なら左端から消える -->
+      <ol id="records" class="records" aria-label="記録したもじ"></ol>
     </div>
-  </header>
-
-  <main class="stage" role="img" aria-label="カメラ映像">
-    <video id="webcam" autoplay playsinline muted></video>
-    <canvas id="output_canvas"></canvas>
-    <div id="current-char" class="current-char" hidden></div>
-
-    <div id="calibration" class="calibration" hidden>
-      <div class="cal-step">体型合わせ</div>
-      <div class="cal-letter" id="cal-letter">イ</div>
-      <div class="cal-phase" id="cal-phase">正面を向いて、このポーズをとってください</div>
-      <div class="cal-meter"><i id="cal-bar"></i></div>
-      <button id="cal-cancel-btn" class="btn-ghost">やめる</button>
-    </div>
-    <button class="stage-resizer" data-axis="x" aria-label="幅を変える（ダブルクリックで戻す）"
-            title="ドラッグで幅を変える／ダブルクリックで戻す"></button>
-    <button class="stage-resizer" data-axis="y" aria-label="高さを変える（ダブルクリックで戻す）"
-            title="ドラッグで高さを変える／ダブルクリックで戻す"></button>
-    <button class="stage-resizer" data-axis="xy" aria-label="幅と高さを変える（ダブルクリックで戻す）"
-            title="ドラッグで縦横比ごと変える／ダブルクリックで戻す"></button>
-  </main>
-
-  <div id="status" class="status">カメラを許可して、ポーズをとってください…</div>
-
-  <div class="segmented" role="radiogroup" aria-label="モード">
-    <label><input type="radio" name="app-mode" value="register" checked /><span>✍️ 登録</span></label>
-    <label><input type="radio" name="app-mode" value="detect" /><span>🔍 判別</span></label>
   </div>
 
-  <div id="register-ui" class="register-row">
-    <input type="text" id="kana-input" placeholder="文字 (例: サ)" aria-label="登録する文字" />
-    <button id="register-btn" class="btn-primary">DB に登録</button>
-  </div>
+  <!-- 調整。まだ詰めるので残すが、作品の画面を邪魔しないよう小さな札に畳む -->
+  <aside class="settings">
+    <button id="panel-toggle" class="settings-toggle" aria-expanded="false" aria-controls="panel">調整</button>
 
-  <section id="panel" class="panel">
-    <div class="panel-label">表示</div>
-    <div class="ctrl">
-      <label for="video-opacity">映像の濃さ</label>
-      <input type="range" id="video-opacity" min="0" max="1" step="0.01" />
-      <output id="video-opacity-value"></output>
-    </div>
-    <p class="note">0 にするとカメラ映像が消え、墨の線だけが残る。姿勢の推定は続くので、線はそのまま出る。</p>
+    <section id="panel" class="panel" hidden>
+      <div id="status" class="status">カメラを許可して、ポーズをとってください…</div>
 
-    <div class="ctrl">
-      <label for="fit-mode">箱に収める</label>
-      <select id="fit-mode">
-        <option value="cover">はみ出す分を切る</option>
-        <option value="contain">全体を入れる</option>
-      </select>
-      <output></output>
-    </div>
-    <p class="note">
-      映像の端（右・下・右下の角）をドラッグすると、大きさと縦横比を変えられる。
-      カメラの比と違う形にしたとき、切って埋めるか、余白を付けて全体を見せるか。
-    </p>
+      <div class="row">
+        <div class="segmented" role="radiogroup" aria-label="モード">
+          <label><input type="radio" name="app-mode" value="detect" checked /><span>判別</span></label>
+          <label><input type="radio" name="app-mode" value="register" /><span>登録</span></label>
+        </div>
+        <button id="calibrate-btn" class="mini-btn" title="体型合わせ（正面を向いてイで静止）">◎ 体型合わせ</button>
+        <button id="reset-cal-btn" class="mini-btn" title="体型合わせを解除する" hidden>↺ 解除</button>
+        <button id="clear-records-btn" class="mini-btn">記録を消す</button>
+      </div>
 
-    <div class="panel-label div">判別</div>
-    <div class="ctrl">
-      <label for="pose-set">ポーズの組</label>
-      <select id="pose-set"></select>
-      <output></output>
-    </div>
-    <p class="note" id="pose-set-info">読み込み中…</p>
-    <div class="ctrl">
-      <label for="match-threshold">一致しやすさ</label>
-      <input type="range" id="match-threshold" min="0.1" max="2" step="0.01" />
-      <output id="match-threshold-value"></output>
-    </div>
-    <p class="note">小さいほど厳しい。判別モードの「最も近い…誤差」を見ながら合わせる。</p>
+      <div id="register-ui" class="row" hidden>
+        <input type="text" id="kana-input" placeholder="文字 (例: サ)" aria-label="登録する文字" />
+        <button id="register-btn" class="mini-btn">DB に登録</button>
+      </div>
 
-    <div class="panel-label div">ブレンド（時間の重ね書き）</div>
-    <div class="ctrl">
-      <label for="blend-window">さかのぼる時間</label>
-      <input type="range" id="blend-window" min="0.2" max="3" step="0.1" />
-      <output id="blend-window-value"></output>
-    </div>
-    <div class="ctrl">
-      <label for="blend-interval">取得間隔</label>
-      <input type="range" id="blend-interval" min="0.02" max="0.5" step="0.01" />
-      <output id="blend-interval-value"></output>
-    </div>
-    <div class="ctrl">
-      <label for="blend-steps">中間形</label>
-      <input type="range" id="blend-steps" min="0" max="10" step="1" />
-      <output id="blend-steps-value"></output>
-    </div>
-    <div class="ctrl">
-      <label for="blend-width">線の太さ</label>
-      <input type="range" id="blend-width" min="2" max="40" step="1" />
-      <output id="blend-width-value"></output>
-    </div>
-    <div class="ctrl">
-      <label for="blend-tail">古い形の濃さ</label>
-      <input type="range" id="blend-tail" min="0" max="1" step="0.01" />
-      <output id="blend-tail-value"></output>
-    </div>
-    <p class="note">
-      さかのぼった時間を取得間隔で刻み、隣り合う字形の間に中間形を挟んで重ねる。
-      中間形 0 なら鍵フレームだけの飛び飛びの重ね、増やすほど連続した掃きに近づく。
-      <span id="shape-count" class="count"></span>
-    </p>
-  </section>
+      <div class="panel-label">表示</div>
+      <div class="ctrl">
+        <label for="pose-opacity">ポーズの濃さ</label>
+        <input type="range" id="pose-opacity" min="0" max="1" step="0.05" />
+        <output id="pose-opacity-value"></output>
+      </div>
+      <div class="ctrl">
+        <label for="video-opacity">映像の濃さ</label>
+        <input type="range" id="video-opacity" min="0" max="1" step="0.01" />
+        <output id="video-opacity-value"></output>
+      </div>
+      <p class="note">ポーズ＝映像に重ねる点と線。記録する字は濃さに関係なく元の線で写る。</p>
+      <div class="ctrl">
+        <label for="fit-mode">映像の収め方</label>
+        <select id="fit-mode">
+          <option value="cover">はみ出す分を切る</option>
+          <option value="contain">全体を入れる</option>
+        </select>
+        <output></output>
+      </div>
+
+      <div class="panel-label">判別</div>
+      <div class="ctrl">
+        <label for="pose-set">ポーズの組</label>
+        <select id="pose-set"></select>
+        <output></output>
+      </div>
+      <p class="note" id="pose-set-info">読み込み中…</p>
+      <div class="ctrl">
+        <label for="match-threshold">一致しやすさ</label>
+        <input type="range" id="match-threshold" min="0.1" max="2" step="0.01" />
+        <output id="match-threshold-value"></output>
+      </div>
+
+      <div class="panel-label">ブレンド（時間の重ね書き）</div>
+      <div class="ctrl">
+        <label for="blend-window">さかのぼる時間</label>
+        <input type="range" id="blend-window" min="0.2" max="3" step="0.1" />
+        <output id="blend-window-value"></output>
+      </div>
+      <div class="ctrl">
+        <label for="blend-interval">取得間隔</label>
+        <input type="range" id="blend-interval" min="0.02" max="0.5" step="0.01" />
+        <output id="blend-interval-value"></output>
+      </div>
+      <div class="ctrl">
+        <label for="blend-steps">中間形</label>
+        <input type="range" id="blend-steps" min="0" max="10" step="1" />
+        <output id="blend-steps-value"></output>
+      </div>
+      <div class="ctrl">
+        <label for="blend-width">線の太さ</label>
+        <input type="range" id="blend-width" min="2" max="40" step="1" />
+        <output id="blend-width-value"></output>
+      </div>
+      <div class="ctrl">
+        <label for="blend-tail">古い形の濃さ</label>
+        <input type="range" id="blend-tail" min="0" max="1" step="0.01" />
+        <output id="blend-tail-value"></output>
+      </div>
+      <p class="note"><span id="shape-count" class="count"></span></p>
+    </section>
+  </aside>
 
   <script type="module" src="script.js"></script>
 </body>

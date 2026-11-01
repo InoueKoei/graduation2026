@@ -17,6 +17,11 @@ export const APP_CONFIG = Object.freeze({
    * 消しても姿勢推定は動き続ける（映っていないだけで、見えてはいる）。
    */
   videoOpacity: 1,
+  /**
+   * ポーズ（映像に重ねる関節の点と字の線）の濃さ（0〜1）。展示版は 0.5 から。
+   * 調整パネルで変えられる。シャッターで記録する字はこの濃さに関係なく元の線で写る。
+   */
+  poseOpacity: 0.5,
   /** これ未満の平均正規化誤差なら「一致」とみなす（小さいほど厳しい）。実運用では 1.0 前後が目安 */
   matchThreshold: 1.0,
   /**
@@ -163,4 +168,18 @@ export const BODY_CALIBRATION = Object.freeze({
   stillTol: 0.25,
   minVisibility: 0.5,
   facingTol: 0.5,
+});
+
+/**
+ * シャッターで記録する字の札（recorder.js）。大きさは Figma のフレーム pose の下の帯から。
+ * 帯は 1920px に 256px の札がちょうど 7 枚入るので、7 枚で満杯にして左端から消す。
+ */
+export const RECORDS = Object.freeze({
+  max: 7,
+  cardW: 256,
+  cardH: 192,
+  /** 字の周りの余白。Figma の見本は縦長の字が上下 14px で収まっている */
+  inset: Object.freeze({ x: 24, y: 14 }),
+  /** 札の canvas の解像度（縮めて見せても線がにじまないよう 2 倍で描く） */
+  pixelRatio: 2,
 });
