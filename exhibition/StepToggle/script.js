@@ -8,12 +8,13 @@
 
 import {
   MAT_TO_ROW, MAT_TO_VOWEL, TIMING, DUO, SHIFT_MODES, DEFAULT_SHIFT_MODE, DEFAULT_DUO_WIDTH,
-  MODE_SLOTS, STORAGE_KEY, SELECT_KEYS, FLOW, HOME_KEY,
+  MODE_SLOTS, STORAGE_KEY, SELECT_KEYS, FLOW, HOME_KEY, METRONOME,
 } from './config.js';
 import { MatReader } from './mat.js';
 import { ToggleEngine } from './toggle-core.js';
 import { DuoEngine, SIDE } from './duo.js';
 import { SCRIPTS, Tutorial } from './tutorial.js';
+import { Metronome, bpmForTyped } from './metronome.js';
 import * as ui from './ui.js';
 
 // ── 設定の保持 ──────────────────────────────────────────────
@@ -28,6 +29,7 @@ function loadSettings() {
     releaseDebounceMs: TIMING.releaseDebounceMs,
     pairMs: DUO.pairMs,
     idleResetMs: FLOW.idleResetMs,
+    volume: METRONOME.volume,
     shiftMode: DEFAULT_SHIFT_MODE,
     duoWidth: DEFAULT_DUO_WIDTH,
     // 初めは「調整」の札だけ。開けば次からも開いたまま出る（盤面にかぶるので既定は閉じる）
@@ -62,6 +64,12 @@ let lastActivity = performance.now();
 
 const engine = new ToggleEngine(settings.commitMs);
 const duo = new DuoEngine(settings.pairMs);
+const metronome = new Metronome();
+metronome.volume = settings.volume;
+/** 入力中に打った字の数。消しても減らさない（テンポは打った量で上がる） */
+let typed = 0;
+/** 前のフレームで残っていた字の数。増えた分だけ typed に足す */
+let lastLen = 0;
 
 const reader = new MatReader({
   onPress: handlePress,
@@ -88,6 +96,7 @@ function goSelect() {
   reader.slotCount = 2;
   reader.resetInputs();
   engine.clear(); duo.clear();
+  stopMetronome();
   ui.showScreen('select');
 }
 
@@ -98,6 +107,7 @@ function startMode(next) {
   reader.slotCount = MODE_SLOTS[mode] ?? 1;
   reader.resetInputs();
   engine.clear(); duo.clear();
+  stopMetronome();
   tutorial = new Tutorial(SCRIPTS[mode], tutorialContext());
   tutorial.start();
   showTutorialStep();
@@ -108,7 +118,23 @@ function startInput() {
   phase = 'input';
   tutorial = null;
   engine.clear(); duo.clear();
+  typed = 0; lastLen = 0;
+  metronome.start(bpmForTyped(0));
+  ui.setBpm(metronome.bpm);
   ui.showScreen('play', { mode, phase });
+}
+
+function stopMetronome() {
+  metronome.stop();
+  ui.renderBeat(-1);
+}
+
+/** 入力中、字が増えた分だけ数えてテンポを上げる。上がった値は次の拍の間隔から効く */
+function countTyped(len) {
+  if (len > lastLen) typed += len - lastLen;
+  lastLen = len;
+  const bpm = bpmForTyped(typed);
+  if (bpm !== metronome.bpm) { metronome.bpm = bpm; ui.setBpm(bpm); }
 }
 
 let shownStep = null;
@@ -203,6 +229,7 @@ const NO_LOOK = Object.freeze({ step: false, foot: false, hint: new Set() });
 
 function frame() {
   const now = performance.now();
+  ui.setSoundBlocked(metronome.blocked);
 
   // 誰かが乗っているあいだは「操作中」。中央で立ち止まって考えている人を追い出さない
   if (reader.pressed.some((s) => s.size > 0)) lastActivity = now;
@@ -223,6 +250,11 @@ function frame() {
     ...(tutorial ? tutorial.boardState(slot) : NO_LOOK),
     focus: new Set(),
   }));
+
+  if (phase === 'input') {
+    countTyped((mode === 'duo' ? duo : engine).chars.length);
+    ui.renderBeat(metronome.currentBeat());
+  }
 
   if (mode === 'duo') {
     const d = duo.tick(now);
@@ -257,6 +289,7 @@ ui.bindSettings({
   onDebounceMs: (v) => { reader.releaseDebounceMs = v; settings.releaseDebounceMs = v; saveSettings(settings); },
   onPairMs: (v) => { duo.pairMs = v; settings.pairMs = v; saveSettings(settings); },
   onIdleResetMs: (v) => { settings.idleResetMs = v; saveSettings(settings); },
+  onVolume: (v) => { metronome.volume = v; settings.volume = v; saveSettings(settings); },
   onKeyboard: (v) => { reader.keyboardEnabled = v; settings.keyboard = v; saveSettings(settings); },
   onShiftMode: (v) => { settings.shiftMode = v; saveSettings(settings); },
   onDuoWidth: (v) => { settings.duoWidth = v; saveSettings(settings); },
@@ -279,10 +312,14 @@ ui.bindSettings({
  * 来場者はマットしか触らないので、キーボードはこの2つだけ（とキーボード代替）。
  */
 window.addEventListener('keydown', (e) => {
+  metronome.unlock();
   if (e.target instanceof HTMLInputElement) return;
   if (e.key === 'Escape') goSelect();
   else if (e.key === 'Enter' && phase === 'tutorial') { e.preventDefault(); tutorial.skip(); }
 });
+
+// 音はクリックかキーが一度来るまで出せない（metronome.js の blocked）
+window.addEventListener('pointerdown', () => metronome.unlock());
 
 goSelect();
 ui.setStatus({ connected: false, message: 'マットを探しています — 挿してから一度踏んでください' });

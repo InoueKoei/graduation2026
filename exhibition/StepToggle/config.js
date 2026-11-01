@@ -577,3 +577,22 @@ export const FLOW = Object.freeze({
   /** 中央に「立った」とみなすまでの時間。乗っただけで先へ進まないよう少し待つ */
   standMs: 500,
 });
+
+/**
+ * 入力中に下で鳴らすメトロノーム（metronome.js）。
+ *
+ * 2/4 拍子で、1拍目に高いクリック（アクセント）、2拍目に低いクリック。
+ * startBpm から始め、charsPerStep 字打つごとに stepBpm ずつ上げる。
+ * 字を消してもテンポは戻さない（数えるのは「打った字」で、残っている字ではない）。
+ * maxBpm で頭打ち。上げ続けると踏めない速さになるので、そこで止める。
+ */
+export const METRONOME = Object.freeze({
+  beatsPerBar: 2,
+  startBpm: 40,
+  stepBpm: 10,
+  charsPerStep: 5,
+  maxBpm: 200,
+  /** 0〜1。0 で鳴らさない（拍のランプは動く） */
+  volume: 0.6,
+  volumeRange: Object.freeze({ min: 0, max: 1, step: 0.05 }),
+});

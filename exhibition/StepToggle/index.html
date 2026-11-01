@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- 画面は Figma のフレームと同じ 1920×1080 で組み、窓の大きさに合わせて丸ごと縮める -->
+  <!-- 画面は Figma のフレームと同じ 1920×1080（縦長の窓では 1080×1920）で組み、窓の大きさに合わせて丸ごと縮める -->
   <div class="viewport">
     <div id="stage" class="stage">
 
@@ -50,6 +50,12 @@
         </div>
 
         <div id="msg" class="msg"><span class="msg-tag">ヒント</span><p class="msg-body"><span class="msg-text" id="msg-text"></span><span class="msg-sub" id="msg-sub"></span></p></div>
+
+        <!-- 入力中のメトロノーム（縦置きの Figma フレームにだけある）。2/4 の2拍を2つのランプで -->
+        <div class="beat" aria-hidden="true">
+          <div class="beat-dots"><i class="beat-dot"></i><i class="beat-dot"></i></div>
+          <p id="beat-bpm" class="beat-bpm">40BPM</p>
+        </div>
       </section>
 
     </div>
@@ -75,6 +81,7 @@
       <label class="setting"><span class="setting-name">チャタリング除去</span><input id="debounce-range" type="range" /><output id="debounce-out"></output></label>
       <label class="setting"><span class="setting-name">相方の許容ずれ</span><input id="pair-range" type="range" /><output id="pair-out"></output></label>
       <label class="setting"><span class="setting-name">無操作で最初へ</span><input id="idle-range" type="range" /><output id="idle-out"></output></label>
+      <label class="setting"><span class="setting-name">クリックの音量</span><input id="volume-range" type="range" /><output id="volume-out"></output></label>
 
       <div class="setting">
         <span class="setting-name">ふたりのずれ</span>

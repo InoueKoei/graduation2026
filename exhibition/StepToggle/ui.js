@@ -8,7 +8,7 @@
 import {
   PANEL_GRID, MAT_TO_ROW, HOME_KEY, TIMING_RANGE,
   VOWEL_PANEL_GRID, MAT_TO_VOWEL, DUO_RANGE, TIME_WIDTH, DUO_BLUR, DUO_SLICE,
-  DUO_SIZE, DUO_WIDTH, FLOW,
+  DUO_SIZE, DUO_WIDTH, FLOW, METRONOME,
 } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +26,8 @@ const el = {
   committed: $('committed'),
   pending: $('pending'),
   caret: $('caret'),
+  beatDots: [...document.querySelectorAll('.beat-dot')],
+  beatBpm: $('beat-bpm'),
 
   status: $('status'),
   holdRange: $('hold-range'), holdOut: $('hold-out'),
@@ -35,6 +37,7 @@ const el = {
   debounceRange: $('debounce-range'), debounceOut: $('debounce-out'),
   pairRange: $('pair-range'), pairOut: $('pair-out'),
   idleRange: $('idle-range'), idleOut: $('idle-out'),
+  volumeRange: $('volume-range'), volumeOut: $('volume-out'),
   keyboardCheck: $('keyboard-check'),
   shiftBtns: [...document.querySelectorAll('.shift-btn')],
   duoWidthCheck: $('duo-width-check'),
@@ -49,10 +52,16 @@ const el = {
 
 // ── 舞台の縮尺 ──────────────────────────────────────────────
 
-/** 1920×1080 の舞台を窓に収まる倍率で縮める。展示機の解像度が違っても Figma のままの比で出る */
+/**
+ * 舞台を窓に収まる倍率で縮める。展示機の解像度が違っても Figma のままの比で出る。
+ * 窓が縦長なら縦置きのフレーム（1080×1920）に組み替える。モニタを縦に回しても設定は要らない
+ */
 export function fitStage() {
   const fit = () => {
-    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    const portrait = window.innerHeight > window.innerWidth;
+    const [w, h] = portrait ? [1080, 1920] : [1920, 1080];
+    const s = Math.min(window.innerWidth / w, window.innerHeight / h);
+    document.documentElement.dataset.orient = portrait ? 'portrait' : 'landscape';
     document.documentElement.style.setProperty('--fit', s.toFixed(4));
   };
   fit();
@@ -328,6 +337,26 @@ export function renderDuo(d, pairMs, shiftMode = 'size', widthOn = false) {
   if (changed) keepTailVisible();
 }
 
+// ── メトロノーム ────────────────────────────────────────────
+
+/** いま鳴っている拍のランプを点ける。-1 なら全部消す */
+export function renderBeat(beat) {
+  el.beatDots.forEach((dot, i) => dot.classList.toggle('is-on', i === beat));
+}
+
+export function setBpm(bpm) {
+  el.beatBpm.textContent = `${bpm}BPM`;
+}
+
+/**
+ * 音が止められているとき、係の人に分かるよう「調整」の札に一言添える。
+ * 来場者の目に入らないよう、札と同じ小ささのまま
+ */
+export function setSoundBlocked(blocked) {
+  const label = blocked ? '調整・音を出すには画面をクリック' : '調整';
+  if (el.settingsToggle.textContent !== label) el.settingsToggle.textContent = label;
+}
+
 // ── 状態表示 ────────────────────────────────────────────────
 
 export function setStatus({ connected, message }) {
@@ -357,6 +386,7 @@ function bindRange(input, out, range, value, format, onChange) {
 
 const ms = (v) => `${v} ms`;
 const sec = (v) => (v ? `${Math.round(v / 1000)} 秒` : '切');
+const pct = (v) => (v ? `${Math.round(v * 100)}%` : '切');
 
 export function bindSettings(handlers, initial) {
   bindRange(el.holdRange, el.holdOut, TIMING_RANGE.holdMs, initial.holdMs, ms, handlers.onHoldMs);
@@ -366,6 +396,7 @@ export function bindSettings(handlers, initial) {
   bindRange(el.debounceRange, el.debounceOut, TIMING_RANGE.releaseDebounceMs, initial.releaseDebounceMs, ms, handlers.onDebounceMs);
   bindRange(el.pairRange, el.pairOut, DUO_RANGE.pairMs, initial.pairMs, ms, handlers.onPairMs);
   bindRange(el.idleRange, el.idleOut, FLOW.idleResetRange, initial.idleResetMs, sec, handlers.onIdleResetMs);
+  bindRange(el.volumeRange, el.volumeOut, METRONOME.volumeRange, initial.volume, pct, handlers.onVolume);
 
   el.keyboardCheck.checked = initial.keyboard;
   el.keyboardCheck.addEventListener('change', () => handlers.onKeyboard?.(el.keyboardCheck.checked));

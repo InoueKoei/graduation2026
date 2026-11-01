@@ -41,6 +41,8 @@ button { font: inherit; color: inherit; }
   width: 1920px; height: 1080px;
   transform: translate(-50%, -50%) scale(var(--fit));
 }
+/* 縦長の窓では Figma のセクション「Vertical」（1080×1920）で組む。向きは ui.js が窓の縦横比で決める */
+:root[data-orient="portrait"] .stage { width: 1080px; height: 1920px; }
 
 .screen {
   position: absolute; inset: 0;
@@ -221,6 +223,83 @@ button { font: inherit; color: inherit; }
 .play[data-mode="duo"][data-phase="input"] .board { --u: .5; }
 .play[data-mode="duo"][data-phase="input"] .textcol { height: 100%; align-items: center; }
 .play[data-mode="duo"][data-phase="input"] .text-box { width: 100%; }
+
+/* ── メトロノームのランプ ─────────────────────────────────── */
+/* Figma は縦置きの入力中にだけ置いている。横置きには場所が無いので出さない（音は鳴る） */
+
+.beat { display: none; flex: none; align-items: flex-end; justify-content: space-between; width: 100%; }
+.beat-dots { display: flex; gap: 24px; }
+.beat-dot {
+  width: 48px; height: 48px; border-radius: 999px;
+  background: #ababab;
+}
+.beat-dot.is-on { background: var(--focus); box-shadow: 0 0 32px rgb(148 160 255 / .8); }
+.beat-bpm { margin: 0; font-size: 40px; line-height: 1; color: #8a8a8a; }
+
+/* ── 縦置き（Figma セクション「Vertical」1080×1920） ───────── */
+/*
+ * DOM は横置きと同じまま、並べ方だけ変える。入力欄と盤面を1枚の白いカードにまとめ、
+ * カードの下半分に灰色の盤面の帯を敷く（帯は .play-main::before）。
+ * 横置きの4つの組み方より強く効かせるため、#screen-play から書く。
+ * 盤面は4画面とも Figma で 120×96 の面（--u: .75）。
+ */
+
+:root[data-orient="portrait"] #screen-play { justify-content: flex-start; gap: 78px; }
+:root[data-orient="portrait"] #screen-play[data-phase="input"] { gap: 40px; padding-bottom: 40px; }
+
+:root[data-orient="portrait"] #screen-play .play-main {
+  flex: 1 1 0; min-height: 0; height: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0; align-items: stretch; /* 横置きの flex-start が残ると帯が高さ 0 に潰れる */
+  border-radius: 80px;
+  background: #fff;
+  overflow: hidden;
+}
+:root[data-orient="portrait"] #screen-play .play-main::before {
+  content: '';
+  grid-area: 2 / 1 / 3 / 3;
+  border-radius: 80px;
+  background: var(--tray);
+}
+
+:root[data-orient="portrait"] #screen-play .textcol {
+  grid-area: 1 / 1 / 2 / 3;
+  height: auto; align-items: stretch;
+  padding: 48px; gap: 64px;
+}
+:root[data-orient="portrait"] #screen-play .text-label { font-size: 32px; }
+:root[data-orient="portrait"] #screen-play .text-box {
+  flex: 1 1 0; width: auto; height: auto;
+  padding: 0; border-radius: 0; background: none;
+  text-align: left;
+}
+:root[data-orient="portrait"] #screen-play .text-line { font-size: 108px; }
+
+:root[data-orient="portrait"] #screen-play .player { grid-row: 2; position: relative; gap: 0; }
+:root[data-orient="portrait"] #screen-play .player-label { display: none; }
+:root[data-orient="portrait"] #screen-play .board { --u: .75; }
+
+/* ひとり：盤面を帯の中央に1枚 */
+:root[data-orient="portrait"] #screen-play[data-mode="free"] .player-left { grid-column: 1 / 3; justify-self: center; }
+/* ふたり：チュートリアルは帯の両端、入力中は中央に寄せて並べる（Figma の 2人入力 は 8px 空き） */
+:root[data-orient="portrait"] #screen-play[data-mode="duo"] .player-left { grid-column: 1; justify-self: start; }
+:root[data-orient="portrait"] #screen-play[data-mode="duo"] .player-right { grid-column: 2; justify-self: end; }
+:root[data-orient="portrait"] #screen-play[data-mode="duo"][data-phase="input"] .player-left { justify-self: end; margin-right: 4px; }
+:root[data-orient="portrait"] #screen-play[data-mode="duo"][data-phase="input"] .player-right { justify-self: start; margin-left: 4px; }
+
+/* 文章ウィンドウは幅 920 なので、長い文は折り返す（Figma も2行） */
+:root[data-orient="portrait"] .msg { width: 100%; }
+:root[data-orient="portrait"] .msg-body { flex-wrap: wrap; justify-content: center; }
+:root[data-orient="portrait"] .msg-text,
+:root[data-orient="portrait"] .msg-sub { white-space: pre-wrap; word-break: auto-phrase; }
+
+:root[data-orient="portrait"] #screen-play[data-phase="input"] .beat { display: flex; }
+
+/* モード選択とチュートリアル-0 は縦置きの Figma フレームが無い。横置きの部品を縦に積み直しただけ */
+:root[data-orient="portrait"] .select-title { font-size: 64px; }
+:root[data-orient="portrait"] .select-row { flex-direction: column; align-items: center; gap: 64px; }
 
 /* ── 調整（小さく隅に） ───────────────────────────────────── */
 /* 右上に置く。どの画面でもここは余白か入力欄の角で、盤面と文章ウィンドウにはかからない */
