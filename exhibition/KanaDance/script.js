@@ -195,6 +195,7 @@ function takeShot() {
     lines: references.lines[latched.letter],
     frames: history.keyframes(windowMs, intervalMs, APP_CONFIG.limits.maxKeyframes),
     blend: ui.settings,
+    video: ui.video,
     width: ui.canvas.width,
     height: ui.canvas.height,
   });

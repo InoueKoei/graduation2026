@@ -2,7 +2,7 @@
 //  ui.js — DOM の取り回し（展示版）
 //  状態表示・モード・調整スライダー・シャッターをここに閉じ込め、
 //  推定と描画のコードから DOM の知識を切り離す。
-//  画面は Figma のフレーム pose（1920×1080）を原寸で組み、窓に合わせて丸ごと縮める。
+//  画面は Figma のフレーム pose（幅 1920）で組み、窓の幅いっぱいに縮める。
 // ============================================================
 
 import { APP_CONFIG, POSE_SETS, DEFAULT_POSE_SET } from './config.js';
@@ -39,6 +39,7 @@ export const settings = {
   matchThreshold: APP_CONFIG.matchThreshold,
   videoOpacity: APP_CONFIG.videoOpacity,
   poseOpacity: APP_CONFIG.poseOpacity,
+  recordPhotoOpacity: APP_CONFIG.recordPhotoOpacity,
   /** 判定に使うポーズの組（config.js の POSE_SETS のキー） */
   poseSet: initialPoseSet(),
   ...APP_CONFIG.blend,
@@ -54,6 +55,11 @@ const CONTROLS = [
     id: 'pose-opacity', key: 'poseOpacity', scale: 1,
     format: (v) => (v === 0 ? '消す' : `${Math.round(v * 100)}%`),
     apply: (v) => { canvas.style.opacity = String(v); },
+  },
+  {
+    id: 'record-photo-opacity', key: 'recordPhotoOpacity', scale: 1,
+    format: (v) => (v === 0 ? '消す' : `${Math.round(v * 100)}%`),
+    apply: (v) => { document.documentElement.style.setProperty('--record-photo-opacity', String(v)); },
   },
   {
     id: 'video-opacity', key: 'videoOpacity', scale: 1,
@@ -172,9 +178,12 @@ const FIT_KEY = 'kanadance.fitMode';
 const SETTINGS_KEY = 'kanadance.exhibition.settings.v1';
 const PANEL_KEY = 'kanadance.exhibition.panelOpen';
 
-/** 1920×1080 の舞台を窓に収まる倍率で縮める。展示機の解像度が違っても Figma のままの比で出る */
+/**
+ * 幅 1920 の舞台を窓の幅いっぱいに縮める。高さは CSS が窓に合わせ、余り・不足は映像の高さで吸収する
+ * （16:9 の窓なら Figma のフレームそのまま）
+ */
 function fitScreen() {
-  const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  const s = window.innerWidth / 1920;
   document.documentElement.style.setProperty('--scale', s.toFixed(4));
 }
 

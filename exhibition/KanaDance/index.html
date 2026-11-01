@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- 画面は Figma「卒制_UIデザイン各種」のフレーム pose（1920×1080）で組み、窓の大きさに合わせて丸ごと縮める -->
+  <!-- 画面は Figma「卒制_UIデザイン各種」のフレーム pose（幅 1920）で組み、窓の幅いっぱいに縮める。高さの増減は映像が受け持つ -->
   <div class="viewport">
     <div id="screen" class="screen">
 
@@ -74,7 +74,12 @@
         <input type="range" id="video-opacity" min="0" max="1" step="0.01" />
         <output id="video-opacity-value"></output>
       </div>
-      <p class="note">ポーズ＝映像に重ねる点と線。記録する字は濃さに関係なく元の線で写る。</p>
+      <div class="ctrl">
+        <label for="record-photo-opacity">記録の写真</label>
+        <input type="range" id="record-photo-opacity" min="0" max="1" step="0.05" />
+        <output id="record-photo-opacity-value"></output>
+      </div>
+      <p class="note">ポーズ＝映像に重ねる点と線。記録する字は濃さに関係なく元の線で写る。記録の写真は下の札に敷く映像の濃さ。</p>
       <div class="ctrl">
         <label for="fit-mode">映像の収め方</label>
         <select id="fit-mode">
