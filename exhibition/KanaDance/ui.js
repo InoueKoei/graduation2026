@@ -72,6 +72,7 @@ const CONTROLS = [
   { id: 'blend-steps',     key: 'steps',          scale: 1,    format: (v) => `${v} 段` },
   { id: 'blend-width',     key: 'width',          scale: 1,    format: (v) => `${v} px` },
   { id: 'blend-tail',      key: 'tailOpacity',    scale: 1,    format: (v) => v.toFixed(2) },
+  { id: 'blend-round',     key: 'roundness',      scale: 1,    format: (v) => `${Math.round(v * 100)}%` },
 ];
 
 export const currentMode = () =>
