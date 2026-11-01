@@ -98,10 +98,16 @@ button { font: inherit; color: inherit; }
   background: var(--orange); color: #fff;
   font-size: 40px; line-height: 1;
 }
-.msg-body { display: flex; align-items: center; gap: 16px; margin: 0; }
+/* 高さは常に本文2行分（48px × 行送り 1.5 × 2）。1行の文でも窓の大きさが変わらず、段が替わるたびに画面が跳ねない */
+.msg-body {
+  display: flex; align-items: center; margin: 0;
+  height: calc(48px * 1.5 * 2);
+}
+/* 本文と補足は1つの流れにする。縦置きで本文が2行になっても、補足は2行目の後ろに続いて3行目に落ちない */
+.msg-line { display: block; line-height: 1.5; }
 .msg-text { font-size: 48px; line-height: 1.5; white-space: pre; }
 /* Figma では補足が白文字（白地に消える）だったので、読める灰色にしてある */
-.msg-sub { font-size: 36px; line-height: 1.4; color: #999; white-space: pre; }
+.msg-sub { margin-left: 16px; font-size: 36px; line-height: 1.4; color: #999; white-space: pre; }
 .msg-sub:empty { display: none; }
 
 /* ── 盤面 ─────────────────────────────────────────────────── */
@@ -291,7 +297,6 @@ button { font: inherit; color: inherit; }
 
 /* 文章ウィンドウは幅 920 なので、長い文は折り返す（Figma も2行） */
 :root[data-orient="portrait"] .msg { width: 100%; }
-:root[data-orient="portrait"] .msg-body { flex-wrap: wrap; justify-content: center; }
 :root[data-orient="portrait"] .msg-text,
 :root[data-orient="portrait"] .msg-sub { white-space: pre-wrap; word-break: auto-phrase; }
 
