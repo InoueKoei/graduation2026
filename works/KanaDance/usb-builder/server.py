@@ -26,6 +26,7 @@ import posixpath
 import sys
 import threading
 import webbrowser
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -242,6 +243,8 @@ class Handler(BaseHTTPRequestHandler):
         row = {"letter": letter, "points": points}
         if isinstance(record.get("lines"), list):
             row["lines"] = record["lines"]
+        # 登録時刻。Supabase の created_at と同じ形にして、旧／新ポーズの切り分けに使う
+        row["created_at"] = datetime.now(timezone.utc).isoformat()
 
         try:
             with LOCK:

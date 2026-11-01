@@ -56,21 +56,46 @@ export const APP_CONFIG = Object.freeze({
   limits: { bufferMs: 4000, maxKeyframes: 48 },
 });
 
-/** MediaPipe Pose ランドマーク番号 → 使用する部位名 */
-export const LANDMARK_INDICES = Object.freeze({
+/** 手足以外の部位（MediaPipe Pose のランドマーク番号）。どの組でも同じ */
+const BODY_LANDMARKS = {
   head: 0,
-  l_hand: 15, r_hand: 16,
+  l_shoulder: 11, r_shoulder: 12,
   l_elbow: 13, r_elbow: 14,
   l_knee: 25, r_knee: 26,
-  l_leg: 27, r_leg: 28,
+};
+
+/**
+ * 手と足をどこで取るか。
+ *   joint … 手首（15/16）・足首（27/28）。2026-10-31 22:40 JST より前の登録はすべてこれ
+ *   tip   … 人差し指（19/20）・つま先（31/32）。線が指先・つま先まで伸びる
+ *
+ * 登録したときと同じ定義で比べないと、「いまの姿勢は指先、登録は手首」と
+ * 比べる位置が食い違ってしまう。なのでポーズの組ごとにどちらで撮ったかを持たせる
+ * （POSE_SETS の landmarks）。指先は手首より揺れやすく、つま先は画面の外に出やすい。
+ */
+export const LANDMARK_SETS = Object.freeze({
+  joint: Object.freeze({ ...BODY_LANDMARKS, l_hand: 15, r_hand: 16, l_leg: 27, r_leg: 28 }),
+  tip: Object.freeze({ ...BODY_LANDMARKS, l_hand: 19, r_hand: 20, l_leg: 31, r_leg: 32 }),
 });
 
 /** 腰＝左右の腰の中点、スケール基準＝両肩間の距離 */
 export const POSE_REF = Object.freeze({ hipL: 23, hipR: 24, shoulderL: 11, shoulderR: 12 });
 
+/**
+ * MediaPipe Pose に無い部位を、2点の中点として作る。
+ *   waist … 左右の腰（23, 24）。正規化の原点でもある
+ *   neck  … 左右の肩（11, 12）。Pose には首の点が無いので肩の中点で代える
+ *           （OpenPose の Neck も同じ作り方）
+ */
+export const DERIVED_POINTS = Object.freeze({
+  waist: [23, 24],
+  neck: [11, 12],
+});
+
 /** 線記述で使う略語 → 部位名 */
 export const SHORTCUTS = Object.freeze({
-  H: 'head', W: 'waist',
+  H: 'head', W: 'waist', N: 'neck',
+  LS: 'l_shoulder', RS: 'r_shoulder',
   LH: 'l_hand', RH: 'r_hand',
   LE: 'l_elbow', RE: 'r_elbow',
   LK: 'l_knee', RK: 'r_knee',
@@ -87,4 +112,55 @@ export const DEFAULT_KANA_LINES = Object.freeze({
   ア: ['LH-RH', 'H-W', 'W-LL'],
   イ: ['H-W', 'RE-W', 'W-RL'],
   サ: ['LH-RH', '[LH_RH]-W', 'RE-RK-RL'],
+});
+
+/**
+ * ポーズの組。同じ Supabase の poses テーブルに複数の時期の登録が混在しているので、
+ * 登録時刻で切り分けて、どの組で判定するかを選べるようにする。
+ * 2026-10-31 22:40 JST より前の登録（旧ポーズ、手首足首で撮った新ポーズ 26字）は使わない。
+ * 手首足首の26字は pose-sets/archive/wrist-ankle_20261031.json に控えてある。
+ *
+ *   since / until … この時刻の範囲に登録された行だけを判定に使う（ISO 8601）
+ *   linkage       … 字と線の結び方（strokes）の一覧。あれば行の lines より優先し、
+ *                   判定に使う字もこの一覧に載っている字に限る
+ *   prefer        … linkage に同じ字が複数ある（未決の）とき、どちらの source を採るか
+ *   landmarks     … 手足をどこで取ったか（LANDMARK_SETS のキー）。判定も描画もこれで取る
+ *
+ * until が決まっている組は締め切り済み。そこへ登録すると、時刻は次の組に入るのに
+ * 部位の取り方は前の組のまま、という食い違った行ができるので、登録は受け付けない。
+ */
+export const POSE_SETS = Object.freeze({
+  tip: {
+    label: '新ポーズ（指先・つま先、10/31 22:40〜）',
+    since: '2026-10-31T22:40:00+09:00',
+    until: null,
+    landmarks: 'tip',
+    linkage: './pose-sets/linkage_20261031.json',
+    prefer: { ト: 'sketch', ヨ: 'sketch' },
+  },
+});
+
+/** 起動時に使う組 */
+export const DEFAULT_POSE_SET = 'tip';
+
+/**
+ * 体型合わせ（体験の最初に、正面を向いてイのポーズで静止してもらう）。
+ * その人の体節の長さを、登録したイの長さと比べて倍率を出し、
+ * 登録ポーズをその人の体型に組み直してから判定する（子どもでも外れにくくする）。
+ *
+ *   letter      … 較正に使う字。この字が登録済みでないと較正できない
+ *   readyMs     … ポーズを作る時間（この間は測らない）
+ *   holdMs      … 静止して測る時間。揺れを抑えるため、この間の中央値を使う
+ *   stillTol    … 静止とみなす揺れの幅（肩幅＝1）。超えたら測り直し
+ *   minVisibility … 手先・足先まで映っているとみなす MediaPipe の visibility
+ *   facingTol   … 正面とみなす体のひねり（左右の肩の奥行き差 / 肩幅）。0.5 でおよそ 27°。
+ *                 null にすると確かめない
+ */
+export const BODY_CALIBRATION = Object.freeze({
+  letter: 'イ',
+  readyMs: 1200,
+  holdMs: 1500,
+  stillTol: 0.25,
+  minVisibility: 0.5,
+  facingTol: 0.5,
 });
