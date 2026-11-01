@@ -32,7 +32,9 @@ button { font: inherit; color: inherit; }
   position: absolute; left: 0; top: 0;
   width: 1920px; height: calc(100vh / var(--scale));
   transform: scale(var(--scale)); transform-origin: 0 0;
-  display: flex; flex-direction: column; gap: 32px;   /* 840 + 32 + 192 + 16 = 1080 */
+  /* 映像と記録の帯のあいだ。Figma は 32（840 + 32 + 192 + 16 = 1080）。
+     小さい窓で縮めても、実際の画面で 16px は必ず空ける */
+  display: flex; flex-direction: column; gap: max(32px, calc(16px / var(--scale)));
   padding-bottom: 16px;
   background: var(--kd-floor);
 }
