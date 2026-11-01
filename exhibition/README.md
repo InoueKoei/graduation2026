@@ -38,4 +38,8 @@ npx --yes http-server exhibition -p 8991 -c-1
 ```
 
 Gamepad・Web Serial・BLE・カメラはセキュアコンテキスト（HTTPS か localhost）でしか動かない。
+
+## ラズパイで動かす
+
+[raspi/README.md](raspi/README.md)。`git clone` して `raspi/setup.sh` を流すと、電源を入れるだけで全画面で立ち上がる。
 LAN の `http://192.168.x.x` では動かないので、展示機では localhost か Pages の URL で開く。
