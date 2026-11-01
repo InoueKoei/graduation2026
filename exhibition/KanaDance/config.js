@@ -60,6 +60,8 @@ export const APP_CONFIG = Object.freeze({
     width: 14,
     tailOpacity: 0.10,
     tailWidth: 0.40,
+    /** 線の丸み（0〜1）。1 で端も角も丸く、0 で四角い。renderer.js の #strokeShape */
+    roundness: 1,
   },
 
   /** 重くなりすぎないための保険：履歴バッファの長さと、一度に描く鍵フレーム数の上限 */

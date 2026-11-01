@@ -35,6 +35,8 @@ Figma「卒制_UIデザイン各種」のフレーム **pose**（1920×1080）�
 | 画面を Figma の pose フレームに組み直した（`index.html` `style.css` `ui.js`） | 展示の画面 |
 | シャッターと記録の帯を足した（`recorder.js`、`config.js` の `RECORDS`） | 打った字を残す |
 | ポーズの濃さ（`config.js` の `poseOpacity`、既定 0.5） | 映像の上で線が強すぎないように |
+| 線の丸み（調整「線の丸み」、`config.js` の `blend.roundness`、既定 1＝今までどおり） | 0 で端が四角く突き出し、折れ目が尖る。途中は端の角の半径が変わり、折れ目は 50% を境に丸／尖りを切り替える（`renderer.js`）。端が同じ点で出会う線はつないで1本として描く |
+| 1つの形の線は1回で塗る | 薄い残像で、線どうしの重なりだけ二重に濃くなっていたのを直した |
 | 映像の枠のつまみ（大きさ・縦横比のドラッグ）とテーマ切替を外した | 枠は Figma で決まっている。比の違いは「映像の収め方」で吸収する |
 | `usb-builder/build.sh` のコピー対象に `body-calibration.js` `recorder.js` `assets/` を足した | `body-calibration.js` は開発版でも抜けていて、USB 版で読み込みに失敗していた |
 
