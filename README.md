@@ -4,6 +4,11 @@
 
 ブランチ運用・コミット・本番前の確認事項は [DEVELOPMENT.md](DEVELOPMENT.md) にまとめてある。
 
+## exhibition — 展示版
+
+卒業制作展で動かす5作品（StepToggle / KanaDance / Yomare / moji-stack / HeadKana）の本番用コピー。
+一覧と URL は [exhibition/README.md](exhibition/README.md)。
+
 ## works — 本題
 
 | プロジェクト | 内容 |

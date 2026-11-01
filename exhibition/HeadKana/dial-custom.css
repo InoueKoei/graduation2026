@@ -1,0 +1,39 @@
+@font-face{font-family:HeadKanaZenMaru;src:url('fonts/ZenMaruGothic-Light.woff2') format('woff2');font-weight:300;font-display:swap}
+@font-face{font-family:HeadKanaZenMaru;src:url('fonts/ZenMaruGothic-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:HeadKanaZenMaru;src:url('fonts/ZenMaruGothic-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:HeadKanaZenMaru;src:url('fonts/ZenMaruGothic-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:HeadKanaZenMaru;src:url('fonts/ZenMaruGothic-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+.dial-custom-bar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin:20px 0 10px;font-size:13px;color:#566373}
+select{font:inherit;color:#263d49;border:1px solid #cedcde;border-radius:8px;background:#fff;padding:10px 12px;max-width:100%}
+.dial-custom-settings{text-align:left;margin:14px 0 24px!important;background:#f9fbfb}
+.dial-custom-settings input,.dial-custom-settings textarea{font:inherit;font-size:14px;width:100%;padding:10px;border:1px solid #d5dfe1;border-radius:8px;background:#fff;color:#263d49}
+.dial-custom-settings fieldset{border:1px solid #d5dfe1;border-radius:8px;margin:16px 0;padding:12px}
+.dial-custom-settings legend{font-size:12px;color:#697380}
+#dial-font-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#dial-font-options label{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;overflow-wrap:anywhere}
+#dial-font-options input{width:auto;accent-color:#397b83}
+.font-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:18px}
+#font-load-status,#dial-options-feedback{font-size:12px;line-height:1.7;color:#397b83}
+.dial-panel h3 .dial-title{font-size:12px;letter-spacing:0;color:#7a898d;margin:0}
+.control-dial .dial-character{font-size:26px;line-height:1.4;overflow-wrap:anywhere;max-width:150px;margin:auto}
+.control-dial .dial-letter{font-size:10px;width:25px}
+.full-kana .dial-letter{font-size:11px;width:18px;height:18px}
+#type-preview{margin-top:20px;border-radius:12px;padding:16px;background:#f1f7f7;overflow:hidden}
+#type-preview[hidden]{display:none}
+#type-preview-letter{display:block;line-height:1.4;overflow-wrap:anywhere}
+#type-preview-label,#type-current{font-size:12px;color:#397b83;line-height:1.7;margin:8px 0 0}
+#type-current{color:#7a8591}
+.pattern-control{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px;margin:18px 0;color:#566373;font-size:13px}
+#pattern-status{font-size:12px;color:#397b83;flex-basis:100%}
+.single-lcd .dual-dials{grid-template-columns:minmax(0,380px);justify-content:center}
+.single-lcd #dial-panel-1,.single-lcd .dial-custom-bar,.single-lcd .dial-custom-settings,.single-lcd [data-action="both"]{display:none}
+.single-lcd .dial-character{font-size:100px}
+.single-lcd .dial-face{background:#fff;box-shadow:inset 0 0 0 6px #fff,0 8px 25px #397b8310}
+.single-lcd .dial-face::before{border:0}
+@media(max-width:520px){.single-lcd .dual-dials{grid-template-columns:minmax(0,300px)}.single-lcd .dial-character{font-size:86px}.single-lcd .full-kana .dial-letter{font-size:11px;width:18px;height:18px}}
+@media(max-width:520px){.control-dial .dial-character{font-size:18px;max-width:100px}.full-kana .dial-letter{font-size:8px;width:12px;height:12px}.dial-custom-bar{align-items:stretch;flex-direction:column}.dial-custom-settings{padding:14px!important}#dial-font-options{grid-template-columns:1fr}}
+
+.type-sliders{margin:20px auto;max-width:560px;padding:18px;border-radius:12px;background:#f1f7f7;text-align:left}
+.type-sliders[hidden]{display:none}.type-sliders label{display:block;margin:10px 0;font-size:13px;color:#397b83}.type-sliders output{float:right;font-variant-numeric:tabular-nums}.type-sliders input{display:block;width:100%;margin:12px 0;accent-color:#397b83}.type-sliders p{font-size:12px;color:#697583;line-height:1.8}
+.type-lcd .dial-custom-bar,.type-lcd [data-action="both"]{display:none}
+.type-lcd .control-dial .dial-character{font-size:24px;max-width:150px;overflow-wrap:anywhere}

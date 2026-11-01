@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>かな入力</title>
+<meta name="description" content="あ〜んの46文字を頭の動き、またはロータリーエンコーダーで選んで入力。">
+<link rel="canonical" href="https://head-kana-ble-koei.k-inoue4274.chatgpt.site/">
+<link rel="stylesheet" href="dial-custom.css">
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;color:#20262d;background:#f5f6f8;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}main{width:min(760px,100%);margin:64px auto;padding:0 24px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px}
+h1{font-size:22px;font-weight:600;margin:0}#status{display:flex;align-items:center;gap:8px;font-size:13px;color:#697380}
+.dot{width:8px;height:8px;border-radius:50%;background:#b0b7bf}.connected .dot{background:#19a57a}.calibrating .dot{background:#d99523}
+section{background:white;border:1px solid #e4e7eb;border-radius:16px;padding:26px 30px;margin-bottom:20px}
+h2{font-size:14px;font-weight:500;color:#697380;margin:0}.selection{text-align:center;padding:28px}
+#selected{display:block;font-size:116px;line-height:1.35;min-height:157px;font-weight:500;margin:12px 0 0;color:#263d49}
+.text-head{display:flex;justify-content:space-between;align-items:center;gap:12px}#count{font-size:12px;color:#87919d}
+#text{font-size:34px;line-height:1.8;min-height:112px;overflow-wrap:anywhere;white-space:pre-wrap;margin:20px 0 14px}
+#placeholder{color:#a0a8b2;font-size:16px}button{font:inherit;font-size:13px;color:#566373;background:#f6f7f9;border:1px solid #e4e7eb;padding:8px 14px;border-radius:8px;cursor:pointer}
+button:hover{background:#eef1f4}button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:3px solid #90c4dc;outline-offset:2px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}#open-output{font-size:13px;color:#397b83;text-decoration:none;border:1px solid #cedcde;border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center}#open-output:hover{background:#f1f7f7}#open-output:focus-visible{outline:3px solid #90c4dc;outline-offset:2px}footer{font-size:13px;color:#7a8591;line-height:1.9;text-align:center;margin:25px 0}#hint{font-size:13px;min-height:20px;color:#7a8591;margin-top:6px}
+.connection-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 22px}#ble-connect,#usb-connect{background:#263d49;border-color:#263d49;color:white}#browser-note{font-size:13px;color:#697380;margin:-10px 0 22px}
+@media(max-width:520px){main{margin:28px auto;padding:0 16px}header{align-items:flex-start}section{padding:22px}#text{font-size:28px}#selected{font-size:100px;min-height:135px}}
+
+#selection-position{color:#397b83;font-size:13px;min-height:22px;margin-top:10px}
+.emphasis{font-size:2em;font-weight:700;color:#1c5966;line-height:1.45}
+.actions{gap:8px;flex-wrap:wrap}#feedback{color:#397b83;font-size:14px;min-height:24px;margin:0 0 14px}.subtle{font-size:13px;color:#7a8591;line-height:1.8}
+details{border:1px solid #e4e7eb;border-radius:12px;padding:16px 20px;background:#fff;margin-top:18px}summary{font-size:13px;cursor:pointer;color:#566373}details label{display:block;margin:18px 0 8px;font-size:13px}input[type=range]{width:min(300px,85%);accent-color:#397b83;vertical-align:middle}output{font-size:13px;margin-left:12px}.telemetry{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.telemetry div{background:#f5f6f8;border-radius:8px;padding:12px;font-size:12px;color:#697380}.telemetry b{display:block;color:#263d49;margin-top:6px;font-size:16px;font-variant-numeric:tabular-nums}#gesture-log{padding-left:22px;font-size:13px;color:#697380;line-height:1.8}#demo-controls{margin-top:18px}#demo-reading{width:100%;padding:12px;font:inherit;border:1px solid #d6dde1;border-radius:8px;margin:8px 0 14px}.demo-actions{display:flex;flex-wrap:wrap;gap:8px}.demo-note{padding:12px;background:#edf5f5;border-radius:8px;font-size:13px;color:#397b83}
+.yaw-ruler{max-width:440px;margin:18px auto 0}.yaw-track{height:4px;border-radius:4px;background:#dce8ea;position:relative}.yaw-track::after{content:"";position:absolute;left:50%;top:-4px;height:12px;border-left:1px solid #9dafb4}#yaw-marker{position:absolute;left:50%;top:-5px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#397b83;z-index:1}.yaw-labels{display:flex;justify-content:space-between;font-size:11px;color:#697380;margin-top:12px}#speech-status{margin:-10px 0 20px}
+</style>
+<style>
+.selection-stage{display:grid;place-items:center}
+.dual-dials{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:26px 0 20px}
+.dial-mode .dual-dials{display:grid}.dial-mode .selection-stage,.dial-mode .yaw-ruler{display:none}
+.dial-panel{min-width:0}.dial-panel h3{font-size:12px;font-weight:500;color:#7a898d;margin:0 0 28px;line-height:1.8}
+.dial-panel h3 span{display:block;font-size:10px;letter-spacing:.13em;color:#9da8ab;margin-bottom:2px}
+.dial-face{position:relative;aspect-ratio:1;border:1px solid #e3e9ea;border-radius:50%;background:radial-gradient(circle,#fff 55%,#f5f7f7 56%,#fbfcfc 72%);box-shadow:inset 0 0 0 6px #fff;transition:border-color 150ms,box-shadow 150ms;display:grid;place-items:center}
+.dial-face{border-color:#9bbfc2;background:radial-gradient(circle,#fff 55%,#edf5f5 56%,#f8fbfb 72%);box-shadow:inset 0 0 0 6px #fff,0 6px 22px #397b8310}
+.dial-face::before{content:"";position:absolute;inset:24%;border:1px solid #e0e9e9;border-radius:50%}
+.dial-face::after{content:"";position:absolute;left:50%;top:-9px;transform:translateX(-50%);width:9px;height:17px;background:#b1bfc1;clip-path:polygon(0 0,100% 0,50% 100%)}
+.dial-face::after{background:#397b83}
+.dial-rotor{position:absolute;inset:0;border-radius:50%;transform:rotate(var(--dial-rotation,0deg));transition:transform 110ms ease-out;will-change:transform}
+.dial-letter{position:absolute;display:grid;place-items:center;width:22px;height:22px;font-size:13px;color:#94a1a5;transform:translate(-50%,-50%) rotate(calc(-1 * var(--dial-rotation,0deg)));transition:transform 110ms ease-out,color 110ms,background 110ms;border-radius:50%;line-height:1}
+.dial-letter.selected{background:#397b83;color:white;font-weight:600;box-shadow:0 0 0 3px #e5eeee}
+.dial-readout{z-index:1;pointer-events:none}.dial-character{display:block;font-size:64px;line-height:1.15;color:#263d49}
+.dial-position{font-size:11px;color:#397b83;margin-top:5px;font-variant-numeric:tabular-nums}
+.dial-state{font-size:11px;color:#397b83;margin-top:15px;min-height:22px}
+.is-pressed .dial-face{box-shadow:inset 0 0 0 6px #e0f0ef,0 0 0 3px #397b83}
+.dial-turn-actions{display:flex;justify-content:center;gap:10px;margin-top:8px}.dial-turn-actions[hidden]{display:none}
+.dial-demo-actions{display:flex;justify-content:center;gap:10px;margin:16px 0 4px}.dial-demo-actions[hidden]{display:none}
+#dial-preview{margin-top:10px}.dial-mode #range-description{color:#397b83}
+@media(max-width:520px){.dual-dials{gap:14px}.dial-panel h3{font-size:11px;margin-bottom:23px}.dial-letter{font-size:11px;width:18px;height:18px}.dial-character{font-size:46px}.dial-position{font-size:10px}.dial-mode.selection{padding:24px 12px}.dial-turn-actions{gap:5px}.dial-turn-actions button{padding:8px 10px}}
+@media(max-width:360px){.dual-dials{gap:10px}.dial-character{font-size:36px}.dial-letter{font-size:10px;width:16px;height:16px}.dial-panel h3{font-size:10px}.dial-position{margin-top:2px}}
+@media(prefers-reduced-motion:reduce){.dial-rotor,.dial-letter{transition:none}}
+</style>
+<style>
+.core-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.core-head h2{color:#263d49;font-size:15px;font-weight:600}#core-status{font-size:12px;color:#397b83}
+.core-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.nod-mapping{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.nod-mapping span{background:#edf5f5;border-radius:8px;padding:9px 12px;color:#397b83;font-size:13px}.nod-mapping b{margin-right:7px}
+.nod-meter{font-size:12px;color:#697380;display:flex;gap:24px;flex-wrap:wrap}.nod-meter strong{color:#263d49;font-weight:500}#modifier-feedback{min-height:22px;margin:10px 0 0;color:#397b83;font-size:13px}.core-options{border:0;padding:0;margin-top:10px}.core-options label{margin-top:12px}.modifier-test{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+</style>
+</head>
+<body>
+<main>
+<header><h1>かな入力</h1><div id="status"><span class="dot"></span><span id="status-label">接続を待っています</span></div></header>
+<div class="connection-actions"><button id="ble-connect">ダイヤル BLEで接続</button><button id="usb-connect">ダイヤル USBで接続</button><button id="speech-toggle" aria-pressed="false">読み上げを開始</button><button id="speech-test">音声テスト</button><button id="recenter" disabled>正面を合わせる</button></div>
+<p id="speech-status" class="subtle" role="status">「音声テスト」で音を確認できます</p>
+<p id="browser-note" hidden>BLE・USB接続には、このページをChromeで開いてください。</p>
+<section class="core-panel" aria-labelledby="core-title">
+<div class="core-head"><h2 id="core-title">DJ HEADBANG · CoreS3</h2><span id="core-status" role="status">未接続</span></div>
+<p class="subtle">ダイヤルで「あ〜ん」を入力し、頷きで直前の文字を変える。</p>
+<div class="nod-mapping"><span><b>1回</b>濁点 ゛</span><span><b>2回</b>半濁点 ゜</span><span><b>3回</b>小文字</span></div>
+<div class="core-actions"><button id="core-ble-connect">CoreS3 BLEで接続</button><button id="core-usb-connect">CoreS3 USBで接続</button><button id="core-recenter" disabled>基準姿勢を合わせる</button></div>
+<div class="nod-meter"><span>頷き <strong id="nod-progress" role="status">—</strong></span><span>角度 <strong id="core-pitch">—</strong></span></div>
+<p id="modifier-feedback" role="status">頷くたびに即反映。濁点 → 半濁点 → 小文字の順で切り替わります。</p>
+<details class="core-options"><summary>使い方・画面で試す</summary>
+<p class="subtle">CoreS3を装着して正面で静止し、基準姿勢を合わせてください。大きく頷いて正面へ戻るたびに反映します。判定に必要な角度・速度を以前の2倍にしています。間隔を空けても同じ文字では順番が続き、4回目は濁点に戻ります。新しい文字を入力すると濁点から始まります。対応しない文字はそのままになります。</p>
+<div class="modifier-test"><button id="nod-test">頷きを1回試す</button></div>
+</details>
+</section>
+<section class="selection" aria-labelledby="selection-title">
+<h2 id="selection-title">今選択中の文字（あ〜ん）</h2>
+<div class="pattern-control"><label for="dial-pattern">機器パターン</label><select id="dial-pattern"><option value="auto">自動認識</option><option value="dual">2ダイヤル</option><option value="single">1ダイヤル＋丸型LCD</option><option value="studio">文字＋フォント＋スライダー</option></select><span id="pattern-status" role="status">接続すると自動認識します</span></div>
+<div class="dial-custom-bar"><label for="right-role">右ダイヤルの役割</label><select id="right-role"><option value="split">かなを分割（今まで通り）</option><option value="weight">ウェイト</option><option value="font">フォント</option><option value="size">文字サイズ</option><option value="symbols">文字・記号</option></select></div>
+<details class="dial-custom-settings"><summary>右ダイヤルの候補をカスタム</summary>
+<p class="subtle">かな分割以外では、左ダイヤルで「あ〜ん」すべてを選びます。右は回してプレビュー、KEYで確定。装飾は直前の1文字と、その後に入力する文字へ適用します。</p>
+<label for="dial-weights">ウェイトの候補（100〜900、カンマ区切り）</label><input id="dial-weights" value="100,200,300,400,500,600,700,800,900">
+<label for="dial-sizes">サイズの候補（12〜200px、カンマ区切り）</label><input id="dial-sizes" value="16,24,34,48,64,96,128">
+<label for="dial-symbols">文字・記号の候補（1行に1候補）</label><textarea id="dial-symbols" rows="4">、
+。
+！
+？
+…
+ー
+␣</textarea>
+<p class="subtle">␣ は空白として入力します。</p>
+<div class="font-actions"><button id="read-local-fonts">PCのフォントを読み込む</button><span id="font-load-status" role="status">Moji-stackの書体リストに対応。フォントはこの端末内で使います。</span></div>
+<fieldset><legend>右ダイヤルに並べるフォント</legend><div id="dial-font-options"></div></fieldset>
+<button id="save-dial-options">候補を反映</button><p id="dial-options-feedback" role="status"></p>
+</details>
+<div class="selection-stage">
+<div class="selection-readout">
+<span id="selected">ね</span>
+<div id="selection-position">24 / 46</div>
+</div></div>
+<div class="dual-dials">
+<div id="dial-panel-0" class="dial-panel" role="group" aria-label="1個目 あ・か・さ・た・な行">
+<h3><span>DIAL 01</span><span id="dial-title-0" class="dial-title">あ・か・さ・た・な行</span></h3>
+<div class="dial-face"><div id="dial-rotor-0" class="dial-rotor" aria-hidden="true"></div><div class="dial-readout"><span id="dial-character-0" class="dial-character">あ</span><div id="dial-position-0" class="dial-position">1 / 25</div></div></div>
+<div id="dial-status-0" class="dial-state">このKEYで入力</div>
+<div class="dial-turn-actions" hidden><button data-action="previous" data-dial="0" aria-label="1個目を左へ回す">←</button><button data-action="confirm" data-dial="0" aria-label="左の文字を入力">入力</button><button data-action="next" data-dial="0" aria-label="1個目を右へ回す">→</button></div>
+</div>
+<div id="dial-panel-1" class="dial-panel" role="group" aria-label="2個目 は・ま・や・ら・わ行とん">
+<h3><span>DIAL 02</span><span id="dial-title-1" class="dial-title">は・ま・や・ら・わ行＋ん</span></h3>
+<div class="dial-face"><div id="dial-rotor-1" class="dial-rotor" aria-hidden="true"></div><div class="dial-readout"><span id="dial-character-1" class="dial-character">は</span><div id="dial-position-1" class="dial-position">1 / 21</div></div></div>
+<div id="dial-status-1" class="dial-state">このKEYで入力</div>
+<div class="dial-turn-actions" hidden><button data-action="previous" data-dial="1" aria-label="2個目を左へ回す">←</button><button data-action="confirm" data-dial="1" aria-label="右の文字を入力">入力</button><button data-action="next" data-dial="1" aria-label="2個目を右へ回す">→</button></div>
+</div>
+</div>
+<div class="yaw-ruler"><div class="yaw-track"><span id="yaw-marker"></span></div><div class="yaw-labels"><span id="range-left-label">左60° · あ</span><span>現在 <output id="yaw-angle">0.0°</output></span><span id="range-right-label">右60° · ん</span></div></div>
+<div id="hint">「BLEで接続」からM5-Kana または M5-Kana-Dial を選んでください</div>
+<div id="type-sliders" hidden class="type-sliders"><label>文字サイズ <output id="size-readout">34px</output><input id="type-size" type="range" min="0" max="4095" value="77" aria-label="文字サイズスライダー"></label><label>ウェイト <output id="weight-readout">400</output><input id="type-weight" type="range" min="0" max="4095" value="1536" aria-label="ウェイトスライダー"></label><p>左：文字・短押しで入力 ／ 右：回してフォントを即反映<br>GP29：12〜600px（中央で約453px） ／ GP28：選択書体の細字〜太字</p></div><div id="type-preview" hidden><span id="type-preview-letter">あ</span><p id="type-preview-label"></p><p id="type-current"></p></div>
+<div id="dial-demo-actions" class="dial-demo-actions" hidden><button data-action="both">両方を同時に入力</button><button data-action="erase">長押しで削除</button></div>
+<button id="dial-preview">ダイヤル表示を試す</button>
+</section>
+<section aria-labelledby="text-title">
+<div class="text-head"><h2 id="text-title">入力中の文字</h2><span id="count">0 / 96文字</span></div>
+<div id="text" aria-live="polite" aria-atomic="true"><span id="placeholder">頷くか、赤ボタンで文字を追加</span></div>
+<p id="feedback" role="status"></p>
+<div class="actions"><button id="copy" disabled>コピー</button><button id="copy-styled">サイズ付きコピー</button><button id="clear-text" disabled>全消し</button><a id="open-output" href="output.html" target="_blank" rel="noopener">文字だけを別タブで表示 ↗</a></div>
+<p id="range-description" class="subtle">あ〜んの46文字を左右合計120°に配置。左端が「あ」、右端が「ん」です。</p>
+</section>
+<footer>ダイヤル：回して「あ〜ん」を選択 · 短押しで入力 · 長押しで削除<br>CoreS3：頷き1回で濁点 · 2回で半濁点 · 3回で小文字<br>RP2040-ZeroのダイヤルはUSBで接続。CoreS3はBLEまたはUSBで接続できます。<br>M5StampS3のダイヤルも引き続きBLE／USBで使えます。</footer>
+<details id="settings"><summary>動作の確認・感度を調整</summary>
+<label for="motion-range">可動域（左右合計）</label><input id="motion-range" type="range" min="60" max="360" step="10" value="120"><output id="motion-range-output" for="motion-range">120°</output>
+<p id="motion-range-hint" class="subtle">左右60°ずつ · 1文字あたり約2.7°。狭くすると小さな動きで選べます。</p>
+<button id="range-reset">120°に戻す</button>
+<p class="subtle">正面で「正面を合わせる」を押し、約0.5秒静止してください。正面は「ね」、左<span class="half-range">60</span>°で「あ」、右<span class="half-range">60</span>°で「ん」になります。文字は動かした分だけすぐ切り替わります。頷きは正面へ戻った時、横振りは止めた時に入力・削除します。横振り中に動いた選択は、削除と判定された時に戻ります。</p>
+<div class="telemetry"><div>頷き角度<b id="pitch-value">—</b></div><div>首かしげ角度<b id="roll-value">—</b></div><div>左右の速度<b id="yaw-value">—</b></div><div>頷き速度<b id="speed-value">—</b></div><div>赤ボタン<b id="red-value">OFF</b></div><div>青ボタン<b id="blue-value">OFF</b></div></div>
+<label for="strong-threshold">大きな文字になる頷き速度（°/秒）</label><input id="strong-threshold" type="range" min="80" max="250" value="150"><output id="strong-threshold-output" for="strong-threshold">150</output>
+<p class="subtle">速度がしきい値を超えるか、頷きの角度が28°以上になると大きく入力します。</p>
+<label for="shake-threshold">削除する横振り速度（°/秒）</label><input id="shake-threshold" type="range" min="60" max="180" value="90"><output id="shake-threshold-output" for="shake-threshold">90</output>
+<label><input id="reverse-selection" type="checkbox"> 左右の文字送りを反転</label>
+<ol id="gesture-log" aria-label="最近の操作"></ol>
+
+</details>
+<details id="demo-panel"><summary>接続せずに操作を試す</summary>
+<p class="subtle">デモは画面の操作確認用です。実機のセンサー判定は「動作の確認」で確認できます。</p>
+<button id="demo-toggle">接続せずに体験デモ</button>
+<div id="demo-controls" hidden><p class="demo-note">体験デモ中 · 実機からの入力は受け取りません</p><label for="demo-angle">頭の向き（デモ）</label><input id="demo-angle" type="range" min="-60" max="60" step="0.1" value="0"><label for="demo-reading">デモ用のかな</label><input id="demo-reading" placeholder="例：はし、あめ、こんにちは" maxlength="96" autocomplete="off">
+<div class="demo-actions"><button data-action="previous">前の文字</button><button data-action="next">次の文字</button><button data-action="confirm">頷く</button><button data-action="strong">強く頷く</button><button data-action="erase">横に振る</button><button data-action="clear">全消去</button></div></div>
+</details>
+</main>
+<script src="ble-protocol.js"></script>
+<script src="speech.js"></script>
+<script src="input-engine.js"></script>
+<script src="dial-wheel.js"></script>
+<script src="dial-custom.js"></script>
+<script src="dial-pattern.js"></script>
+<script src="head-modifiers.js"></script>
+<script src="core-link.js"></script>
+<script src="output-sync.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

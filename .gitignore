@@ -35,3 +35,6 @@ __pycache__/
 outputs/
 work/
 coverage/
+
+# 展示版の moji-stack はビルド済みを配信する（exhibition/README.md）
+!exhibition/moji-stack/dist/

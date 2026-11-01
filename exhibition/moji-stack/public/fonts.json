@@ -1,0 +1,38 @@
+{
+  "_comment": "★これがメニューの元データ（実行時に読むのはこのファイル。src/fonts.js は fonts.json が読めない時のフォールバック）。各要素は label と、family か postscript のどちらかで指定する。family=ファミリー名（そのファミリーの全ウェイト）。postscript=PostScript名（例 PNijitakotengokuMin2-H のように一意。-H/-B/-M 等でウェイトもピン留めできる。名前にスペースが無く -Bold 等が付く形は PostScript名なので postscript で指定）。照合は大小無視・部分一致でゆるく行う。編集後はブラウザを手動でリロード（Cmd+R）すること。実際の名前は DevTools コンソールの [書体診断] に family と PostScript名が一覧表示される。",
+  "fonts": [
+
+    { "postscript": "PIshiiGothicStdN",    "label": "石井ゴシック（写研）" },
+    { "postscript": "GocurlMin2",               "label": "ゴカール（写研）" },
+    { "postscript": "IdasheMin2",               "label": "イダシエ（写研）" },
+    { "postscript": "TunnelMin",                "label": "トンネル（写研）" },
+    { "postscript": "BokassiGMin2",             "label": "ボカッシイ（写研）" },
+
+    { "family":     "A P-OTF Gothic MB101 Pr6N","label": "ゴシックMB101（モリサワ）" },
+    { "family":     "A P-OTF Ryumin Pr6N",      "label": "リュウミン（モリサワ）" },
+    { "postscript": "PJunProN",     "label": " じゅん（モリサワ）" },
+    { "family":     "A P-OTF Shin Go Pr6N",     "label": "新ゴ（モリサワ）" },
+    { "postscript": "PKaishoMCBK1ProN-Bold",    "label": "楷書MCBK1（モリサワ）" },
+    { "postscript": "KochoStdN",         "label": "光朝（モリサワ）" },
+    { "postscript": "APOTFKuromameStdN-EB",     "label": "くろまめ（モリサワ）" },
+    { "postscript": "PNijitakotengokuMin2-H",   "label": "虹蛸天国（モリサワ）" },
+    { "postscript": "HarucraftStdN",     "label": "ハルクラフト（モリサワ）" },
+    { "postscript": "ChougetsuMin2",       "label": "澄月（モリサワ）" },
+
+    { "postscript": "TsukuAOldMinPr6N",        "label": "筑紫Aオールド明朝（フォントワークス）" },
+    { "postscript": "TsukuOldGothicStd",        "label": "筑紫オールドゴシック（フォントワークス）" },
+    { "postscript": "TsukuARdGothicStd",        "label": "筑紫A丸ゴシック（フォントワークス）" },
+    { "postscript": "TsukuQMinLStd",            "label": "筑紫Q明朝（フォントワークス）" },
+    { "postscript": "TsukuAMGothicLStd",        "label": "筑紫AMゴシック（フォントワークス）" },
+    { "postscript": "RailwayStd-B",             "label": "レイルウェイ（フォントワークス）" },
+    { "postscript": "DotGothic12Std-M",         "label": "ドットゴシック（フォントワークス）" },
+    { "postscript": "KanaeReishoStd",         "label": "鼎隷書（フォントワークス）" },
+
+    { "family":     "Ro Honmincho StdN",         "label": "本明朝（タイプバンク）" },
+    { "postscript": "RoGothSinkStd",         "label": "ゴシック新がな（タイプバンク）" },
+    { "family":     "A P-OTF Shueimincho Pr6N", "label": "秀英明朝（DNP）" },
+    { "family":     "Yu Gothic Pr6N",            "label": "游ゴシック（字游工房）" },
+    { "family":     "Meiryo",                    "label": "メイリオ（マイクロソフト）" }
+
+  ]
+}
