@@ -54,7 +54,7 @@ mkdir -p "$OUT/app/vendor/tasks-vision/wasm" "$OUT/app/vendor/models" "$OUT/data
 # ── 1. 本体をコピー（開発用のものは持っていかない）──────────
 echo "[1/6] KanaDance をコピー"
 for f in index.html style.css sumi-tokens.css config.js pose-matcher.js pose-history.js \
-         renderer.js ui.js script.js pose-store.js store-local.js; do
+         renderer.js ui.js script.js pose-store.js store-local.js body-calibration.js; do
   cp "$SRC/$f" "$OUT/app/$f"
 done
 # 新ポーズの字と線の結び方の一覧（既定の組が使う）
