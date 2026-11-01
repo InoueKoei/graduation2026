@@ -5,6 +5,9 @@
 //  画面の canvas には関節の点も乗っていて、ポーズの濃さ（CSS の opacity）も掛かっているので、
 //  そのまま写すと点が混ざり、薄い字になる。描き直せば線だけが元の濃さで取れる。
 //
+//  札の下には、シャッターを切った瞬間の映像を写真として敷く。字と同じ縮尺・同じ位置で切り抜くので、
+//  線は写真の身体の上にそのまま乗る。写真の濃さは CSS 変数（--record-photo-opacity）で、あとから変えられる。
+//
 //  帯は左から右へ並び、満杯（RECORDS.max 枚）になると左端の古いものから消えて、残りが左へ流れる。
 // ============================================================
 
@@ -23,11 +26,13 @@ export class Recorder {
 
   /**
    * いまの字を写して帯の右端に足す。
-   * @param {{letter:string, lines?:string[], frames:Array<Object>, blend:Object, width:number, height:number}} shot
-   *   lines が無い字（線データの無い字）は、画面と同じく大きな文字で写す
+   * @param {{letter:string, lines?:string[], frames:Array<Object>, blend:Object,
+   *          video?:HTMLVideoElement, width:number, height:number}} shot
+   *   lines が無い字（線データの無い字）は、画面と同じく大きな文字で写す。
+   *   video が無い・まだ映っていないときは写真なしで字だけ写す
    * @returns {boolean} 写せたか（線が画面の外で何も描けなかったときは false）
    */
-  add({ letter, lines, frames, blend, width, height }) {
+  add({ letter, lines, frames, blend, video, width, height }) {
     const work = this.#work;
     if (work.width !== width || work.height !== height) { work.width = width; work.height = height; }
     this.#renderer.clear();
@@ -40,7 +45,9 @@ export class Recorder {
     const item = document.createElement('li');
     item.className = 'record is-in';
     item.title = letter;
-    item.appendChild(cardCanvas(work, box));
+    const place = placement(box);
+    if (video?.videoWidth) item.appendChild(cardLayer('record-photo', video, place));
+    item.appendChild(cardLayer('record-ink', work, place));
     item.addEventListener('animationend', () => item.classList.remove('is-in'), { once: true });
     this.#list.appendChild(item);
     this.#trim();
@@ -81,24 +88,32 @@ function inkBounds(canvas) {
 }
 
 /**
- * 札1枚分の canvas。字の外接矩形を、札の内側（RECORDS.inset の余白を除いた枠）に縦横比を保って収める。
- * 画面の映像は左右反転して見せているので、写した字も反転して見たままの向きにする。
+ * 字の外接矩形を、札の内側（RECORDS.inset の余白を除いた枠）に縦横比を保って収める置き方。
+ * 札全体に写る元画像の範囲（src）も返す。写真はこの範囲を切り抜くので、字とぴったり重なる。
  */
-function cardCanvas(src, box) {
+function placement(box) {
   const { cardW, cardH, inset, pixelRatio } = RECORDS;
+  const outW = cardW * pixelRatio;
+  const outH = cardH * pixelRatio;
+  const s = Math.min((cardW - inset.x * 2) * pixelRatio / box.w, (cardH - inset.y * 2) * pixelRatio / box.h);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  return { outW, outH, src: { x: cx - outW / s / 2, y: cy - outH / s / 2, w: outW / s, h: outH / s } };
+}
+
+/**
+ * 札の1層（写真か字）。元画像の src 範囲を札いっぱいに描く。
+ * 画面の映像は左右反転して見せているので、写したものも反転して見たままの向きにする。
+ * 範囲が映像の外にはみ出した分は描かれず、札の白地のまま残る。
+ */
+function cardLayer(className, source, { outW, outH, src }) {
   const out = document.createElement('canvas');
-  out.width = cardW * pixelRatio;
-  out.height = cardH * pixelRatio;
+  out.className = className;
+  out.width = outW;
+  out.height = outH;
   const ctx = out.getContext('2d');
-
-  const availW = (cardW - inset.x * 2) * pixelRatio;
-  const availH = (cardH - inset.y * 2) * pixelRatio;
-  const s = Math.min(availW / box.w, availH / box.h);
-  const w = box.w * s;
-  const h = box.h * s;
-
-  ctx.translate(out.width / 2, out.height / 2);
+  ctx.translate(outW, 0);
   ctx.scale(-1, 1);
-  ctx.drawImage(src, box.x, box.y, box.w, box.h, -w / 2, -h / 2, w, h);
+  ctx.drawImage(source, src.x, src.y, src.w, src.h, 0, 0, outW, outH);
   return out;
 }
