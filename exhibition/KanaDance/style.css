@@ -1,193 +1,185 @@
-/* ── KanaDance スタイル（sumi 基調・墨のモノクロ） ──
-   デザイントークンは sumi-tokens.css を先に読み込むこと。色はすべて --color-* 参照。 */
+/* ============================================================
+   KanaDance 展示版
+   数値は Figma「卒制_UIデザイン各種」のフレーム pose（1920×1080）から写したもの。
+   画面は .screen に原寸で組み、ui.js が窓に合わせて丸ごと縮める（--scale）。
+   墨の色は sumi-tokens.css（renderer.js が --color-accent-strong を読む）。
+   ============================================================ */
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
 :root {
-  --cam-ar: 1.7778;   /* カメラの比。映像が来たら JS が実解像度から上書きする（既定は仮） */
-  --stage-max-h: 52vh;
-  /* 既定の幅。ステージの右端をドラッグすると JS が --stage-w を立てて、こちらが優先される */
-  --auto-w: min(760px, 100%, calc(var(--stage-max-h) * var(--cam-ar)));
-  --content-w: var(--stage-w, var(--auto-w));
+  --kd-floor: #f0f0f0;   /* 画面の地・記録の帯 */
+  --kd-zone: #dadada;    /* 映像の地（映像が来るまで・余白） */
+  --kd-ink: #444;        /* 文字 */
+  --kd-shutter: #678adc;
+  --scale: 1;
+  --cam-ar: 1.7778;      /* カメラの比。ui.js が実解像度から上書きする */
 }
 
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--kd-floor); }
 body {
-  margin: 0; padding: 16px 16px 40px;
-  background: var(--color-background); color: var(--color-text-primary);
-  font-family: "ZEN Interface", system-ui, -apple-system, sans-serif; line-height: 1.6;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font-family: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+  font-weight: 500; color: var(--kd-ink);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+
+/* ── 原寸の舞台 ───────────────────────────────────────────── */
+
+.viewport { position: fixed; inset: 0; overflow: hidden; }
+.screen {
+  position: absolute; left: 50%; top: 50%;
+  width: 1920px; height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--scale));
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding-bottom: 16px;
+  background: var(--kd-floor);
 }
 
-/* トップバー */
-.topbar { width: var(--content-w); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.topbar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: .04em; }
-.topbar-actions { display: flex; gap: 8px; }
+/* ── 映像 ─────────────────────────────────────────────────── */
 
-/* sumi アイコンボタン（ピル） */
-.icon-btn {
-  width: 36px; height: 36px; flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 16px; line-height: 1;
-  background: var(--color-surface); color: var(--color-text-primary);
-  border: 1px solid var(--color-border); border-radius: 999px;
-  cursor: pointer; transition: background .15s, border-color .15s;
-}
-.icon-btn:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
-.icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent-strong); }
-
-/* カメラステージ（映像と canvas は鏡像） */
 .stage {
-  position: relative; width: var(--content-w);
-  /* --stage-h が立っていればそちらが勝ち、比はカメラから外れる（縦長にもできる）。
-     立っていなければ aspect-ratio がカメラの比を保つ。 */
-  aspect-ratio: var(--cam-ar);
-  height: var(--stage-h, auto);
-  background: var(--color-muted);
-  border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden;
+  position: relative; flex: none;
+  width: 1920px; height: 840px;
+  background: var(--kd-zone);
+  overflow: hidden;
 }
-
-/* 端のつまみ。右＝幅、下＝高さ、右下＝両方。
-   幅と高さを別々に変えられるので、縦長カメラに合わせて縦の箱にもできる。
-   ダブルクリック（または Esc）でカメラの比の既定サイズに戻る。 */
-.stage-resizer {
-  position: absolute; z-index: 30;
-  display: flex; align-items: center; justify-content: center;
-  touch-action: none;                      /* iPad で掴んだときに画面が動かないように */
-  background: transparent; border: 0; padding: 0;
-  opacity: .35; transition: opacity .15s;  /* 気づけるよう常に薄く出す */
-}
-.stage:hover .stage-resizer,
-.stage-resizer:focus-visible,
-.stage-resizer.dragging { opacity: 1; }
-.stage-resizer:focus-visible { outline: none; }
-
-.stage-resizer[data-axis="x"]  { top: 0; right: 0; width: 18px; height: 100%; cursor: ew-resize; }
-.stage-resizer[data-axis="y"]  { left: 0; bottom: 0; height: 18px; width: 100%; cursor: ns-resize; }
-.stage-resizer[data-axis="xy"] { right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize; z-index: 31; }
-
-/* つまみの見た目 */
-.stage-resizer::before {
-  content: ''; border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent-strong) 55%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-background) 55%, transparent);
-}
-.stage-resizer[data-axis="x"]::before  { width: 4px; height: 44px; }
-.stage-resizer[data-axis="y"]::before  { width: 44px; height: 4px; }
-.stage-resizer[data-axis="xy"]::before { width: 10px; height: 10px; }
-.stage-resizer:focus-visible::before,
-.stage-resizer.dragging::before { background: var(--color-accent-strong); }
 .stage video, .stage canvas {
-  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  position: absolute; inset: 0; width: 100%; height: 100%;
   transform: scaleX(-1);
-  /* 箱の形がカメラの比と違うときの収め方。
-     cover = はみ出す分を切って埋める（余白なし）／contain = 全体を入れる（余白あり）。
-     映像と canvas は同じ内在比なので、どちらでも同じように変形する。
-     ＝線が身体からずれることはない。 */
+  /* cover = はみ出す分を切って埋める／contain = 全体を入れる。
+     映像と canvas は同じ内在比なので、どちらでも線が身体からずれない */
   object-fit: var(--fit, cover);
 }
 
-/* 判定中の字（半透明チップに墨文字） */
-.current-char {
-  position: absolute; bottom: 12px; right: 12px; z-index: 10;
-  min-width: 72px; text-align: center; padding: 2px 16px; border-radius: 12px;
-  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
-  border: 1px solid var(--color-border); backdrop-filter: blur(6px);
-  font-size: 48px; font-weight: 700; line-height: 1.2; color: var(--color-accent-strong);
+/* シャッターの白い光 */
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; }
+.flash.is-on { animation: flash .35s ease-out; }
+@keyframes flash { from { opacity: .8; } to { opacity: 0; } }
+
+/* 今のもじ（左上） */
+.now {
+  position: absolute; left: 0; top: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 10px;
+  padding: 32px 40px;
+  border-bottom-right-radius: 32px;
+  background: #fff;
+  line-height: 1; white-space: nowrap;
+}
+.now p { margin: 0; }
+.now-label { font-size: 32px; }
+.now-char { font-size: 128px; min-width: 128px; text-align: center; }
+/* 字が出ていないあいだも枠の大きさは保つ（出たり消えたりで跳ねないように） */
+.now-char.is-empty::before { content: '・'; color: #ccc; }
+
+/* シャッター（右上） */
+.shutter {
+  position: absolute; right: 24px; top: 24px; z-index: 10;
+  width: 160px; height: 160px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 999px;
+  background: var(--kd-shutter);
+  box-shadow: 0 0 12px rgb(0 0 0 / .25);
+  cursor: pointer;
+  transition: transform .1s ease;
+}
+.shutter img { width: 96px; height: 96px; display: block; }
+.shutter:active, .shutter.is-pressed { transform: scale(.94); }
+/* 字が無いときに押した：撮れなかったことを小さく揺らして返す */
+.shutter.is-miss { animation: miss .3s ease; }
+@keyframes miss {
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
 }
 
-/* 状態表示 */
-.status {
-  width: var(--content-w); min-height: 24px;
-  font-size: 13px; color: var(--color-text-secondary); font-variant-numeric: tabular-nums;
-}
-.status.error { color: var(--color-text-primary); font-weight: 700; }
+/* ── 記録の帯（下） ───────────────────────────────────────── */
+/* 7枚でちょうど 1920px（16 + 256×7 + 16×6 + 16）。満杯なら左端から消える（recorder.js） */
 
-/* モード切替（sumi セグメンテッド） */
-.segmented { display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: var(--color-muted); }
-.segmented input { position: absolute; opacity: 0; pointer-events: none; }
-.segmented span {
-  display: inline-flex; align-items: center; height: 34px; padding: 0 18px;
-  border-radius: 999px; cursor: pointer; font-size: 14px; color: var(--color-text-secondary);
-  transition: background .15s, color .15s;
+.records {
+  display: flex; gap: 16px;
+  height: 192px; margin: 0; padding: 0 16px;
+  list-style: none;
+  overflow: hidden;
 }
-.segmented input:checked + span { background: var(--color-surface); color: var(--color-text-primary); font-weight: 700; }
-.segmented input:focus-visible + span { box-shadow: 0 0 0 2px var(--color-accent-strong); }
+.record {
+  flex: none; position: relative;
+  width: 256px; height: 192px;
+  background: #fff;
+  overflow: hidden;
+}
+.record canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 入るときは右からふわっと。押し出されるときは幅を畳んで、残りが左へ流れる */
+.record.is-in { animation: record-in .35s ease-out; }
+@keyframes record-in { from { opacity: 0; transform: translateY(24px); } }
+.record.is-out { animation: record-out .35s ease-in forwards; }
+@keyframes record-out { to { opacity: 0; width: 0; margin-right: -16px; } }
 
-/* 登録行 */
-.register-row { display: flex; gap: 8px; align-items: center; }
-#kana-input {
-  font: inherit; font-size: 16px; height: 44px; width: 160px; padding: 0 14px;
-  background: var(--color-surface); color: var(--color-text-primary);
-  border: 1px solid var(--color-border); border-radius: 999px;
-}
-#kana-input::placeholder { color: var(--color-text-placeholder); }
-.btn-primary {
-  font: inherit; font-weight: 700; height: 44px; padding: 0 20px; border-radius: 999px; cursor: pointer;
-  background: var(--color-accent-strong); color: var(--primitive-0);
-  border: 1px solid var(--color-accent-strong); transition: opacity .15s;
-}
-.btn-primary:disabled { opacity: .45; cursor: progress; }
+/* ── 体型合わせのオーバーレイ（正面を向いてイで静止） ──────── */
 
-/* 調整パネル */
-.panel {
-  width: var(--content-w); margin-top: 8px; padding: 16px 18px;
-  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
-}
-.panel-label { font-size: 11px; color: var(--color-text-placeholder); letter-spacing: .06em; margin-bottom: 8px; }
-.panel-label.div { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 14px; }
-
-.ctrl { display: grid; grid-template-columns: 7.5em 1fr 5em; align-items: center; gap: 12px; margin: 6px 0; }
-.ctrl label { font-size: 13px; color: var(--color-text-secondary); }
-.ctrl output { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
-.ctrl select {
-  font: inherit; font-size: 13px; height: 32px; padding: 0 10px; width: 100%;
-  background: var(--color-surface); color: var(--color-text-primary);
-  border: 1px solid var(--color-border); border-radius: 999px; cursor: pointer;
-}
-
-/* レンジ（sumi の墨スライダー） */
-.ctrl input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; cursor: pointer; }
-.ctrl input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-muted); }
-.ctrl input[type="range"]::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-muted); }
-.ctrl input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px;
-  border-radius: 999px; background: var(--color-accent-strong); border: 2px solid var(--color-surface);
-}
-.ctrl input[type="range"]::-moz-range-thumb {
-  width: 16px; height: 16px; border-radius: 999px;
-  background: var(--color-accent-strong); border: 2px solid var(--color-surface);
-}
-.ctrl input[type="range"]:focus-visible { outline: none; }
-.ctrl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--color-accent-overlay); }
-
-.note { margin: 8px 0 0; font-size: 12px; color: var(--color-text-placeholder); }
-.count { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-
-/* 体型合わせのオーバーレイ（正面を向いてイで静止） */
 .calibration {
   position: absolute; inset: 0; z-index: 40;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  background: color-mix(in srgb, var(--color-background) 55%, transparent);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  background: rgb(240 240 240 / .6);
   backdrop-filter: blur(2px);
-  text-align: center; padding: 16px;
+  text-align: center;
 }
-.calibration .cal-step { font-size: 11px; letter-spacing: .1em; color: var(--color-text-placeholder); }
-.calibration .cal-letter {
-  font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", serif;
-  font-size: clamp(64px, 14vh, 140px); font-weight: 700; line-height: 1.05; color: var(--color-accent-strong);
-}
-.calibration .cal-phase { font-size: 14px; color: var(--color-text-primary); min-height: 1.6em; }
-.calibration .cal-meter {
-  width: min(240px, 60%); height: 5px; border-radius: 999px; background: var(--color-muted); overflow: hidden;
-}
-.calibration .cal-meter > i {
-  display: block; height: 100%; width: 0; background: var(--color-accent-default);
-  transition: width .1s linear;
-}
+.cal-step { font-size: 28px; letter-spacing: .1em; color: #888; }
+.cal-letter { font-size: 240px; font-weight: 700; line-height: 1.05; color: #000; }
+.cal-phase { font-size: 40px; min-height: 1.6em; }
+.cal-meter { width: 480px; height: 10px; border-radius: 999px; background: #ccc; overflow: hidden; }
+.cal-meter > i { display: block; height: 100%; width: 0; background: var(--kd-shutter); transition: width .1s linear; }
 .btn-ghost {
-  margin-top: 6px; font: inherit; font-size: 13px; height: 34px; padding: 0 18px;
-  border-radius: 999px; cursor: pointer;
-  background: transparent; color: var(--color-text-secondary);
-  border: 1px solid var(--color-border); transition: background .15s, border-color .15s;
+  font-size: 28px; padding: 8px 32px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: 2px solid #aaa;
 }
-.btn-ghost:hover { background: var(--color-muted); border-color: var(--color-accent-strong); }
+
+/* ── 調整（小さく隅に） ───────────────────────────────────── */
+/* 右上のシャッターの左隣に置く。「今のもじ」とシャッターのどちらにもかからない */
+
+.settings {
+  position: fixed; top: 6px; right: calc(200px * var(--scale)); z-index: 50;
+  max-width: 300px; max-height: calc(100vh - 12px); overflow: auto;
+  padding: 2px 6px;
+  border: 1px solid #ddd; border-radius: 8px;
+  background: rgb(255 255 255 / .88);
+  font-family: system-ui, sans-serif; font-weight: 400; font-size: 10px; color: #555;
+  opacity: .75; transition: opacity .15s;
+}
+.settings:hover { opacity: 1; }
+.settings:has(.panel:not([hidden])) { width: 300px; padding: 4px 8px 6px; }
+
+.settings-toggle {
+  border: 0; background: none; padding: 0;
+  font-size: 10px; font-weight: 600; color: #888; cursor: pointer;
+}
+
+.status { margin: 2px 0 4px; color: #2a6a8a; min-height: 2.6em; font-variant-numeric: tabular-nums; }
+.status.error { color: #c55; font-weight: 600; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; }
+
+.mini-btn {
+  padding: 1px 6px;
+  border: 1px solid #ccc; border-radius: 999px;
+  background: #fff; font-size: 10px; cursor: pointer;
+}
+.mini-btn:hover { border-color: #999; }
+.mini-btn:disabled { opacity: .45; cursor: progress; }
+
+.segmented { display: inline-flex; border: 1px solid #ccc; border-radius: 999px; overflow: hidden; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span { display: inline-block; padding: 1px 8px; background: #fff; cursor: pointer; }
+.segmented label + label span { border-left: 1px solid #ccc; }
+.segmented input:checked + span { background: #555; color: #fff; }
+
+#kana-input { width: 90px; padding: 1px 6px; border: 1px solid #ccc; border-radius: 999px; font-size: 10px; }
+
+.panel-label { margin: 8px 0 2px; padding-top: 4px; border-top: 1px solid #e4e4e4; font-weight: 600; color: #888; }
+
+.ctrl { display: grid; grid-template-columns: 78px 1fr 46px; align-items: center; gap: 4px; margin: 2px 0; }
+.ctrl input[type="range"] { width: 100%; height: 10px; margin: 0; }
+.ctrl select { width: 100%; font-size: 10px; }
+.ctrl output { text-align: right; font-variant-numeric: tabular-nums; }
+
+.note { margin: 2px 0 4px; color: #999; }
+.count { font-variant-numeric: tabular-nums; }
