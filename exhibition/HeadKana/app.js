@@ -45,10 +45,13 @@ function savedDialOptions(){
 const dialAssignments=new DialAssignments(fontCatalog.fonts,savedDialOptions());
 let wheelSignature='',fontPreviewToken=0;
 const outputFontData=new Map();
+const rotationClock=new LetterRotation();
+function rotatedRunStyle(run){return {...runStyle(run),...rotationStyle(run)};}
+function inputStyle(){return {...committedStyle(),rotationDeg:rotationClock.angle()};}
 let candidateVisible=true,candidateSignature='';
 function candidateRun(){
   const index=deviceMode==='dial'?(dialPattern.full?dialPattern.selected:dialAssignments.mode==='split'?dialState.positions[0]:dialAssignments.leftIndex):doc.selected;
-  return {text:KANA[index],...committedStyle(),size:1,pending:true};
+  return {text:KANA[index],...committedStyle(),...rotationClock.live(),size:1,pending:true};
 }
 function updateCandidatePreview(){
   const signature=JSON.stringify(candidateRun());
@@ -69,7 +72,7 @@ const textOutput=new TextOutputPublisher(outputRuns,async runs=>{
   }
   return result;
 });
-$('open-output').href='output.html?source='+encodeURIComponent(textOutput.id);
+$('open-output').href='/output.html?source='+encodeURIComponent(textOutput.id);
 
 function saveDialOptions(){try{localStorage.setItem(DIAL_OPTIONS_KEY,JSON.stringify({...dialAssignments.options,mode:dialAssignments.mode}));}catch{}}
 function committedStyle(){const s=dialAssignments.style,f=dialAssignments.font();return {fontFamily:f.family,fontLabel:f.label,fontWeight:s.fontWeight,fontSize:s.fontSize};}
@@ -81,13 +84,13 @@ function applyTypeStyle(){
 function renderTypeControls(){
   const style=committedStyle();$('type-preview').hidden=false;
   $('type-preview-letter').textContent=KANA[dialPattern.selected];
-  Object.assign($('type-preview-letter').style,runStyle({...style,size:1}));
+  Object.assign($('type-preview-letter').style,rotatedRunStyle({...candidateRun(),...style,size:1}));
   $('type-preview-label').textContent=`${style.fontLabel} / ${style.fontWeight} / ${style.fontSize}px`;
   $('type-current').textContent='選択中の文字へ即反映 · 入力済みの文字は入力時の見た目を保持';
   $('size-readout').textContent=style.fontSize+'px';$('weight-readout').textContent=style.fontWeight;
   $('type-size').value=typeControls.sizeRaw;$('type-weight').value=typeControls.weightRaw;
   $('type-size').disabled=$('type-weight').disabled=connected&&!demo;
-  void fontCatalog.load(dialAssignments.style.fontId,style.fontWeight).catch(()=>{$('type-current').textContent='書体の読み込みに失敗しました';});
+  void fontCatalog.load(dialAssignments.style.fontId,style.fontWeight).then(refreshRotationBodies).catch(()=>{$('type-current').textContent='書体の読み込みに失敗しました';});
 }
 for(const [id,key] of [['type-size','sizeRaw'],['type-weight','weightRaw']])$(id).addEventListener('input',e=>{typeControls[key]=Number(e.target.value);applyTypeStyle();render();});
 function renderFontOptions(){
@@ -126,7 +129,7 @@ function renderTypePreview(){
   $('type-preview-label').textContent=`プレビュー · ${font.label} / ${draft.fontWeight} / ${draft.fontSize}px · 右KEYで確定`;
   const current=committedStyle();$('type-current').textContent=`適用中：${current.fontLabel} / ${current.fontWeight} / ${current.fontSize}px`;
   const token=++fontPreviewToken;
-  void fontCatalog.load(draft.fontId,draft.fontWeight).catch(()=>{if(token===fontPreviewToken)$('type-preview-label').textContent='この書体を読み込めませんでした。別の書体を選んでください';});
+  void fontCatalog.load(draft.fontId,draft.fontWeight).then(refreshRotationBodies).catch(()=>{if(token===fontPreviewToken)$('type-preview-label').textContent='この書体を読み込めませんでした。別の書体を選んでください';});
 }
 function confirmDial(group){
   if(dialPattern.studio){if(group===0)act({type:'confirm',selectionIndex:dialPattern.selected});else{applyTypeStyle();render();}return;}
@@ -135,7 +138,7 @@ function confirmDial(group){
   if(group===0){act({type:'confirm',selectionIndex:dialAssignments.leftIndex});return;}
   if(dialAssignments.mode==='symbols'){
     const value=dialAssignments.choices()[dialAssignments.rightIndex]?.value||'';
-    if(!doc.confirmText(value,committedStyle())){log('96文字まで入力できます');return;}
+    if(!doc.confirmText(value,inputStyle())){log('96文字まで入力できます');return;}
     render();log(`右KEY：「${value===' '?'空白':value}」を入力`);speaker.confirm(value);return;
   }
   const style=dialAssignments.commit(),applied=committedStyle();
@@ -222,7 +225,7 @@ function renderDials(){
   if(dialPattern.full){
     dialWheels[0].select(dialPattern.selected);
     $('dial-character-0').textContent=KANA[dialPattern.selected];
-    Object.assign($('dial-character-0').style,dialPattern.studio?runStyle({...committedStyle(),size:1}):{fontFamily:'"HeadKanaZenMaru",sans-serif',fontWeight:'700',fontSize:''});
+    Object.assign($('dial-character-0').style,dialPattern.studio?rotatedRunStyle(candidateRun()):{...rotationStyle(candidateRun()),fontFamily:'"HeadKanaZenMaru",sans-serif',fontWeight:'700',fontSize:''});
     $('dial-position-0').textContent=`${dialPattern.selected+1} / 46`;
     $('dial-panel-0').classList.toggle('is-pressed',dialPattern.pressed);
     $('dial-status-0').textContent=dialPattern.pressed?'KEY 押下中':'短押しで入力 · 長押しで削除';
@@ -243,7 +246,7 @@ function renderDials(){
     dialWheels[i].select(index);
     $('dial-character-'+i).textContent=custom?(i===0?KANA[index]:choice?.label||'—'):KANA[dialState.positions[i]];
     $('dial-position-'+i).textContent=`${index+1} / ${custom?(i===0?46:choices.length):i===0?25:21}${custom&&i===1&&choice?.detail?' · '+choice.detail:''}`;
-    if(i===0)Object.assign($('dial-character-0').style,runStyle({...committedStyle(),size:1}));
+    if(i===0)Object.assign($('dial-character-0').style,rotatedRunStyle(candidateRun()));
     $('dial-panel-'+i).classList.toggle('is-pressed',!!(dialState.pressedMask&(1<<i)));
     $('dial-status-'+i).textContent=dialState.pressedMask&(1<<i)?'KEY 押下中':custom&&i===1&&dialAssignments.mode!=='symbols'?'このKEYで設定を確定':'このKEYで入力';
   }
@@ -290,17 +293,18 @@ async function flushM5Selection(){
 function syncM5Selection(index){selectionToSend=index;void flushM5Selection();}
 function render(){
   selected.textContent=KANA[doc.selected];
-  Object.assign(selected.style,runStyle({...committedStyle(),size:1}));
+  Object.assign(selected.style,rotatedRunStyle(candidateRun()));
   renderDials();updateModeView();
   $('selection-position').textContent=`${doc.selected+1} / ${KANA.length}`;
   const runs=doc.composition;
   updateCandidatePreview();textOutput.publish();
-  text.replaceChildren(...runs.map(r=>{const span=document.createElement('span');span.textContent=r.text;span.className=r.size>1?'emphasis':'';Object.assign(span.style,runStyle(r));return span;}));
+  text.replaceChildren(...runs.map(r=>{const span=document.createElement('span');span.textContent=r.text;span.className=r.size>1?'emphasis':'';Object.assign(span.style,rotatedRunStyle(r));return span;}));
   if(!runs.length){const p=document.createElement('span');p.id='placeholder';p.textContent=deviceMode==='dial'?'ダイヤルを短押しして文字を追加':'頷くか、赤ボタンで文字を追加';text.append(p);}
   count.textContent=`${doc.length} / 96文字`;
   copy.disabled=!doc.text;
   $('clear-text').disabled=!doc.text;
   copy.textContent='コピー';
+  centerRotationBodies([selected,$('dial-character-0'),$('type-preview-letter'),...document.querySelectorAll('#text > span:not(#placeholder)')]);
   speakSelection();
 }
 function updateConnection(){
@@ -319,7 +323,7 @@ function act(event){
   if(event.type==='confirm'){
     const index=Number.isInteger(event.selectionIndex)?event.selectionIndex:doc.selected;
     const character=KANA[index];
-    if(!doc.confirm(event.strong,index,committedStyle())){log('96文字まで入力できます');return;}
+    if(!doc.confirm(event.strong,index,inputStyle())){log('96文字まで入力できます');return;}
     hideCandidatePreview();render();speaker.confirm(character);
     log(deviceMode==='dial'?`短押し：「${character}」を入力`:event.strong?'強い頷き：大きく入力':'頷き：文字を入力');
   }
@@ -484,7 +488,7 @@ $('clear-text').addEventListener('click',()=>act({type:'clear'}));
 $('copy-styled').addEventListener('click',async()=>{
   try{
     const div=document.createElement('div');
-    for(const run of doc.composition){const span=document.createElement('span');span.textContent=run.text;Object.assign(span.style,runStyle(run));div.append(span);}
+    for(const run of doc.composition){const span=document.createElement('span');span.textContent=run.text;Object.assign(span.style,rotatedRunStyle(run));div.append(span);}
     await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([doc.text],{type:'text/plain'}),'text/html':new Blob([div.outerHTML],{type:'text/html'})})]);
     log('文字サイズ付きでコピーしました');
   }catch{log('サイズ付きコピーに非対応です。通常のコピーを使ってください');}
@@ -559,3 +563,7 @@ if(!navigator.bluetooth&&!navigator.serial)$('browser-note').hidden=false;
 updateRange(engine.options.range);render();updateConnection();
 updateCoreLinkState({connected:false,busy:false,kind:'',message:''});
 $('core-usb-connect').hidden=!navigator.serial;
+
+function refreshRotationBodies(){centerRotationBodies([selected,$('dial-character-0'),$('type-preview-letter'),...document.querySelectorAll('#text > span:not(#placeholder)')]);}
+document.fonts?.addEventListener('loadingdone',refreshRotationBodies);
+window.addEventListener?.('resize',refreshRotationBodies);

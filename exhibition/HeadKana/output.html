@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>かな入力 · 文字だけ</title>
 <link rel="stylesheet" href="dial-custom.css">
+<link rel="stylesheet" href="rotation.css">
 <style>
 :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;color:#20262d;background:#fff}
-*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:clamp(24px,6vw,96px)}
-main{width:100%;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:0}
+main{width:100%;min-height:100svh;display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;gap:12px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.15}
+.letter-slot{position:relative;display:block;flex:0 0 auto;font-size:0;line-height:0}.letter-glyph{line-height:1}
 .pending{text-decoration:underline;text-decoration-color:#a9b9bb;text-decoration-thickness:1px;text-underline-offset:.15em}
 </style>
 </head>
 <body>
 <main id="output" aria-label="入力中の文字" aria-live="polite" aria-atomic="true"></main>
 <script src="dial-custom.js"></script>
+<script src="rotation.js"></script>
 <script src="output-sync.js"></script>
 <script src="output.js"></script>
 </body>
