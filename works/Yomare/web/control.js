@@ -4,7 +4,8 @@
 // 輪郭（二値化と連結成分）は「静止したか」「どこに置かれたか」を知るためだけに使う。
 // OCR へ渡すのはカメラ映像を矩形で切り出しただけの画像で、二値化したものではない。
 
-import { CHANNEL, PLACE, GATHER, inPlace, TIME, EMOJI, DEFAULTS } from './common.js';
+import { CHANNEL, PLACE, GATHER, inPlace, TIME, DEFAULTS } from './common.js';
+import { WORDS as EMOJI, FLOW } from './emoji.js';
 
 const $ = id => document.getElementById(id);
 const ch = new BroadcastChannel(CHANNEL);
@@ -141,6 +142,7 @@ function rebuild() {
   rc.width = gw; rc.height = gh;
   view = rc.getContext('2d').createImageData(gw, gh);
   rebuildLut();
+  tracks = [];                // 格子が変わると塊の座標も変わるので、動かない塊の記録は捨てる
   resetArrangement('格子を作り直した');
 }
 
@@ -163,8 +165,9 @@ function rebuildLut() {
   }
 }
 
-// 1フレームぶんの検出。部品の和集合を mask に入れて、面積と外接矩形を返す
-function detect() {
+// 1フレームぶんの検出。部品の和集合を mask に入れて、面積と外接矩形を返す。
+// paused のあいだ（絵文字・中央へ飛ぶ形が置く場の上にある）は、動かない塊の記録を更新しない
+function detect(t, paused) {
   sctx.drawImage(video, 0, 0, small.width, small.height);
   const px = sctx.getImageData(0, 0, small.width, small.height).data;
   hist.fill(0);
@@ -208,6 +211,7 @@ function detect() {
       comps.push(c);
     }
   }
+  trackStatic(t, paused);
 
   let area = 0, bx0 = gw, by0 = gh, bx1 = -1, by1 = -1, n = 0;
   for (let i = 0; i < comps.length; i++) {
@@ -217,15 +221,87 @@ function detect() {
     bx0 = Math.min(bx0, c.x0); by0 = Math.min(by0, c.y0);
     bx1 = Math.max(bx1, c.x1); by1 = Math.max(by1, c.y1);
   }
-  // 部品の外接矩形の内側にある小さい塊（てん など）は、部品の一部として数える。
-  // 切り出しには最初から写っているので、残す形からだけ落とすと、読みと形が食い違う
+  // 光・残す形・動いたかの判定に使うのは「部品」だけ。小さい塊は、たとえ部品の近くにあっても入れない。
+  // （てん が小さい塊に落ちるなら、小さい塊のスライダーを下げる。見えているもので赤くなれば、残す形にも入る）
   if (n) {
     for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
       const i = y * gw + x;
-      if (label[i] && comps[label[i]].kind !== 'edge') mask[i] = 1;
+      if (label[i] && comps[label[i]].kind === 'part') mask[i] = 1;
     }
   }
   return { area, n, bbox: n ? { x0: bx0, y0: by0, x1: bx1, y1: by1 } : null };
+}
+
+// ---------------------------------------------------------------- 動かない塊
+//
+// 布の柄や汚れ、置いたまま片付けていない字のように、STATIC_SEC のあいだ変わらない塊は無視する。
+// 塊は外接矩形の重なり（IoU）で追いかけるので、少し揺れても同じ塊とみなす。
+//
+// ただし時間だけで決めると、組んでいる途中の字まで消える。そこで2つの例外を置く。
+//   ・近くで部品が現れた／消えたら、まわりの塊の時計を最初から数え直す（組み足している最中）
+//   ・静止を待つ〜読めて保持しているあいだは、まだ動かないと決まっていない塊の時計を止める
+//     （読めてから残るまで約6秒かかるので、止めないと残す前に部品が消える）
+
+const STATIC_SEC = 5;        // これだけ変わらなければ無視する
+const LOST_SEC = 0.5;        // これだけ見えなければ「どけた」とみなす（際のちらつきは数えない）
+let tracks = [];             // { x0, y0, x1, y1, area, since, seen, kind }
+
+function iou(a, b) {
+  const ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + 1;
+  const iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + 1;
+  if (ix <= 0 || iy <= 0) return 0;
+  const inter = ix * iy;
+  const ua = (a.x1 - a.x0 + 1) * (a.y1 - a.y0 + 1) + (b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1) - inter;
+  return inter / ua;
+}
+
+// 外接矩形どうしの隙間が r 以内か
+function near(a, b, r) {
+  const gx = Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1));
+  const gy = Math.max(0, Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
+  return Math.hypot(gx, gy) <= r;
+}
+
+function trackStatic(t, paused) {
+  const used = new Set();
+  const events = [];         // 部品が現れた／消えた場所
+  for (let i = 1; i < comps.length; i++) {
+    const c = comps[i];
+    if (c.kind === 'edge') continue;
+    let best = null, bv = 0;
+    for (const tr of tracks) {
+      if (used.has(tr)) continue;
+      const r = c.area / tr.area;
+      if (r < 0.6 || r > 1.67) continue;
+      const v = iou(c, tr);
+      if (v >= 0.5 && v > bv) { bv = v; best = tr; }
+    }
+    if (best) {
+      used.add(best);
+      c.track = best;
+      if (!paused) Object.assign(best, { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, area: c.area, seen: t, kind: c.kind });
+    } else if (!paused) {
+      const tr = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, area: c.area, since: t, seen: t, kind: c.kind };
+      tracks.push(tr); used.add(tr); c.track = tr;
+      if (c.kind === 'part') events.push(tr);   // 小さい塊（ゴミ）の明滅では数え直さない
+    }
+  }
+  if (!paused) {
+    tracks = tracks.filter(tr => {
+      if (t - tr.seen <= LOST_SEC) return true;
+      if (tr.kind === 'part') events.push(tr);
+      return false;
+    });
+    const R = Math.round(gw * 0.08);
+    for (const e of events) for (const tr of tracks) if (tr !== e && near(tr, e, R)) tr.since = t;
+    if (['settling', 'reading', 'read'].includes(st.name)) {
+      for (const tr of tracks) if (t - tr.since < STATIC_SEC) tr.since = t;
+    }
+  }
+  for (let i = 1; i < comps.length; i++) {
+    const c = comps[i];
+    if (c.track && t - c.track.since >= STATIC_SEC) c.kind = 'static';
+  }
 }
 
 // 半径 r で膨らませる（行・列それぞれの累積和で、窓の中に1つでもあれば1）
@@ -298,7 +374,6 @@ function step(det, t, dt) {
     if (det.area === 0) {
       st.emptyFor += dt;
       if (st.ref && st.emptyFor >= TIME.MOVE_CONFIRM_SEC) resetArrangement();
-      if (st.emptyFor >= 2) st.lastFixed = null;   // 本当に片付けたら、同じ形をまた残してよい
     } else {
       st.emptyFor = 0;
       if (!st.ref) newArrangement(mask, det.area, t);
@@ -310,6 +385,15 @@ function step(det, t, dt) {
         }
       } else st.changedFor = 0;
     }
+    // 残した形の場所から部品が本当になくなったら、同じ形をまた残してよい。
+    // 「何も置かれていない」では判断しない。残した字は5秒で動かない塊として無視されるが、物はまだそこにある
+    const f = st.lastFixed;
+    if (f) {
+      let left = 0;
+      for (let i = 0; i < f.ref.length; i++) if (f.ref[i] && bin[i]) left++;
+      f.goneFor = left < f.refArea * 0.1 ? (f.goneFor || 0) + dt : 0;
+      if (f.goneFor >= 2) st.lastFixed = null;
+    }
     if (st.name === 'settling' && st.changedFor === 0 && t - st.refT >= TIME.STILL_SEC) {
       read(det);
     }
@@ -319,7 +403,7 @@ function step(det, t, dt) {
     st.lastFixed = { ref: st.ref, refDil: st.refDil, refArea: st.refArea, text: st.text };
     ch.postMessage({ type: 'fix', id: st.id });
     // 形が置く場を横切って中央へ縮んでいくあいだは、それを部品と取り違えないよう見ない
-    st.pausedUntil = Math.max(st.pausedUntil, t + TIME.SHRINK_SEC + 0.3);
+    st.pausedUntil = Math.max(st.pausedUntil, t + TIME.GATHER_SEC + 0.3);
     log(st.text, '残した');
   }
 }
@@ -389,9 +473,9 @@ async function read(det) {
   const e = EMOJI[text];
   if (e) {
     const t = now();
-    if (t - (lastEmoji[text] ?? -1e9) >= TIME.EMOJI_COOLDOWN_SEC) {
+    if (t - (lastEmoji[text] ?? -1e9) >= FLOW.COOLDOWN_SEC) {
       ch.postMessage({ type: 'emoji', ch: e });
-      st.pausedUntil = t + TIME.EMOJI_SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
+      st.pausedUntil = t + FLOW.SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
     }
     lastEmoji[text] = t;
   }
@@ -422,7 +506,9 @@ function traceShape(b, gridMask) {
       data[y * w + x] = S.darkParts ? (l < S.threshold ? 1 : 0) : (l > S.threshold ? 1 : 0);
     }
   }
-  return { w, h, data };
+  // 小さい塊の基準を、この形の画素の大きさに換算して渡す（白い面が飛ばす前の切り分けで同じ基準を使う）
+  const k = w / (b.x1 + 1 - b.x0);
+  return { w, h, data, minPx: minAreaPx() * k * k };
 }
 
 let cropUrl = null;
@@ -516,7 +602,7 @@ function drawCam(det) {
 }
 
 const rectCtx = $('rect').getContext('2d');
-const KIND_RGB = { part: [229, 72, 77], small: [62, 155, 224], edge: [240, 160, 32] };
+const KIND_RGB = { part: [229, 72, 77], small: [62, 155, 224], edge: [240, 160, 32], static: [120, 120, 120] };
 function drawRect() {
   const d = view.data;
   for (let i = 0; i < gw * gh; i++) {
@@ -681,15 +767,15 @@ function loop() {
   const t = now(), dt = Math.min(0.1, t - last);
   last = t;
   if (video.readyState >= 2 && lut) {
-    const det = detect();
+    const det = detect(t, S.calib || t < st.pausedUntil);
     step(det, t, dt);
     drawCam(det);
     drawRect();
     drawHist();
     renderState(t);
-    const counts = { part: 0, small: 0, edge: 0 };
+    const counts = { part: 0, small: 0, edge: 0, static: 0 };
     for (let i = 1; i < comps.length; i++) counts[comps[i].kind]++;
-    $('counts').textContent = `部品 ${counts.part}　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}`;
+    $('counts').textContent = `部品 ${counts.part}　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}　動かないので無視 ${counts.static}`;
     const p = S.minAreaPct;
     $('minAreaVal').textContent = `${p < 0.1 ? p.toFixed(3) : p.toFixed(2)}%（${Math.round(minAreaPx())}画素未満）`;
     $('levelVal').textContent = S.surfaceLevel;
