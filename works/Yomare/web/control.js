@@ -113,7 +113,7 @@ let lut = null;               // 格子 → 縮小映像の画素位置（-1 は
 const small = document.createElement('canvas');
 const sctx = small.getContext('2d', { willReadFrequently: true });
 
-let luma, bin, label, mask, view;
+let luma, bin, label, glabel, partMask, view;
 let comps = [];
 const hist = new Uint32Array(256);
 
@@ -135,12 +135,13 @@ function rebuild() {
     y0: Math.ceil(PLACE.inset * gh), y1: Math.floor((1 - PLACE.inset) * gh),
   };
   const n = gw * gh;
-  luma = new Uint8Array(n); bin = new Uint8Array(n); mask = new Uint8Array(n);
-  label = new Int32Array(n);
+  luma = new Uint8Array(n); bin = new Uint8Array(n); partMask = new Uint8Array(n);
+  label = new Int32Array(n); glabel = new Int32Array(n);
   const rc = $('rect');
   rc.width = gw; rc.height = gh;
   view = rc.getContext('2d').createImageData(gw, gh);
   rebuildLut();
+  memory = [];   // 格子の大きさが変わると、覚えていた配置とは比べられない
   resetArrangement('格子を作り直した');
 }
 
@@ -163,12 +164,12 @@ function rebuildLut() {
   }
 }
 
-// 1フレームぶんの検出。部品の和集合を mask に入れて、面積と外接矩形を返す
+// 1フレームぶんの検出。部品を連結成分に分け、近いものどうしを「ひとまとまり（1語）」に束ねて返す
 function detect() {
   sctx.drawImage(video, 0, 0, small.width, small.height);
   const px = sctx.getImageData(0, 0, small.width, small.height).data;
   hist.fill(0);
-  bin.fill(0); label.fill(0); mask.fill(0);
+  bin.fill(0); label.fill(0); partMask.fill(0); glabel.fill(0);
   const thr = S.threshold, dark = S.darkParts;
   for (let y = zone.y0; y < zone.y1; y++) {
     for (let x = zone.x0; x < zone.x1; x++) {
@@ -189,7 +190,7 @@ function detect() {
       const s = y * gw + x;
       if (!bin[s] || label[s]) continue;
       const id = comps.length;
-      const c = { area: 0, x0: x, y0: y, x1: x, y1: y, touch: false };
+      const c = { area: 0, x0: x, y0: y, x1: x, y1: y, touch: false, seed: s };
       let sp = 0;
       stack[sp++] = s; label[s] = id;
       while (sp) {
@@ -209,23 +210,71 @@ function detect() {
     }
   }
 
-  let area = 0, bx0 = gw, by0 = gh, bx1 = -1, by1 = -1, n = 0;
-  for (let i = 0; i < comps.length; i++) {
-    const c = comps[i];
-    if (c.kind !== 'part') continue;
-    n++; area += c.area;
-    bx0 = Math.min(bx0, c.x0); by0 = Math.min(by0, c.y0);
-    bx1 = Math.max(bx1, c.x1); by1 = Math.max(by1, c.y1);
-  }
-  // 部品の外接矩形の内側にある小さい塊（てん など）は、部品の一部として数える。
-  // 切り出しには最初から写っているので、残す形からだけ落とすと、読みと形が食い違う
-  if (n) {
-    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
+  // ひとまとまり：部品を「間隔の半分」ずつ膨らませ、つながったものを1語とみなす。
+  // テーブルを囲んで何人かが別々に組んでも、語ごとに分けて読ませるため。
+  // 膨らませた範囲は中央の円の上を通ってもよい（円をはさんだ2つの部品の近さは、見た目どおりの距離で決める）
+  for (let y = zone.y0; y < zone.y1; y++) {
+    for (let x = zone.x0; x < zone.x1; x++) {
       const i = y * gw + x;
-      if (label[i] && comps[label[i]].kind !== 'edge') mask[i] = 1;
+      if (label[i] && comps[label[i]].kind === 'part') partMask[i] = 1;
     }
   }
-  return { area, n, bbox: n ? { x0: bx0, y0: by0, x1: bx1, y1: by1 } : null };
+  const groups = [];
+  let area = 0;
+  if (comps.some(c => c.kind === 'part')) {
+    const r = Math.max(1, Math.round(gw * S.groupGapPct / 100 / 2));
+    const grown = dilate(partMask, r);
+    for (let y = zone.y0; y < zone.y1; y++) {
+      for (let x = zone.x0; x < zone.x1; x++) {
+        const s = y * gw + x;
+        if (!grown[s] || glabel[s]) continue;
+        const id = groups.length + 1;
+        let sp = 0;
+        stack[sp++] = s; glabel[s] = id;
+        while (sp) {
+          const i = stack[--sp];
+          const cx = i % gw, cy = (i / gw) | 0;
+          if (cx > zone.x0 && grown[i - 1] && !glabel[i - 1]) { glabel[i - 1] = id; stack[sp++] = i - 1; }
+          if (cx < zone.x1 - 1 && grown[i + 1] && !glabel[i + 1]) { glabel[i + 1] = id; stack[sp++] = i + 1; }
+          if (cy > zone.y0 && grown[i - gw] && !glabel[i - gw]) { glabel[i - gw] = id; stack[sp++] = i - gw; }
+          if (cy < zone.y1 - 1 && grown[i + gw] && !glabel[i + gw]) { glabel[i + gw] = id; stack[sp++] = i + gw; }
+        }
+        groups.push({ id, area: 0, n: 0, x0: gw, y0: gh, x1: -1, y1: -1 });
+      }
+    }
+    for (const c of comps) {
+      if (c.kind !== 'part') continue;
+      const g = groups[glabel[c.seed] - 1];
+      g.n++; g.area += c.area; area += c.area;
+      g.x0 = Math.min(g.x0, c.x0); g.y0 = Math.min(g.y0, c.y0);
+      g.x1 = Math.max(g.x1, c.x1); g.y1 = Math.max(g.y1, c.y1);
+    }
+  }
+  return { area, groups: groups.filter(g => g.n) };
+}
+
+// 画素 i がまとまり g に属するか。部品はそのまとまりのものだけ。
+// まとまりの外接矩形の内側にある小さい塊（てん など）も、そのまとまりの一部として数える。
+// 切り出しには最初から写っているので、残す形からだけ落とすと、読みと形が食い違う
+function inGroup(i, g) {
+  const l = label[i];
+  if (!l) return 0;
+  const k = comps[l].kind;
+  if (k === 'part') return glabel[i] === g.id ? 1 : 0;
+  if (k === 'small') {
+    const x = i % gw, y = (i / gw) | 0;
+    return x >= g.x0 && x <= g.x1 && y >= g.y0 && y <= g.y1 ? 1 : 0;
+  }
+  return 0;
+}
+
+function groupMask(g) {
+  const m = new Uint8Array(gw * gh);
+  for (let y = g.y0; y <= g.y1; y++) for (let x = g.x0; x <= g.x1; x++) {
+    const i = y * gw + x;
+    m[i] = inGroup(i, g);
+  }
+  return m;
 }
 
 // 半径 r で膨らませる（行・列それぞれの累積和で、窓の中に1つでもあれば1）
@@ -249,78 +298,149 @@ function dilate(src, r) {
   return out;
 }
 
-// ================================================================ 配置の状態
+// ================================================================ まとまりごとの状態
 
-// empty → settling →（静止）→ reading → read →（保持）→ fixed
-//                                     ↘ unread（何もしない。動かせばまた読む）
-const st = {
-  name: 'empty', id: 0,
-  ref: null, refDil: null, refArea: 0, refT: 0,
-  changedFor: 0, emptyFor: 0,
-  text: '', readT: 0,
-  lastFixed: null,
-  pausedUntil: 0,
-};
+// まとまり（1語）ごとに、次の順で進む。テーブルを囲む何人かが、それぞれのペースで組めるように
+// settling →（静止）→ reading → read →（保持）→ fixed
+//                            ↘ unread（何もしない。動かせばまた読む）
+// 前のフレームのまとまりとは、基準の配置を少し膨らませた範囲と重なるかで対応づける
+let trackers = [];
+let nextId = 0;
+let pausedUntil = 0;   // 絵文字が流れているあいだ。白い面の全体を流れるので、全部止める
+// 残した形が中央へ縮んでいく道筋。そこだけしばらく見ない（ほかの人の語は止めない）
+let quiet = [];        // { box, until }
+// 残した配置の記憶。腕が一瞬かぶって戻っただけなら、同じ形を二重に残さない。
+// その場所に 2秒以上なにも置かれなければ消えるので、片付けて組み直せばまた残る
+let memory = [];
 const lastEmoji = {};
 
 function resetArrangement(why) {
-  if (st.name === 'read') ch.postMessage({ type: 'clear', id: st.id });
-  st.name = 'empty'; st.ref = null; st.changedFor = 0;
+  for (const tr of trackers) if (tr.name === 'read') ch.postMessage({ type: 'clear', id: tr.id });
+  for (const tr of trackers) tr.name = 'gone';
+  trackers = [];
   if (why) console.log(why);
 }
 
-// 基準の配置からどれだけ変わったか。際のちらつきや光の滲みは、膨らませた範囲の内側なので数えない
-function differs(m, area, ref, refDil, refArea) {
-  let lost = 0, added = 0;
-  for (let i = 0; i < m.length; i++) {
-    if (ref[i] && !m[i]) lost++;
-    else if (m[i] && !refDil[i]) added++;
-  }
-  return lost / refArea > 0.3 || added / refArea > 0.15 || Math.abs(area - refArea) / refArea > 0.4;
+function dropTracker(tr) {
+  if (tr.name === 'read') ch.postMessage({ type: 'clear', id: tr.id });
+  tr.name = 'gone';   // 読んでいる最中なら、その読みは捨てられる
+  trackers = trackers.filter(x => x !== tr);
 }
 
-function newArrangement(m, area, t) {
-  st.id++;
-  st.ref = m.slice();
-  st.refDil = dilate(st.ref, Math.round(gw * 0.025));
-  st.refArea = area; st.refT = t; st.changedFor = 0;
-  st.name = 'settling';
-  // 腕が一瞬かぶって戻っただけなら、もう残した配置なので繰り返さない
-  const f = st.lastFixed;
-  if (f && !differs(m, area, f.ref, f.refDil, f.refArea)) {
-    st.name = 'fixed'; st.text = f.text;
+// 基準にする配置を、いまのまとまり g から取り直す
+function setRef(tr, g) {
+  const d = Math.round(gw * 0.025);
+  tr.ref = groupMask(g);
+  tr.refDil = dilate(tr.ref, d);
+  tr.refArea = g.area;
+  tr.bbox = { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 };
+  tr.box = {
+    x0: Math.max(0, g.x0 - d), y0: Math.max(0, g.y0 - d),
+    x1: Math.min(gw - 1, g.x1 + d), y1: Math.min(gh - 1, g.y1 + d),
+  };
+}
+
+// 基準の配置からどれだけ変わったか。際のちらつきや光の滲みは、膨らませた範囲の内側なので数えない
+function differs(g, ref, refDil, refArea, box) {
+  let lost = 0, added = 0;
+  const x0 = Math.min(g.x0, box.x0), x1 = Math.max(g.x1, box.x1);
+  const y0 = Math.min(g.y0, box.y0), y1 = Math.max(g.y1, box.y1);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * gw + x, m = inGroup(i, g);
+    if (ref[i] && !m) lost++;
+    else if (m && !refDil[i]) added++;
   }
+  return lost / refArea > 0.3 || added / refArea > 0.15 || Math.abs(g.area - refArea) / refArea > 0.4;
+}
+
+// まとまり g の部品のうち、どれだけが refDil の内側にあるか（0〜1）
+function overlap(g, refDil) {
+  let n = 0;
+  for (let y = g.y0; y <= g.y1; y++) for (let x = g.x0; x <= g.x1; x++) {
+    const i = y * gw + x;
+    if (refDil[i] && partMask[i] && glabel[i] === g.id) n++;
+  }
+  return n / g.area;
+}
+
+const meets = (a, b) => a.x0 <= b.x1 && a.x1 >= b.x0 && a.y0 <= b.y1 && a.y1 >= b.y0;
+const isQuiet = b => quiet.some(q => meets(q.box, b));
+
+function newTracker(g, t) {
+  const tr = { id: ++nextId, name: 'settling', refT: t, changedFor: 0, goneFor: 0, text: '', readT: 0, g };
+  setRef(tr, g);
+  const f = memory.find(e => !differs(g, e.ref, e.refDil, e.refArea, e.box));
+  if (f) { tr.name = 'fixed'; tr.text = f.text; }
+  trackers.push(tr);
+}
+
+function updateMemory(dt) {
+  for (const e of memory) {
+    if (isQuiet(e.box)) continue;   // 見ていないあいだは、片付けられたとは数えない
+    let present = false;
+    for (let y = e.box.y0; y <= e.box.y1 && !present; y++) for (let x = e.box.x0; x <= e.box.x1; x++) {
+      const i = y * gw + x;
+      if (partMask[i] && e.refDil[i]) { present = true; break; }
+    }
+    e.emptyFor = present ? 0 : e.emptyFor + dt;
+  }
+  memory = memory.filter(e => e.emptyFor < 2);
 }
 
 function step(det, t, dt) {
-  const paused = S.calib || t < st.pausedUntil;
+  quiet = quiet.filter(q => t < q.until);
+  const paused = S.calib || t < pausedUntil;
   if (!paused) {
-    if (det.area === 0) {
-      st.emptyFor += dt;
-      if (st.ref && st.emptyFor >= TIME.MOVE_CONFIRM_SEC) resetArrangement();
-      if (st.emptyFor >= 2) st.lastFixed = null;   // 本当に片付けたら、同じ形をまた残してよい
-    } else {
-      st.emptyFor = 0;
-      if (!st.ref) newArrangement(mask, det.area, t);
-      else if (differs(mask, det.area, st.ref, st.refDil, st.refArea)) {
-        st.changedFor += dt;
-        if (st.changedFor >= TIME.MOVE_CONFIRM_SEC) {
-          resetArrangement();
-          newArrangement(mask, det.area, t);
-        }
-      } else st.changedFor = 0;
+    for (const tr of trackers) tr.hits = [];
+    for (const g of det.groups) {
+      g.quiet = isQuiet(g);
+      g.trs = trackers.filter(tr => overlap(g, tr.refDil) > 0.3);
+      for (const tr of g.trs) tr.hits.push(g);
     }
-    if (st.name === 'settling' && st.changedFor === 0 && t - st.refT >= TIME.STILL_SEC) {
-      read(det);
+    for (const tr of [...trackers]) {
+      // 縮んでいく形が重なっているかもしれない。見えたものを信じず、そのまま待つ
+      tr.frozen = isQuiet(tr.box) || tr.hits.some(g => g.quiet);
+      if (tr.frozen) continue;
+      if (!tr.hits.length) {
+        // 片付けられた
+        tr.goneFor += dt;
+        if (tr.goneFor >= TIME.MOVE_CONFIRM_SEC) dropTracker(tr);
+        continue;
+      }
+      tr.goneFor = 0;
+      const g = tr.hits[0];
+      tr.g = g;
+      // 割れた・隣とくっついた・形が変わった、のどれも「動かした」として扱う
+      const changed = tr.hits.length > 1 || g.trs.length > 1 || differs(g, tr.ref, tr.refDil, tr.refArea, tr.box);
+      if (!changed) { tr.changedFor = 0; continue; }
+      tr.changedFor += dt;
+      if (tr.changedFor >= TIME.MOVE_CONFIRM_SEC) dropTracker(tr);   // 次のフレームで新しい配置として拾い直す
     }
+    for (const g of det.groups) if (!g.trs.length && !g.quiet) newTracker(g, t);
+    for (const tr of trackers) {
+      if (tr.name === 'settling' && !tr.frozen && tr.changedFor === 0 && t - tr.refT >= TIME.STILL_SEC) read(tr, tr.g);
+    }
+    updateMemory(dt);
   }
-  if (st.name === 'read' && t - st.readT >= TIME.HOLD_SEC) {
-    st.name = 'fixed';
-    st.lastFixed = { ref: st.ref, refDil: st.refDil, refArea: st.refArea, text: st.text };
-    ch.postMessage({ type: 'fix', id: st.id });
-    // 形が置く場を横切って中央へ縮んでいくあいだは、それを部品と取り違えないよう見ない
-    st.pausedUntil = Math.max(st.pausedUntil, t + TIME.SHRINK_SEC + 0.3);
-    log(st.text, '残した');
+  for (const tr of trackers) {
+    if (tr.name === 'read' && t - tr.readT >= TIME.HOLD_SEC) {
+      tr.name = 'fixed';
+      memory.push({ ref: tr.ref, refDil: tr.refDil, refArea: tr.refArea, box: tr.box, text: tr.text, emptyFor: 0 });
+      if (memory.length > 20) memory.shift();
+      ch.postMessage({ type: 'fix', id: tr.id });
+      // 形は置かれていた場所から中心へ、置く場を横切って縮んでいく。そのあいだ、その道筋だけを見ない。
+      // 道筋は、まとまりの枠と円の中心を両方含む矩形で足りる（形はその線分の上を縮みながら進む）
+      const d = Math.round(gw * 0.025);
+      const cx = Math.round(GATHER.x * gw), cy = Math.round(GATHER.y * gh);
+      quiet.push({
+        until: t + TIME.SHRINK_SEC + 0.3,
+        box: {
+          x0: Math.max(0, Math.min(tr.box.x0, cx) - d), y0: Math.max(0, Math.min(tr.box.y0, cy) - d),
+          x1: Math.min(gw - 1, Math.max(tr.box.x1, cx) + d), y1: Math.min(gh - 1, Math.max(tr.box.y1, cy) + d),
+        },
+      });
+      log(tr.text, '残した');
+    }
   }
 }
 
@@ -328,36 +448,34 @@ function step(det, t, dt) {
 
 const full = document.createElement('canvas');
 const fctx = full.getContext('2d', { willReadFrequently: true });
-const cropCanvas = document.createElement('canvas');
 
-async function read(det) {
-  st.name = 'reading';
-  const id = st.id;
+async function read(tr, g) {
+  tr.name = 'reading';
   // 読ませる瞬間の配置を基準にし直す（保持の判定はこれと比べる）
-  st.ref = mask.slice();
-  st.refDil = dilate(st.ref, Math.round(gw * 0.025));
-  st.refArea = det.area;
+  setRef(tr, g);
+  const id = tr.id;
+  const b = tr.bbox;
+  const gridMask = tr.ref;
 
-  const b = det.bbox;
-  const gridMask = mask.slice();
-
-  // 切り出す範囲：部品の外接矩形に余白を足し、カメラ映像の座標へ写す
+  // 切り出す範囲：まとまりの外接矩形に余白を足し、カメラ映像の座標へ写す
   const m = Math.round(Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.25) + 4;
-  const g = [[b.x0 - m, b.y0 - m], [b.x1 + 1 + m, b.y0 - m], [b.x1 + 1 + m, b.y1 + 1 + m], [b.x0 - m, b.y1 + 1 + m]];
-  const pts = g.map(([x, y]) => project(x / gw, y / gh));
+  const q = [[b.x0 - m, b.y0 - m], [b.x1 + 1 + m, b.y0 - m], [b.x1 + 1 + m, b.y1 + 1 + m], [b.x0 - m, b.y1 + 1 + m]];
+  const pts = q.map(([x, y]) => project(x / gw, y / gh));
   const vw = video.videoWidth, vh = video.videoHeight;
   const sx = Math.max(0, Math.floor(Math.min(...pts.map(p => p[0]))));
   const sy = Math.max(0, Math.floor(Math.min(...pts.map(p => p[1]))));
   const ex = Math.min(vw, Math.ceil(Math.max(...pts.map(p => p[0]))));
   const ey = Math.min(vh, Math.ceil(Math.max(...pts.map(p => p[1]))));
 
-  // 同じ瞬間の映像から、切り出し（OCR 用）と、残す形（白い面用）の両方を取る
+  // 同じ瞬間の映像から、切り出し（OCR 用）と、残す形（白い面用）の両方を取る。
+  // 同じフレームで複数のまとまりを読ませることがあるので、切り出しはまとまりごとに別のキャンバス
   full.width = vw; full.height = vh;
   fctx.drawImage(video, 0, 0);
-  cropCanvas.width = ex - sx; cropCanvas.height = ey - sy;
-  cropCanvas.getContext('2d').drawImage(full, sx, sy, ex - sx, ey - sy, 0, 0, ex - sx, ey - sy);
+  const crop = document.createElement('canvas');
+  crop.width = ex - sx; crop.height = ey - sy;
+  crop.getContext('2d').drawImage(full, sx, sy, ex - sx, ey - sy, 0, 0, ex - sx, ey - sy);
   const shape = traceShape(b, gridMask);
-  const blob = await new Promise(r => cropCanvas.toBlob(r, 'image/png'));
+  const blob = await new Promise(r => crop.toBlob(r, 'image/png'));
   showCrop(blob);
 
   let res;
@@ -369,18 +487,18 @@ async function read(det) {
     $('server').innerHTML = '<span class="warn">OCR サーバに届かない（./run.sh で起動しているか）</span>';
     res = { ok: false, text: '' };
   }
-  if (st.id !== id || st.name !== 'reading') return;    // 読んでいるあいだに動かされた
+  if (tr.name !== 'reading') return;    // 読んでいるあいだに動かされた
 
   const text = res.ok ? (res.text || '') : '';
   if (!text) {
-    st.name = 'unread';
+    tr.name = 'unread';
     log('', res.ok ? `${res.ms}ms` : 'エラー');
-    $('lastRead').textContent = `読めず（${cropCanvas.width}×${cropCanvas.height}px を渡した）`;
+    $('lastRead').textContent = `読めず（${crop.width}×${crop.height}px を渡した）`;
     return;
   }
-  st.name = 'read'; st.text = text; st.readT = now();
+  tr.name = 'read'; tr.text = text; tr.readT = now();
   log(text, `確信度 ${(+res.conf).toFixed(2)} ・ ${res.ms}ms`);
-  $('lastRead').textContent = `「${text}」（${cropCanvas.width}×${cropCanvas.height}px を渡した）`;
+  $('lastRead').textContent = `「${text}」（${crop.width}×${crop.height}px を渡した）`;
   ch.postMessage({
     type: 'read', id, text, gw, gh, mask: gridMask, shape,
     bbox: { x0: b.x0 / gw, y0: b.y0 / gh, x1: (b.x1 + 1) / gw, y1: (b.y1 + 1) / gh },
@@ -391,7 +509,7 @@ async function read(det) {
     const t = now();
     if (t - (lastEmoji[text] ?? -1e9) >= TIME.EMOJI_COOLDOWN_SEC) {
       ch.postMessage({ type: 'emoji', ch: e });
-      st.pausedUntil = t + TIME.EMOJI_SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
+      pausedUntil = t + TIME.EMOJI_SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
     }
     lastEmoji[text] = t;
   }
@@ -463,17 +581,45 @@ function setState(name, text, sub) {
   $('stateSub').textContent = sub ?? s;
 }
 
-function renderState(t) {
-  if (S.calib) { setState('settling', '四隅合わせ中', 'このあいだは読まない'); $('bar').firstChild.style.width = '0'; return; }
-  const extra = st.name === 'read' || st.name === 'fixed' ? `「${st.text}」` : '';
-  const [c, label, sub] = STATE_VIEW[st.name];
-  setState(st.name, label + extra, t < st.pausedUntil ? '絵文字が流れているあいだはカメラを見ない' : sub);
+function progress(tr, t) {
   let p = 0;
-  if (st.name === 'settling') p = (t - st.refT) / TIME.STILL_SEC;
-  if (st.name === 'read') p = (t - st.readT) / TIME.HOLD_SEC;
-  if (st.name === 'fixed') p = 1;
-  $('bar').firstChild.style.width = `${Math.min(1, Math.max(0, p)) * 100}%`;
-  $('bar').firstChild.style.background = c;
+  if (tr.name === 'settling') p = (t - tr.refT) / TIME.STILL_SEC;
+  if (tr.name === 'read') p = (t - tr.readT) / TIME.HOLD_SEC;
+  if (tr.name === 'fixed') p = 1;
+  return Math.min(1, Math.max(0, p));
+}
+
+const trLabel = tr => STATE_VIEW[tr.name][1] + (tr.name === 'read' || tr.name === 'fixed' ? `「${tr.text}」` : '');
+
+function renderState(t) {
+  const bar = $('bar').firstChild;
+  const list = $('groups');
+  if (S.calib) { setState('settling', '四隅合わせ中', 'このあいだは読まない'); bar.style.width = '0'; list.replaceChildren(); return; }
+  const pausedNote = t < pausedUntil ? '絵文字が流れているあいだはカメラを見ない' : null;
+  if (trackers.length <= 1) {
+    const tr = trackers[0];
+    const name = tr ? tr.name : 'empty';
+    setState(name, tr ? trLabel(tr) : undefined, pausedNote ?? undefined);
+    bar.style.width = `${tr ? progress(tr, t) * 100 : 0}%`;
+    bar.style.background = STATE_VIEW[name][0];
+    list.replaceChildren();
+    return;
+  }
+  // 何人かが別々に組んでいる。全体は数だけにして、まとまりごとの状態を並べる
+  setState('settling', `${trackers.length}つのまとまり`, pausedNote ?? 'それぞれ別に読ませ、別に残す');
+  $('stateDot').style.background = '#1d1d1b';
+  bar.style.width = '0';
+  list.replaceChildren(...trackers.map(tr => {
+    const li = document.createElement('li');
+    const color = STATE_VIEW[tr.name][0];
+    li.innerHTML = '<i></i><span></span><div class="bar"><div></div></div>';
+    li.querySelector('i').style.background = color;
+    li.querySelector('span').textContent = trLabel(tr);
+    const fill = li.querySelector('.bar div');
+    fill.style.width = `${progress(tr, t) * 100}%`;
+    fill.style.background = color;
+    return li;
+  }));
 }
 
 const camCtx = $('cam').getContext('2d');
@@ -497,10 +643,12 @@ function drawCam(det) {
   poly([P(i, i), P(1 - i, i), P(1 - i, 1 - i), P(i, 1 - i)], 'rgba(255,255,255,.7)', [6, 6], 1.5);
   poly(Array.from({ length: 48 }, (_, k) => P(GATHER.x + R * Math.cos(k / 48 * Math.PI * 2), GATHER.y + R * Math.sin(k / 48 * Math.PI * 2))),
     'rgba(255,255,255,.7)', [6, 6], 1.5);
-  if (det && det.bbox) {
-    const b = det.bbox;
-    poly([P(b.x0 / gw, b.y0 / gh), P((b.x1 + 1) / gw, b.y0 / gh), P((b.x1 + 1) / gw, (b.y1 + 1) / gh), P(b.x0 / gw, (b.y1 + 1) / gh)],
-      st.name === 'read' || st.name === 'fixed' ? '#ffb01f' : '#e5484d', null, 2.5);
+  // まとまりごとの枠。読めた・残したものは光の色、それ以外は赤
+  for (const g of det ? det.groups : []) {
+    const tr = trackers.find(x => x.g === g);
+    const lit = tr && (tr.name === 'read' || tr.name === 'fixed');
+    poly([P(g.x0 / gw, g.y0 / gh), P((g.x1 + 1) / gw, g.y0 / gh), P((g.x1 + 1) / gw, (g.y1 + 1) / gh), P(g.x0 / gw, (g.y1 + 1) / gh)],
+      lit ? '#ffb01f' : '#e5484d', null, 2.5);
   }
   S.corners.forEach(([x, y], i) => {
     const cx = x * W, cy = y * H;
@@ -517,7 +665,7 @@ function drawCam(det) {
 
 const rectCtx = $('rect').getContext('2d');
 const KIND_RGB = { part: [229, 72, 77], small: [62, 155, 224], edge: [240, 160, 32] };
-function drawRect() {
+function drawRect(det) {
   const d = view.data;
   for (let i = 0; i < gw * gh; i++) {
     const k = i * 4;
@@ -529,6 +677,13 @@ function drawRect() {
     d[k + 3] = 255;
   }
   rectCtx.putImageData(view, 0, 0);
+  // ひとまとまり（1語として読む範囲）を点線の枠で。地は白っぽいので、枠は暗い色にする
+  rectCtx.save();
+  rectCtx.strokeStyle = '#1d1d1b';
+  rectCtx.lineWidth = 1.5;
+  rectCtx.setLineDash([4, 3]);
+  for (const g of det.groups) rectCtx.strokeRect(g.x0 - 2.5, g.y0 - 2.5, g.x1 - g.x0 + 6, g.y1 - g.y0 + 6);
+  rectCtx.restore();
 }
 
 // ヒストグラム。2つの山（部品と地）のあいだに線を置けばよい、が見て分かるように
@@ -642,6 +797,8 @@ const posToArea = pos => Math.pow(10, AREA_LO + (AREA_HI - AREA_LO) * pos / 1000
 function minAreaPx() { return Math.max(2, placeArea * S.minAreaPct / 100); }
 $('minArea').value = areaToPos(S.minAreaPct);
 $('minArea').oninput = e => { S.minAreaPct = posToArea(+e.target.value); save(); };
+$('groupGap').value = S.groupGapPct;
+$('groupGap').oninput = e => { S.groupGapPct = +e.target.value; save(); };
 $('level').value = S.surfaceLevel;
 $('level').oninput = e => { S.surfaceLevel = +e.target.value; save(); pushSurfaceSettings(); };
 $('glow').value = S.glow;
@@ -663,7 +820,7 @@ $('calib').onclick = () => {
   pushSurfaceSettings();
   resetArrangement();
 };
-$('wipe').onclick = () => { ch.postMessage({ type: 'wipe' }); st.lastFixed = null; };
+$('wipe').onclick = () => { ch.postMessage({ type: 'wipe' }); memory = []; };
 $('openSurface').onclick = () => window.open('surface.html', 'yomare-surface', 'width=1280,height=800');
 
 ch.onmessage = ({ data: m }) => {
@@ -684,14 +841,15 @@ function loop() {
     const det = detect();
     step(det, t, dt);
     drawCam(det);
-    drawRect();
+    drawRect(det);
     drawHist();
     renderState(t);
     const counts = { part: 0, small: 0, edge: 0 };
     for (let i = 1; i < comps.length; i++) counts[comps[i].kind]++;
-    $('counts').textContent = `部品 ${counts.part}　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}`;
+    $('counts').textContent = `部品 ${counts.part}（${det.groups.length}つのまとまり）　小さいので無視 ${counts.small}　縁に触れたので無視 ${counts.edge}`;
     const p = S.minAreaPct;
     $('minAreaVal').textContent = `${p < 0.1 ? p.toFixed(3) : p.toFixed(2)}%（${Math.round(minAreaPx())}画素未満）`;
+    $('groupGapVal').textContent = `${S.groupGapPct.toFixed(1)}%`;
     $('levelVal').textContent = S.surfaceLevel;
     $('gatherVal').textContent = S.gatherR.toFixed(2);
   }
