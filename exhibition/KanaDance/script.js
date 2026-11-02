@@ -161,8 +161,8 @@ function drawDetection(now) {
     ui.setStatus(`最も近い:「${letter ?? '—'}」誤差 ${error.toFixed(2)}（一致=しきい値 ${matchThreshold.toFixed(2)} 未満）／登録 ${refCount} 件`);
   }
 
-  // 一致が切れても、さかのぼる時間のあいだは尾を描き続ける
-  if (!latched.letter || now - latched.atMs > windowMs) {
+  // 一致が切れても、さかのぼる時間のあいだは尾を描き続ける（短くても holdMs は字を残す）
+  if (!latched.letter || now - latched.atMs > holdMs(windowMs)) {
     ui.setCurrentChar(null);
     ui.setShapeCount(0);
     return;
@@ -180,6 +180,11 @@ function drawDetection(now) {
   ui.setShapeCount(renderer.drawKanaBlend(lines, frames, ui.settings));
 }
 
+/** 一致が切れたあと字を出しておく時間。さかのぼる時間が 0 でも、最短 holdMs は残す */
+function holdMs(windowMs) {
+  return Math.max(windowMs, APP_CONFIG.limits.holdMs);
+}
+
 // ── シャッター ──────────────────────────────────────────────
 /**
  * いま画面に出ている字を下の帯に記録する。
@@ -189,7 +194,7 @@ function drawDetection(now) {
 function takeShot() {
   const now = performance.now();
   const { windowMs, intervalMs } = ui.settings;
-  const live = ui.currentMode() === 'detect' && latched.letter && now - latched.atMs <= windowMs;
+  const live = ui.currentMode() === 'detect' && latched.letter && now - latched.atMs <= holdMs(windowMs);
   const ok = live && recorder.add({
     letter: latched.letter,
     lines: references.lines[latched.letter],
