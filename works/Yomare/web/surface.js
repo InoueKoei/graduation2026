@@ -9,6 +9,7 @@
 // 外周の帯が置く場、中央の円が集まる場。
 
 import { CHANNEL, GATHER, TIME, DEFAULTS } from './common.js';
+import { FLOW } from './emoji.js';
 
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
@@ -19,7 +20,7 @@ const S = { ...DEFAULTS, calib: false };
 let W = 0, H = 0, dpr = 1;
 let side = 0, ox = 0, oy = 0;   // 正方形の一辺と左上（画素）
 
-let reading = null;   // { id, text, t0, glowCanvas, shapeCanvas, bbox, fading }
+let reading = null;   // { id, text, t0, glowCanvas, shape, bbox, fading }
 const bodies = [];    // 塊に加わった形
 const particles = [];
 
@@ -108,13 +109,63 @@ function startReading(m) {
     text: m.text,
     t0: now(),
     glowCanvas: maskCanvas(m.mask, m.gw, m.gh, S.glow),
-    shapeCanvas: maskCanvas(m.shape.data, m.shape.w, m.shape.h, S.ink),
+    shape: m.shape,       // 読まれた瞬間の形（0/1、正方形の向き）
     bbox: m.bbox,         // 正規化座標
     fading: 0,
   };
 }
 
-// 置かれていた場所から、置かれていた大きさのまま塊に加わり、引かれながら縮む
+// 形を部品（つながった塊）ごとに切り分ける。8近傍。
+// 操作画面の「小さい塊を無視する」と同じ基準（shape.minPx）より小さい粒は捨てる。
+// 細かい解像度で二値にし直しているぶん部品が少し痩せることがあるので、基準の 7割で切る
+function splitParts(shape, color) {
+  const { w, h, data } = shape;
+  const minPx = Math.max(6, (shape.minPx || 0) * 0.7);
+  const lab = new Int32Array(w * h), stack = new Int32Array(w * h);
+  const [r, g, b] = hexRgb(color);
+  const parts = [];
+  let id = 0;
+  for (let s = 0; s < w * h; s++) {
+    if (!data[s] || lab[s]) continue;
+    id++;
+    const px = [];
+    let x0 = w, y0 = h, x1 = -1, y1 = -1, sp = 0;
+    stack[sp++] = s; lab[s] = id;
+    while (sp) {
+      const i = stack[--sp];
+      px.push(i);
+      const x = i % w, y = (i / w) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (data[k] && !lab[k]) { lab[k] = id; stack[sp++] = k; }
+      }
+    }
+    if (px.length < minPx) continue;
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    const c = new OffscreenCanvas(bw, bh);
+    const cg = c.getContext('2d');
+    const img = cg.createImageData(bw, bh);
+    for (const i of px) {
+      const k = (((i / w) | 0) - y0) * bw + (i % w - x0);
+      img.data[k * 4] = r; img.data[k * 4 + 1] = g; img.data[k * 4 + 2] = b; img.data[k * 4 + 3] = 255;
+    }
+    cg.putImageData(img, 0, 0);
+    parts.push({
+      canvas: c,
+      fx: x0 / w, fy: y0 / h, fw: bw / w, fh: bh / h,      // 形の中での位置（割合）
+      delay: Math.random() * 0.4,                          // 動き出すまでの遅れ
+      dur: 0.9 + Math.random() * 0.6,                      // 着くまでの長さ。部品ごとに速さが違う
+      arc: (Math.random() - 0.5) * 0.16,                   // 道筋のふくらみ（進む向きに対して横へ）
+    });
+  }
+  return parts;
+}
+
+// 部品がばらばらに、向きを変えずに中央へ向かい、着いたところで置かれていた配置に組み直る
 function fix(id) {
   if (!reading || reading.id !== id) return;
   const b = reading.bbox;
@@ -124,9 +175,10 @@ function fix(id) {
   const ph = Math.random() * Math.PI * 2;
   bodies.push({
     text: reading.text,
-    canvas: reading.shapeCanvas,
-    w0, h0, w: w0 * k, h: h0 * k,
-    x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2,
+    parts: splitParts(reading.shape, S.ink),
+    from: { x: b.x0, y: b.y0, w: w0, h: h0 },     // 置かれていた場所と大きさ
+    w: w0 * k, h: h0 * k,                          // 塊の中での大きさ
+    x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2,    // 塊の中での中心（ここへ部品が集まる）
     vx: 0, vy: 0,
     born: now(), dying: 0, ph,
   });
@@ -136,14 +188,14 @@ function fix(id) {
 
 function spawnEmoji(e) {
   const t = now();
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < FLOW.COUNT; i++) {
     particles.push({
-      ch: e,
+      ch: Array.isArray(e) ? e[(Math.random() * e.length) | 0] : e,
       x: Math.random(),
       y: 1.05 + Math.random() * 0.35,
       vy: -(0.28 + Math.random() * 0.3),
       vx: (Math.random() - 0.5) * 0.06,
-      size: 0.035 + Math.random() * 0.04,
+      size: FLOW.SIZE_MIN + Math.random() * (FLOW.SIZE_MAX - FLOW.SIZE_MIN),
       rot: (Math.random() - 0.5) * 0.8,
       vr: (Math.random() - 0.5) * 1.2,
       t0: t + Math.random() * 0.5,
@@ -156,16 +208,18 @@ function spawnEmoji(e) {
 const ease = x => 1 - Math.pow(1 - x, 3);
 const clamp01 = x => Math.max(0, Math.min(1, x));
 
-// いまの大きさ（縮みきるまでは置いた大きさから補間）と、消えかけの度合い
+// 部品が着いた度合い
+function arrival(p, b, t) {
+  return ease(clamp01((t - b.born - p.delay) / p.dur));
+}
+
+// 塊の中での大きさ（ぶつかり合いに使う）と、全部の部品が着いたか、消えかけの度合い。
+// 部品が飛んでいるあいだも、塊の中では着いたあとの大きさで場所を取っておく
 function sizeOf(b, t) {
-  const s = ease(clamp01((t - b.born) / TIME.SHRINK_SEC));
+  let s = 1;
+  for (const p of b.parts) s = Math.min(s, arrival(p, b, t));
   const fade = b.dying ? clamp01((t - b.dying) / 1.5) : 0;
-  const k = 1 - fade;
-  return {
-    s, fade,
-    w: (b.w0 + (b.w - b.w0) * s) * k,
-    h: (b.h0 + (b.h - b.h0) * s) * k,
-  };
+  return { s, fade, w: b.w * (1 - fade), h: b.h * (1 - fade) };
 }
 
 // ぶつかり合いは円で近似する。字形の外接矩形には余白があるので、対角線より少し小さく取る。
@@ -277,7 +331,21 @@ function drawBodies(t) {
     const w = sz.w * side, h = sz.h * side;
     const cx = X(b.x), cy = Y(b.y);
     ctx.globalAlpha = 1 - sz.fade;
-    ctx.drawImage(b.canvas, cx - w / 2, cy - h / 2, w, h);
+    for (const p of b.parts) {
+      const e = arrival(p, b, t);
+      // 出発：置かれていた場所での、その部品の矩形
+      const ax = X(b.from.x + p.fx * b.from.w), ay = Y(b.from.y + p.fy * b.from.h);
+      const aw = p.fw * b.from.w * side, ah = p.fh * b.from.h * side;
+      // 到着：塊の中の字の、その部品の矩形
+      const bx = cx - w / 2 + p.fx * w, by = cy - h / 2 + p.fy * h;
+      const bw = p.fw * w, bh = p.fh * h;
+      // 進む向きに対して横へふくらませる
+      const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+      const bulge = Math.sin(Math.PI * e) * p.arc * side;
+      const px = ax + dx * e - dy / len * bulge;
+      const py = ay + dy * e + dx / len * bulge;
+      ctx.drawImage(p.canvas, px, py, aw + (bw - aw) * e, ah + (bh - ah) * e);
+    }
     // 見出しは縮みきる手前から出る
     const ha = clamp01((sz.s - 0.7) / 0.3) * (1 - sz.fade);
     if (ha > 0) {
@@ -311,7 +379,7 @@ function drawParticles(t, dt) {
     const p = particles[i];
     if (t < p.t0) continue;
     p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
-    if (p.y < -0.15 || t - p.t0 > TIME.EMOJI_SEC + 1.5) { particles.splice(i, 1); continue; }
+    if (p.y < -0.15 || t - p.t0 > FLOW.SEC + 1.5) { particles.splice(i, 1); continue; }
     const s = p.size * side;
     ctx.save();
     ctx.translate(X(p.x), Y(p.y));
