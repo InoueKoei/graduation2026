@@ -8,7 +8,7 @@ class TextOutputPublisher {
     if(this.channel)this.channel.onmessage=e=>{if(e.data?.type==='request'&&(!e.data.source||e.data.source===this.id))this.publish(true);};
   }
   publish(force=false){
-    const runs=this.getRuns().map(r=>({text:r.text,fontFamily:r.fontFamily,fontWeight:r.fontWeight,fontSize:r.fontSize,size:r.size,pending:!!r.pending}));
+    const runs=this.getRuns().map(r=>({text:r.text,fontFamily:r.fontFamily,fontWeight:r.fontWeight,fontSize:r.fontSize,size:r.size,pending:!!r.pending,...(Number.isFinite(r.rotationDeg)?{rotationDeg:r.rotationDeg}:{}),...(Number.isFinite(r.rotationStartedAt)?{rotationStartedAt:r.rotationStartedAt,rotationDuration:r.rotationDuration}:{})}));
     const signature=JSON.stringify(runs);if(!force&&signature===this.signature)return;
     this.signature=signature;const revision=++this.revision;
     this.channel?.postMessage({type:'text',source:this.id,revision,runs});
