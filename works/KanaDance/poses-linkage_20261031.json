@@ -1,0 +1,540 @@
+{
+ "_meta": {
+  "purpose": "KanaDance 新バージョンのポーズ紐付け（座標は未登録。MediaPipe で撮ってから登録する）",
+  "exportedAt": "2026-10-31 (JST)",
+  "source": "アーティファクト「身振りスケッチ」の DB コレクション poses",
+  "artifactUrl": "https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug",
+  "count": 44,
+  "newRegistrationCutoff": "2026-10-31 21:42 JST 以降に Supabase poses へ登録された行を新しい登録とみなす",
+  "fields": {
+   "docId": "アーティファクト DB 上のドキュメント id",
+   "letter": "KanaDance の Supabase poses.letter に対応する字",
+   "source": "kanadance=KDタグ付き / sketch=自作スケッチ由来",
+   "strokes": "点の結び方。Supabase poses.lines に入れる値（config.js の線記述と同じ記法）",
+   "kanadanceId": "新しく登録した Supabase 行の id。登録後に埋める（現在は全て null）",
+   "prevKanadanceId": "入れ替え前の旧 Supabase 行 id（KD のみ）",
+   "status": "coords-pending=座標未登録"
+  },
+  "notes": [
+   "ト・ヨは sketch 版と kanadance 版の2行ずつある。どちらを使うか未決",
+   "フ・ル・レ（kanadance）は strokes が空",
+   "座標 pts は意図的に含めていない（全て null）"
+  ]
+ },
+ "poses": [
+  {
+   "docId": "k30a2",
+   "letter": "ア",
+   "source": "sketch",
+   "strokes": [
+    "LH-RE-RH",
+    "W-LK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30a4",
+   "letter": "イ",
+   "source": "sketch",
+   "strokes": [
+    "LH-N-RH",
+    "N-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30a6",
+   "letter": "ウ",
+   "source": "sketch",
+   "strokes": [
+    "LE-RE",
+    "LE-LH",
+    "H-[LE_RE]",
+    "RE-RK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30a8",
+   "letter": "エ",
+   "source": "sketch",
+   "strokes": [
+    "LH-N-RH",
+    "LK-W-RK",
+    "N-W"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30aa",
+   "letter": "オ",
+   "source": "sketch",
+   "strokes": [
+    "LH-RH",
+    "H-N-RL",
+    "N-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30ab",
+   "letter": "カ",
+   "source": "sketch",
+   "strokes": [
+    "N-W-LL",
+    "RH-RE-RK-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30ad",
+   "letter": "キ",
+   "source": "sketch",
+   "strokes": [
+    "H-W-RL",
+    "LH-RH",
+    "LK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30af",
+   "letter": "ク",
+   "source": "sketch",
+   "strokes": [
+    "H-RE-RH",
+    "RE-RS-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30b1",
+   "letter": "ケ",
+   "source": "sketch",
+   "strokes": [
+    "H-LH",
+    "LS-RH",
+    "RE-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30b3",
+   "letter": "コ",
+   "source": "sketch",
+   "strokes": [
+    "LH-N-W-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30b5",
+   "letter": "サ",
+   "source": "sketch",
+   "strokes": [
+    "LL-RH",
+    "LE-LH",
+    "H-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-10",
+   "letter": "シ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-LE",
+    "RH-RE",
+    "W-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 10,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30b9",
+   "letter": "ス",
+   "source": "sketch",
+   "strokes": [
+    "LH-RS-W-LL",
+    "W-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30bb",
+   "letter": "セ",
+   "source": "sketch",
+   "strokes": [
+    "LH-RE-RH",
+    "H-LK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-11",
+   "letter": "ソ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-LE",
+    "H-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 11,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30bf",
+   "letter": "タ",
+   "source": "sketch",
+   "strokes": [
+    "H-LS-LH",
+    "LS-RS-RL",
+    "LK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-27",
+   "letter": "チ",
+   "source": "kanadance",
+   "strokes": [
+    "LE-RE",
+    "LK-RK",
+    "[LE_RE]-W-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 27,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-28",
+   "letter": "ツ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-LE",
+    "RH-RE",
+    "W-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 28,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30c6",
+   "letter": "テ",
+   "source": "sketch",
+   "strokes": [
+    "LH-RH",
+    "LL-LK",
+    "RK-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-17",
+   "letter": "ト",
+   "source": "kanadance",
+   "strokes": [
+    "H-LL",
+    "H-LL-LH"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 17,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30c8",
+   "letter": "ト",
+   "source": "sketch",
+   "strokes": [
+    "H-W-LL",
+    "W-LH"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-18",
+   "letter": "ナ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-RH",
+    "H-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 18,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30cb",
+   "letter": "ニ",
+   "source": "sketch",
+   "strokes": [
+    "LH-RH",
+    "LL-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-30",
+   "letter": "ヌ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-RE-LL",
+    "LK-RL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 30,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-31",
+   "letter": "ネ",
+   "source": "kanadance",
+   "strokes": [
+    "LE-RE",
+    "H-[LE_RE]",
+    "RE-LL",
+    "LE-LL",
+    "W-RL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 31,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30ce",
+   "letter": "ノ",
+   "source": "sketch",
+   "strokes": [
+    "RH-LH"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30cf",
+   "letter": "ハ",
+   "source": "sketch",
+   "strokes": [
+    "LS-LE-LL",
+    "RS-RE-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30d2",
+   "letter": "ヒ",
+   "source": "sketch",
+   "strokes": [
+    "H-W",
+    "LS-N-RE-LH",
+    "W-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-34",
+   "letter": "フ",
+   "source": "kanadance",
+   "strokes": [],
+   "kanadanceId": null,
+   "prevKanadanceId": 34,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-35",
+   "letter": "ヘ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-H-RL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 35,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30db",
+   "letter": "ホ",
+   "source": "sketch",
+   "strokes": [
+    "LH-LE-LS-N-RS-RE-RH",
+    "H-N-W",
+    "LK-LL",
+    "RK-RL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-37",
+   "letter": "マ",
+   "source": "kanadance",
+   "strokes": [
+    "RK-RL",
+    "LE-RE-[RK_RL]"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 37,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30df",
+   "letter": "ミ",
+   "source": "sketch",
+   "strokes": [
+    "LE-LH",
+    "RH-RE",
+    "LK-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-39",
+   "letter": "ム",
+   "source": "kanadance",
+   "strokes": [
+    "H-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 39,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-15",
+   "letter": "メ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-RL",
+    "RH-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 15,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-40",
+   "letter": "モ",
+   "source": "kanadance",
+   "strokes": [
+    "LE-RE",
+    "LH-RH",
+    "[LE_RE]-LK-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 40,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-16",
+   "letter": "ヤ",
+   "source": "kanadance",
+   "strokes": [
+    "H-RL",
+    "LH-RE-RH"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 16,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-41",
+   "letter": "ユ",
+   "source": "kanadance",
+   "strokes": [
+    "LH-LE",
+    "LL-RL",
+    "LE-[LL_RL]"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 41,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-42",
+   "letter": "ヨ",
+   "source": "kanadance",
+   "strokes": [
+    "LE-RE-RL-LL",
+    "RK-LE"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 42,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30e8",
+   "letter": "ヨ",
+   "source": "sketch",
+   "strokes": [
+    "LH-LS",
+    "RH-RE",
+    "LL-LK",
+    "LS-RE-LK"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-43",
+   "letter": "ラ",
+   "source": "kanadance",
+   "strokes": [
+    "LE-RE",
+    "LH-RH-LL"
+   ],
+   "kanadanceId": null,
+   "prevKanadanceId": 43,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "k30ea",
+   "letter": "リ",
+   "source": "sketch",
+   "strokes": [
+    "RE-RH",
+    "RS-W-LL"
+   ],
+   "kanadanceId": null,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-45",
+   "letter": "ル",
+   "source": "kanadance",
+   "strokes": [],
+   "kanadanceId": null,
+   "prevKanadanceId": 45,
+   "status": "coords-pending"
+  },
+  {
+   "docId": "kd-46",
+   "letter": "レ",
+   "source": "kanadance",
+   "strokes": [],
+   "kanadanceId": null,
+   "prevKanadanceId": 46,
+   "status": "coords-pending"
+  }
+ ]
+}
