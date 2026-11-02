@@ -21,7 +21,7 @@ h2{font-size:14px;font-weight:500;color:#697380;margin:0}.selection{text-align:c
 #text{font-size:34px;line-height:1.8;min-height:112px;overflow-wrap:anywhere;white-space:pre-wrap;margin:20px 0 14px}
 #placeholder{color:#a0a8b2;font-size:16px}button{font:inherit;font-size:13px;color:#566373;background:#f6f7f9;border:1px solid #e4e7eb;padding:8px 14px;border-radius:8px;cursor:pointer}
 button:hover{background:#eef1f4}button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:3px solid #90c4dc;outline-offset:2px}
-.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}#open-output{font-size:13px;color:#397b83;text-decoration:none;border:1px solid #cedcde;border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center}#open-output:hover{background:#f1f7f7}#open-output:focus-visible{outline:3px solid #90c4dc;outline-offset:2px}footer{font-size:13px;color:#7a8591;line-height:1.9;text-align:center;margin:25px 0}#hint{font-size:13px;min-height:20px;color:#7a8591;margin-top:6px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}#open-output{font-size:13px;color:#397b83;text-decoration:none;border:1px solid #cedcde;border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center}#open-output:hover{background:#f1f7f7}#open-output:focus-visible{outline:3px solid #90c4dc;outline-offset:2px}.output-invert{font-size:13px;color:#566373;display:inline-flex;align-items:center;gap:6px}.output-invert input{accent-color:#397b83}footer{font-size:13px;color:#7a8591;line-height:1.9;text-align:center;margin:25px 0}#hint{font-size:13px;min-height:20px;color:#7a8591;margin-top:6px}
 .connection-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 22px}#ble-connect,#usb-connect{background:#263d49;border-color:#263d49;color:white}#browser-note{font-size:13px;color:#697380;margin:-10px 0 22px}
 @media(max-width:520px){main{margin:28px auto;padding:0 16px}header{align-items:flex-start}section{padding:22px}#text{font-size:28px}#selected{font-size:100px;min-height:135px}}
 
@@ -129,7 +129,7 @@ details{border:1px solid #e4e7eb;border-radius:12px;padding:16px 20px;background
 <div class="text-head"><h2 id="text-title">入力中の文字</h2><span id="count">0 / 96文字</span></div>
 <div id="text" aria-live="polite" aria-atomic="true"><span id="placeholder">頷くか、赤ボタンで文字を追加</span></div>
 <p id="feedback" role="status"></p>
-<div class="actions"><button id="copy" disabled>コピー</button><button id="copy-styled">サイズ付きコピー</button><button id="clear-text" disabled>全消し</button><a id="open-output" href="output.html" target="_blank" rel="noopener">文字だけを別タブで表示 ↗</a></div>
+<div class="actions"><button id="copy" disabled>コピー</button><button id="copy-styled">サイズ付きコピー</button><button id="clear-text" disabled>全消し</button><label class="output-invert"><input id="output-invert" type="checkbox"> 白黒反転</label><a id="open-output" href="output.html" target="_blank" rel="noopener">文字だけを別タブで表示 ↗</a></div>
 <p class="subtle">選択中の文字は回転し、入力した瞬間の角度で固定されます。表示タブはダブルクリックで全画面にできます。</p>
 <p id="range-description" class="subtle">あ〜んの46文字を左右合計120°に配置。左端が「あ」、右端が「ん」です。</p>
 </section>

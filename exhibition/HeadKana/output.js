@@ -29,6 +29,16 @@ const requestTimer=setInterval(()=>{if(mirror.revision)clearInterval(requestTime
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)mirror.request();});
 window.addEventListener('pageshow',()=>mirror.request());
 
+// Black-and-white inversion comes from the control page (?invert=1); "i" flips it here and keeps it in the URL.
+const params=new URLSearchParams(location.search);
+document.documentElement.classList.toggle('invert',params.get('invert')==='1');
+document.addEventListener('keydown',e=>{
+  if(e.key!=='i'||e.metaKey||e.ctrlKey||e.altKey)return;
+  const on=document.documentElement.classList.toggle('invert');
+  if(on)params.set('invert','1');else params.delete('invert');
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));
+});
+
 document.addEventListener('dblclick',async()=>{
   try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{}
 });
