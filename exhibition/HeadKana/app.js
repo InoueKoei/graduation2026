@@ -72,7 +72,11 @@ const textOutput=new TextOutputPublisher(outputRuns,async runs=>{
   }
   return result;
 });
-$('open-output').href='/output.html?source='+encodeURIComponent(textOutput.id);
+const OUTPUT_INVERT_KEY='headkana-output-invert';
+function updateOutputLink(){$('open-output').href='output.html?source='+encodeURIComponent(textOutput.id)+($('output-invert').checked?'&invert=1':'');}
+try{$('output-invert').checked=localStorage.getItem(OUTPUT_INVERT_KEY)==='1';}catch{}
+$('output-invert').addEventListener('change',e=>{try{localStorage.setItem(OUTPUT_INVERT_KEY,e.target.checked?'1':'0');}catch{}updateOutputLink();});
+updateOutputLink();
 
 function saveDialOptions(){try{localStorage.setItem(DIAL_OPTIONS_KEY,JSON.stringify({...dialAssignments.options,mode:dialAssignments.mode}));}catch{}}
 function committedStyle(){const s=dialAssignments.style,f=dialAssignments.font();return {fontFamily:f.family,fontLabel:f.label,fontWeight:s.fontWeight,fontSize:s.fontSize};}
