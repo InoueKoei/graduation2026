@@ -67,7 +67,7 @@ const CONTROLS = [
     apply: (v) => { video.style.opacity = String(v); },
   },
   { id: 'match-threshold', key: 'matchThreshold', scale: 1,    format: (v) => v.toFixed(2) },
-  { id: 'blend-window',    key: 'windowMs',       scale: 1000, format: (v) => `${v.toFixed(1)} 秒` },
+  { id: 'blend-window',    key: 'windowMs',       scale: 1000, format: (v) => (v > 0 ? `${v.toFixed(1)} 秒` : 'なし') },
   { id: 'blend-interval',  key: 'intervalMs',     scale: 1000, format: (v) => `${Math.round(v * 1000)} ms` },
   { id: 'blend-steps',     key: 'steps',          scale: 1,    format: (v) => `${v} 段` },
   { id: 'blend-width',     key: 'width',          scale: 1,    format: (v) => `${v} px` },

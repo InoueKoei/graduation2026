@@ -65,7 +65,11 @@ export const APP_CONFIG = Object.freeze({
   },
 
   /** 重くなりすぎないための保険：履歴バッファの長さと、一度に描く鍵フレーム数の上限 */
-  limits: { bufferMs: 4000, maxKeyframes: 48 },
+  /**
+   * holdMs: 一致が切れてから字を出し続ける最短の時間。さかのぼる時間がこれより短い（0 = 尾なし）ときも、
+   * 判定の一瞬の途切れで字がちらつかず、シャッターも押した瞬間に間に合うようにする
+   */
+  limits: { bufferMs: 4000, maxKeyframes: 48, holdMs: 300 },
 });
 
 /** 手足以外の部位（MediaPipe Pose のランドマーク番号）。どの組でも同じ */

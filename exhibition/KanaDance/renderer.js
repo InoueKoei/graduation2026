@@ -70,7 +70,8 @@ export class Renderer {
 
     const scale = this.#scale();
     let drawn = 0;
-    for (let d = 0; d <= divisions; d++) {
+    // 形が1つだけ（さかのぼる時間 0）のときは、尾の濃さで重ねず、いまの形を1回だけ描く
+    for (let d = shapes.length === 1 ? divisions : 0; d <= divisions; d++) {
       const progress = d / divisions;               // 0 = 最も古い形, 1 = いまの形
       const position = progress * (shapes.length - 1);
       const index = Math.min(Math.floor(position), shapes.length - 2);
