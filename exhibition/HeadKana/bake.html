@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>かな入力 · 書体を画像にする</title>
+<style>
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;color:#20262d;background:#f4f7f7}
+*{box-sizing:border-box}body{margin:0;padding:32px 16px}
+main{max-width:720px;margin:0 auto;background:#fff;border-radius:14px;padding:28px}
+h1{font-size:20px;margin:0 0 12px}p,li{font-size:14px;line-height:1.8;color:#3d4954}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:18px 0}
+button{font:inherit;font-size:14px;color:#fff;background:#397b83;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+label{font-size:14px;color:#3d4954}select,input[type=text]{font:inherit;font-size:14px;border:1px solid #cedcde;border-radius:8px;padding:8px 10px;color:#263d49;background:#fff}
+input[type=text]{width:16em}
+#fonts{display:grid;gap:6px;margin:12px 0}#fonts label{display:flex;gap:8px;align-items:baseline}#fonts small{color:#7a8591}
+#fonts input{accent-color:#397b83}
+#status{font-size:13px;color:#397b83;min-height:1.6em;white-space:pre-wrap}
+#log{font-size:12px;color:#697380;white-space:pre-wrap;max-height:240px;overflow:auto;background:#f9fbfb;border-radius:8px;padding:10px;margin:0}
+#log:empty{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>書体を画像にする</h1>
+<p>Mac に入っている Moji-stack の書体を、HeadKana で使う文字（あ〜ん・濁点・半濁点・小文字・記号）だけ PNG に焼き出します。
+焼いた書体は、ラズパイの<strong>文字だけのページ</strong>で画像として描かれます。操作画面ではゴシックで代わりに表示されます。</p>
+<p>書き出し先には <code>exhibition/HeadKana/baked</code> を選んでください（無ければ作る）。中身はリポジトリに入れず、ラズパイへ直接コピーします。</p>
+<div class="row"><button id="read">PCのフォントを読み込む</button></div>
+<div id="fonts"></div>
+<div class="row">
+<label>焼く大きさ <select id="size"><option value="256">256px</option><option value="384">384px</option><option value="512" selected>512px</option><option value="768">768px</option></select></label>
+<label>追加の文字 <input id="extra" type="text" placeholder="例：〜・「」" autocomplete="off"></label>
+</div>
+<div class="row"><button id="bake" disabled>フォルダを選んで書き出す</button></div>
+<p id="status" role="status"></p>
+<pre id="log"></pre>
+</main>
+<script src="input-engine.js"></script>
+<script src="head-modifiers.js"></script>
+<script src="dial-custom.js"></script>
+<script src="bake.js"></script>
+</body>
+</html>
