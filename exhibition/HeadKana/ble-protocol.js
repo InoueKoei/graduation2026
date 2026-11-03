@@ -58,6 +58,10 @@ class DialSerialDecoder {
           messages.push({type:'dial',protocol:5,pattern:'type-lcd',ready:!!(flags&1),confirm:!!(flags&2),erase:!!(flags&4),pressed:!!(flags&8),fontConfirm:!!(flags&16),selected,seq,fontCounter,sizeRaw,weightRaw,fontPressed:!!fontPressed});
         continue;
       }
+      const swap=/^@SWAP,([01])$/.exec(line.trim());
+      if(swap){messages.push({type:'encoder-swap',swapped:swap[1]==='1'});continue;}
+      const glyph=/^@GLYPHSET,(\d+),(\d+)$/.exec(line.trim());
+      if(glyph){messages.push({type:'lcd-glyph',size:Number(glyph[1]),capacity:Number(glyph[2])});continue;}
       const single=/^@S,(\d+),(\d+),(\d+)$/.exec(line.trim());
       if(single){
         const flags=Number(single[1]),selected=Number(single[2]),seq=Number(single[3]);
