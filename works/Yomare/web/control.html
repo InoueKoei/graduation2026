@@ -52,6 +52,12 @@
   #log li { padding: 2px 0; border-top: 1px dashed var(--line); display: flex; gap: 10px; }
   #log li time { color: var(--sub); }
   #log li.miss b { color: var(--sub); font-weight: 400; }
+  #emojiRows { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 4px; }
+  #emojiRows li { display: flex; gap: 6px; align-items: center; }
+  #emojiRows input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+  #emojiRows .word { flex: 1; }
+  #emojiRows .chars { flex: 1.2; font-size: 16px; }
+  #emojiRows button { padding: 3px 10px; }
   #kept { list-style: none; padding: 0; margin: 8px 0 0; max-height: 260px; overflow: auto; font-variant-numeric: tabular-nums; }
   #kept li { padding: 4px 0; border-top: 1px dashed var(--line); display: flex; gap: 10px; align-items: center; }
   #kept li time { color: var(--sub); }
@@ -152,6 +158,16 @@
         <input type="color" id="glow">
         <span class="hint">光が部品として拾われていないか、上の「見えているもの」で確かめる</span>
       </div>
+    </section>
+
+    <section>
+      <h2>絵文字 — この語が読めたら流す</h2>
+      <ul id="emojiRows"></ul>
+      <div class="row">
+        <button id="emojiAdd">＋ 語を足す</button>
+        <button id="emojiReset">emoji.js に戻す</button>
+      </div>
+      <p class="hint">語は完全一致（読まれた文字列そのまま。ひらがな・カタカナ・漢字・数字なんでもよい）。絵文字を2つ以上並べると、流れる粒ごとにその中から選ばれる。「流す」で白い面に試しに流せる。変えたものはすぐ効き、このブラウザに覚えておく。</p>
     </section>
 
     <section>

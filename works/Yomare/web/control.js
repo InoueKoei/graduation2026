@@ -5,7 +5,7 @@
 // OCR へ渡すのはカメラ映像を矩形で切り出しただけの画像で、二値化したものではない。
 
 import { CHANNEL, PLACE, GATHER, inPlace, TIME, DEFAULTS } from './common.js';
-import { WORDS as EMOJI, FLOW } from './emoji.js';
+import { WORDS, FLOW } from './emoji.js';
 
 const $ = id => document.getElementById(id);
 const ch = new BroadcastChannel(CHANNEL);
@@ -14,8 +14,10 @@ const now = () => performance.now() / 1000;
 // ================================================================ 設定（この端末に覚えておく）
 
 const STORE = 'yomare.settings.v1';
-const S = { ...DEFAULTS, corners: null, cameraId: '', rotate: 0, calib: false };
+const S = { ...DEFAULTS, corners: null, cameraId: '', rotate: 0, emoji: null, calib: false };
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch {}
+// 絵文字の対応表は、操作画面で一度でも変えたらこの端末に覚えたものを使う。まだなら emoji.js のまま
+if (!S.emoji) S.emoji = { ...WORDS };
 S.calib = false;
 function save() {
   const { calib, ...keep } = S;
@@ -618,16 +620,74 @@ async function read(tr, g) {
     bbox: { x0: b.x0 / gw, y0: b.y0 / gh, x1: (b.x1 + 1) / gw, y1: (b.y1 + 1) / gh },
   });
 
-  const e = EMOJI[text];
+  const e = S.emoji[text];
   if (e) {
     const t = now();
-    if (t - (lastEmoji[text] ?? -1e9) >= FLOW.COOLDOWN_SEC) {
-      ch.postMessage({ type: 'emoji', ch: e });
-      pausedUntil = t + FLOW.SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
-    }
+    if (t - (lastEmoji[text] ?? -1e9) >= FLOW.COOLDOWN_SEC) flowEmoji(e);
     lastEmoji[text] = t;
   }
 }
+
+function flowEmoji(e) {
+  ch.postMessage({ type: 'emoji', ch: e });
+  pausedUntil = now() + FLOW.SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
+}
+
+// ================================================================ 絵文字の対応表
+
+// 語 → 絵文字を操作画面で足したり変えたりする。変えるたびにこの端末に覚える。
+// 絵文字の欄は1字ずつ（書記素ごと）に分け、2つ以上なら配列にする（流れる粒ごとにその中から選ばれる）
+const graphemes = s => [...new Intl.Segmenter('ja', { granularity: 'grapheme' }).segment(s)]
+  .map(x => x.segment).filter(x => x.trim());
+let emojiRows = [];   // { word, chars }（入力欄そのままの文字列）
+
+function loadEmojiRows() {
+  emojiRows = Object.entries(S.emoji).map(([word, e]) => ({ word, chars: [].concat(e).join('') }));
+  renderEmoji();
+}
+
+// 語と絵文字の両方が入っている行だけを対応表にする（書きかけの行は覚えない）。
+// 語は Vision の読みと同じく空白を詰める。同じ語が2行あれば下の行が勝つ
+function commitEmoji() {
+  const map = {};
+  for (const r of emojiRows) {
+    const word = r.word.replace(/\s/g, ''), g = graphemes(r.chars);
+    if (!word || !g.length) continue;
+    map[word] = g.length > 1 ? g : g[0];
+  }
+  S.emoji = map;
+  save();
+}
+
+function renderEmoji() {
+  $('emojiRows').replaceChildren(...emojiRows.map((r, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = '<input class="word" placeholder="語"><input class="chars" placeholder="絵文字"><button class="flow">流す</button><button class="del" title="この行を消す">×</button>';
+    const [word, chars] = li.querySelectorAll('input');
+    word.value = r.word; chars.value = r.chars;
+    word.oninput = () => { r.word = word.value; commitEmoji(); };
+    chars.oninput = () => { r.chars = chars.value; commitEmoji(); };
+    li.querySelector('.flow').onclick = () => {
+      const g = graphemes(r.chars);
+      if (g.length) flowEmoji(g.length > 1 ? g : g[0]);
+    };
+    li.querySelector('.del').onclick = () => { emojiRows.splice(i, 1); commitEmoji(); renderEmoji(); };
+    return li;
+  }));
+}
+
+$('emojiAdd').onclick = () => {
+  emojiRows.push({ word: '', chars: '' });
+  renderEmoji();
+  $('emojiRows').lastChild.querySelector('.word').focus();
+};
+$('emojiReset').onclick = () => {
+  if (!confirm('絵文字の対応表を emoji.js の内容に戻す？（この画面で足した・変えたものは消える）')) return;
+  S.emoji = { ...WORDS };
+  save();
+  loadEmojiRows();
+};
+loadEmojiRows();
 
 // 読んだ向き。いちばん長い行の四隅から、白い面の上でのベースライン（左下→右下）の向きを出し、
 // 90° 単位に丸める（0 = 正位置、1 = 時計回りに 90°、2 = 逆さ、3 = 反時計回りに 90°）。
