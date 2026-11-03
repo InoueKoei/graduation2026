@@ -44,7 +44,6 @@ function savedDialOptions(){
 }
 const dialAssignments=new DialAssignments(fontCatalog.fonts,savedDialOptions());
 let wheelSignature='',fontPreviewToken=0;
-const outputFontData=new Map();
 const rotationClock=new LetterRotation();
 function rotatedRunStyle(run){return {...runStyle(run),...rotationStyle(run)};}
 function inputStyle(){return {...committedStyle(),rotationDeg:rotationClock.angle()};}
@@ -60,14 +59,13 @@ function updateCandidatePreview(){
 function hideCandidatePreview(){candidateSignature=JSON.stringify(candidateRun());candidateVisible=false;}
 function outputRuns(){return candidateVisible?[...doc.composition,candidateRun()]:doc.composition;}
 
-const textOutput=new TextOutputPublisher(outputRuns,async runs=>{
+const textOutput=new TextOutputPublisher(outputRuns,async (runs,sent)=>{
   const result=[];
   for(const font of fontCatalog.fonts.filter(f=>f.faces&&runs.some(r=>r.fontFamily===f.family))){
     for(const weight of new Set(runs.filter(r=>r.fontFamily===font.family).map(r=>r.fontWeight||400))){
-      const face=font.faces.find(f=>fontWeightFromName(f.style+' '+f.postscriptName)===weight)||font.faces[0];
-      const key=face.postscriptName;
-      if(!outputFontData.has(key))outputFontData.set(key,face.blob().then(blob=>blob.arrayBuffer()).catch(error=>{outputFontData.delete(key);throw error;}));
-      result.push({family:font.family,weight:fontWeightFromName(face.style+' '+face.postscriptName),data:await outputFontData.get(key)});
+      const face=fontCatalog.face(font,weight),faceWeight=fontWeightFromName(face.style+' '+face.postscriptName);
+      if(sent.has(font.family+':'+faceWeight))continue;
+      result.push({family:font.family,weight:faceWeight,data:await fontCatalog.fontData(face)});
     }
   }
   return result;
@@ -161,20 +159,35 @@ $('save-dial-options').addEventListener('click',()=>{
     const fontIds=[...document.querySelectorAll('#dial-font-options input:checked')].map(input=>input.value);
     if(!fontIds.length)throw Error('フォントを1つ以上選んでください');
     dialAssignments.options={weights,sizes,symbols,fontIds};dialAssignments.alignChoice();saveDialOptions();render();
+    fontCatalog.extraText=symbols.join('');preloadDialFonts();
     $('dial-options-feedback').textContent='右ダイヤルの候補を保存しました';
   }catch(error){$('dial-options-feedback').textContent=error.message;}
 });
-$('read-local-fonts').addEventListener('click',async()=>{
+fontCatalog.extraText=dialAssignments.options.symbols.join('');
+function preloadDialFonts(){void fontCatalog.preload(dialAssignments.options.fontIds,dialAssignments.style.fontWeight);}
+// The button adds every Moji-stack face to the dial; the automatic read on a later visit keeps the saved choice.
+async function readLocalFonts(addToDial){
   $('read-local-fonts').disabled=true;
   try{
     const count=await fontCatalog.readLocalFonts();dialAssignments.fonts=fontCatalog.fonts;
-    for(const font of fontCatalog.fonts.filter(f=>f.faces))if(!dialAssignments.options.fontIds.includes(font.id))dialAssignments.options.fontIds.push(font.id);
-    renderFontOptions();dialAssignments.alignChoice();render();saveDialOptions();
+    if(addToDial)for(const font of fontCatalog.fonts.filter(f=>f.faces))if(!dialAssignments.options.fontIds.includes(font.id))dialAssignments.options.fontIds.push(font.id);
+    renderFontOptions();dialAssignments.alignChoice();render();if(addToDial)saveDialOptions();
     $('font-load-status').textContent=count?`Moji-stackの書体が${count}種類使えます。下で候補を選んでください`:'Moji-stackの書体は見つかりませんでした。標準書体とゼン丸ゴシックを使えます';
+    preloadDialFonts();
   }catch(error){$('font-load-status').textContent=error.name==='NotAllowedError'?'フォントの読み込みは許可されませんでした。標準書体を使えます':error.message;}
   finally{$('read-local-fonts').disabled=false;}
-});
+}
+$('read-local-fonts').addEventListener('click',()=>readLocalFonts(true));
+// Once Chrome has allowed local fonts, read them on every visit so the dial is ready without a click.
+navigator.permissions?.query({name:'local-fonts'}).then(status=>{if(status.state==='granted')void readLocalFonts(false);}).catch(()=>{});
 setupDialControls();
+void fontCatalog.readBakedFonts().then(count=>{
+  if(!count)return;dialAssignments.fonts=fontCatalog.fonts;
+  // First run on a fresh machine (the Pi): put the baked faces on the dial without a trip to the settings.
+  let saved=true;try{saved=!!localStorage.getItem(DIAL_OPTIONS_KEY);}catch{}
+  if(!saved)for(const font of fontCatalog.fonts.filter(f=>f.baked))if(!dialAssignments.options.fontIds.includes(font.id))dialAssignments.options.fontIds.push(font.id);
+  renderFontOptions();dialAssignments.alignChoice();render();
+}).catch(()=>{});
 let coreTarget=null,coreReady=false;
 const coreCycle=new KanaModifierCycle();
 function coreAction(event){

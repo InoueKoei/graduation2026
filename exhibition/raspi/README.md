@@ -28,6 +28,9 @@ Yomare は文字認識に Mac で動かすサーバが要るので、ラズパ�
 - `exhibition/` を `http://localhost:8991/` で配るサーバを、起動時に自動で立ち上げる
 - ログインしたら Chromium を全画面・音の自動再生許可で開く（**最初のクリックが要らなくなる**）
 - 画面が消えないようにする
+- 日本語フォントが無ければ入れる（Noto CJK）
+
+HeadKana で商用書体を出すなら、Mac で焼いた `baked/` を別にコピーする（[HeadKana の README](../HeadKana/README.md#商用書体をラズパイで使う)）。
 
 ## 3. ラズパイの設定（初回だけ、`sudo raspi-config`）
 

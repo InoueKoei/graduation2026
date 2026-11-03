@@ -12,7 +12,9 @@
 main{width:100%;min-height:100svh;display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;gap:12px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.15}
 .letter-slot{position:relative;display:block;flex:0 0 auto;font-size:0;line-height:0}.letter-glyph{line-height:1}
 .pending{text-decoration:underline;text-decoration-color:#a9b9bb;text-decoration-thickness:1px;text-underline-offset:.15em}
-:root.invert{color-scheme:dark;color:#fff;background:#000}:root.invert .pending{text-decoration-color:#5c6b6d}
+.baked{position:relative}.baked-mask{position:absolute;inset:0;background:currentColor;-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.baked.pending{box-shadow:0 1px 0 #a9b9bb}
+:root.invert{color-scheme:dark;color:#fff;background:#000}:root.invert .pending{text-decoration-color:#5c6b6d}:root.invert .baked.pending{box-shadow:0 1px 0 #5c6b6d}
 </style>
 </head>
 <body>

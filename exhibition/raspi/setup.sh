@@ -35,6 +35,13 @@ if [ -z "$BROWSER" ]; then
   BROWSER="$(command -v chromium-browser || command -v chromium)"
 fi
 
+# 日本語の字が豆腐（□）にならないように
+if ! fc-list :lang=ja | grep -q .; then
+  echo "日本語フォント（Noto CJK）を入れます"
+  sudo apt-get update
+  sudo apt-get install -y fonts-noto-cjk
+fi
+
 echo "1/3 ローカルサーバ（port $PORT, $SERVE_DIR）"
 sudo tee /etc/systemd/system/exhibition-server.service >/dev/null <<EOF
 [Unit]

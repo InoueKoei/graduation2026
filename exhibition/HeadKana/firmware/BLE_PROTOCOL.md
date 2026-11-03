@@ -75,3 +75,8 @@ Dictionary conversion is a local prototype based on SKK-JISYO.L. It offers exact
 USB: `@T,flags,selected,seq,fontCounter,sizeRaw,weightRaw,fontPressed\n`. Flags bits0..3 match protocol4; bit4=font KEY short release/reapply. Bounds: flags0..31, selected0..45, seq/fontCounter0..65535, sizeRaw/weightRaw0..4095, fontPressed0..1. Font counter wraps at16bits; browser computes signed deltas, rebasing first sample on connection. Event FIFO stores the complete parameter snapshot. No font-file or text transfer to the MCU. LCD remains fixed-font kana.
 
 Character encoder6/7/8; font encoder26/15/14; sizeADC29; weightADC28. Size maps12..128px; weight selects nearest actual weight supported by chosen browser font. Main KEY confirms/erases; font KEY reapplies only. All controls sampled independently, no active/inactive side.
+
+
+## 2026-11-02 LCD v1.9 wiring update
+
+Type-LCD protocol5 unchanged. LCD RST/CS/DC/MOSI/SCK=GP1/2/3/4/5. Main CLK/DT/SW=GP6/7/8 (equivalent to A/B/KEY). Software SPI and row-run painting avoid installed Adafruit RP2040 bulk-transfer hardware-SPI assumption. Font encoder26/15/14 and ADC29/28 unchanged.

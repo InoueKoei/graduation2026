@@ -38,3 +38,6 @@ coverage/
 
 # 展示版の moji-stack はビルド済みを配信する（exhibition/README.md）
 !exhibition/moji-stack/dist/
+
+# HeadKana の焼いた書体（商用書体の画像。リポジトリに入れず、ラズパイへ直接コピーする）
+exhibition/HeadKana/baked/

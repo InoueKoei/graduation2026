@@ -75,6 +75,9 @@ class DialAssignments {
   }
   commit(){this.style=this.draft();return {...this.style};}
 }
+// Faces baked to PNG by bake.html. Only the text-only page draws them; elsewhere the family falls back to sans-serif.
+const BAKED_FAMILY_PREFIX='HeadKanaBaked-';
+function bakedSlug(family){const m=/HeadKanaBaked-([a-z0-9-]+)/.exec(family||'');return m?m[1]:null;}
 function runStyle(run){return {fontFamily:run.fontFamily||'-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif',fontWeight:String(run.fontWeight||400),fontSize:`${(run.fontSize||34)*(run.size||1)}px`};}
 class DialFontCatalog {
   constructor(){
@@ -83,7 +86,7 @@ class DialFontCatalog {
       {id:'serif',label:'明朝',family:'"Hiragino Mincho ProN","Yu Mincho",serif',weights:all},
       {id:'mono',label:'等幅',family:'"Osaka-Mono",monospace',weights:all},
       {id:'zen-maru',label:'ゼン丸ゴシック',family:'"HeadKanaZenMaru",sans-serif',weights:[300,400,500,700,900]}];
-    this.loaded=new Map();
+    this.loaded=new Map();this.data=new Map();this.extraText='';
   }
   async readLocalFonts(){
     if(!window.queryLocalFonts)throw Error('PCのフォント読み込みはChromeで利用できます');
@@ -94,14 +97,40 @@ class DialFontCatalog {
     this.fonts=this.fonts.filter(f=>!f.id.startsWith('moji-')).concat(matchMojiFonts(curated,available));
     return this.fonts.filter(f=>f.faces).length;
   }
-  load(id,weight){
-    const font=this.fonts.find(f=>f.id===id);if(!font?.faces)return Promise.resolve();
-    const face=font.faces.find(f=>fontWeightFromName(f.style+' '+f.postscriptName)===weight)||font.faces[0];
+  async readBakedFonts(){
+    const response=await fetch('baked/index.json',{cache:'no-store'});if(!response.ok)return 0;
+    const baked=((await response.json()).fonts||[]).filter(f=>/^[a-z0-9-]+$/.test(f.slug)&&Array.isArray(f.weights)&&f.weights.length);
+    this.fonts=this.fonts.filter(f=>!f.baked).concat(baked.map(f=>({id:`baked-${f.slug}`,label:`${f.label}（画像）`,family:`"${BAKED_FAMILY_PREFIX}${f.slug}",sans-serif`,weights:f.weights,baked:f.slug})));
+    return baked.length;
+  }
+  face(font,weight){return font.faces.find(f=>fontWeightFromName(f.style+' '+f.postscriptName)===weight)||font.faces[0];}
+  // Font data trimmed to what HeadKana types; shared by this page and the text-only tab. Falls back to the whole file.
+  fontData(face){
+    const key=face.postscriptName;if(!this.data.has(key))this.data.set(key,(async()=>{
+      const full=await (await face.blob()).arrayBuffer();
+      try{return await subsetFont(full,this.extraText);}catch{return full;}
+    })().catch(error=>{this.data.delete(key);throw error;}));
+    return this.data.get(key);
+  }
+  loadFace(font,face){
     const key=face.postscriptName;if(!this.loaded.has(key))this.loaded.set(key,(async()=>{
-      const data=await (await face.blob()).arrayBuffer();
-      const loaded=await new FontFace(font.family,data,{weight:String(fontWeightFromName(face.style+' '+face.postscriptName))}).load();document.fonts.add(loaded);
+      const loaded=await new FontFace(font.family,await this.fontData(face),{weight:String(fontWeightFromName(face.style+' '+face.postscriptName))}).load();document.fonts.add(loaded);
     })().catch(error=>{this.loaded.delete(key);throw error;}));
     return this.loaded.get(key);
   }
+  load(id,weight){
+    const font=this.fonts.find(f=>f.id===id);if(!font?.faces)return Promise.resolve();
+    return this.loadFace(font,this.face(font,weight));
+  }
+  // Load the dial's faces one by one in the background, nearest the current weight first, so turning the dial swaps at once.
+  async preload(ids,weight){
+    const fonts=ids.map(id=>this.fonts.find(f=>f.id===id&&f.faces)).filter(Boolean);
+    const closeness=face=>Math.abs(fontWeightFromName(face.style+' '+face.postscriptName)-weight);
+    const jobs=fonts.flatMap(font=>font.faces.map(face=>({font,face}))).sort((a,b)=>closeness(a.face)-closeness(b.face));
+    for(const {font,face} of jobs){
+      if(!this.loaded.has(face.postscriptName))try{await this.loadFace(font,face);}catch{}
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
+  }
 }
-if(typeof module!=='undefined')module.exports={DialAssignments,DialFontCatalog,DIAL_ROLES,DEFAULT_DIAL_OPTIONS,parseDialNumbers,matchMojiFonts,fontWeightFromName,runStyle};
+if(typeof module!=='undefined')module.exports={DialAssignments,DialFontCatalog,DIAL_ROLES,DEFAULT_DIAL_OPTIONS,parseDialNumbers,matchMojiFonts,fontWeightFromName,runStyle,bakedSlug};
