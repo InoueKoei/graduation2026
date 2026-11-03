@@ -20,7 +20,8 @@ const S = { ...DEFAULTS, calib: false };
 let W = 0, H = 0, dpr = 1;
 let side = 0, ox = 0, oy = 0;   // 正方形の一辺と左上（画素）
 
-let reading = null;   // { id, text, t0, glowCanvas, shape, bbox, fading }
+// 読めたまとまり。テーブルを囲んで何人かが組めば、同時にいくつも光る
+const readings = new Map();   // id → { text, t0, glowCanvas, shape, bbox, fading, flash }
 const bodies = [];    // 塊に加わった形
 const particles = [];
 
@@ -73,7 +74,8 @@ ch.onmessage = ({ data: m }) => {
   }
   if (m.type === 'read') { startReading(m); return; }
   if (m.type === 'clear') {
-    if (reading && reading.id === m.id && !reading.fading) reading.fading = now();
+    const r = readings.get(m.id);
+    if (r && !r.fading) r.fading = now();
     return;
   }
   if (m.type === 'fix') { fix(m.id); return; }
@@ -104,15 +106,14 @@ function hexRgb(hex) {
 }
 
 function startReading(m) {
-  reading = {
-    id: m.id,
+  readings.set(m.id, {
     text: m.text,
     t0: now(),
     glowCanvas: maskCanvas(m.mask, m.gw, m.gh, S.glow),
     shape: m.shape,       // 読まれた瞬間の形（0/1、正方形の向き）
     bbox: m.bbox,         // 正規化座標
     fading: 0,
-  };
+  });
 }
 
 // 形を部品（つながった塊）ごとに切り分ける。8近傍。
@@ -167,7 +168,8 @@ function splitParts(shape, color) {
 
 // 部品がばらばらに、向きを変えずに中央へ向かい、着いたところで置かれていた配置に組み直る
 function fix(id) {
-  if (!reading || reading.id !== id) return;
+  const reading = readings.get(id);
+  if (!reading) return;
   const b = reading.bbox;
   const w0 = b.x1 - b.x0, h0 = b.y1 - b.y0;
   const long = Math.max(w0, h0);
@@ -288,11 +290,14 @@ function stepBodies(t, dt) {
 // ---------------------------------------------------------------- 描画
 
 function drawGlow(t) {
-  if (!reading) return;
+  for (const [id, reading] of readings) drawOneGlow(t, id, reading);
+}
+
+function drawOneGlow(t, id, reading) {
   let a;
   if (reading.fading) {
     const f = (t - reading.fading) / 0.7;
-    if (f >= 1) { reading = null; return; }
+    if (f >= 1) { readings.delete(id); return; }
     a = (reading.flash ? 1 : 0.8) * (1 - f);
   } else {
     // 保持するほど強くなる。これがそのまま「あと少しで残る」の手がかりになる

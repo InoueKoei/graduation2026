@@ -39,6 +39,11 @@
   #state { display: flex; align-items: center; gap: 12px; }
   #stateDot { width: 14px; height: 14px; border-radius: 50%; background: #ccc; flex: none; }
   #stateText { font-size: 18px; font-weight: 600; }
+  #groups { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
+  #groups li { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  #groups li i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  #groups li .bar { flex: 1; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; max-width: 160px; }
+  #groups li .bar div { height: 100%; }
   #stateSub { color: var(--sub); }
   #bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
   #bar div { height: 100%; width: 0; background: var(--ink); transition: width .1s linear; }
@@ -66,6 +71,7 @@
     <section>
       <div id="state"><div id="stateDot"></div><div><div id="stateText">起動中</div><div id="stateSub"></div></div></div>
       <div id="bar"><div></div></div>
+      <ul id="groups"></ul>
     </section>
     <section>
       <h2>カメラ — 丸 1〜4 を白い面の四隅に重ねる</h2>
@@ -83,7 +89,17 @@
         <span><i style="background:var(--small)"></i>小さいので無視</span>
         <span><i style="background:var(--edge)"></i>縁に触れたので無視</span>
         <span><i style="background:#787878"></i>5秒動かないので無視</span>
+        <span><i style="background:none;border:1.5px dashed var(--ink)"></i>ひとまとまり（1語として読む）</span>
       </div>
+    </section>
+
+    <section>
+      <h2>まとまりとみなす間隔</h2>
+      <div class="row">
+        <input type="range" id="groupGap" min="2" max="30" step="0.5">
+        <span class="num" id="groupGapVal"></span>
+      </div>
+      <p class="hint">部品どうしがこれより近ければ1語（正方形の一辺に対する割合）。テーブルを囲んで別々に組むなら、語と語のあいだはこれより離す。1語が割れるなら上げ、隣の語とくっつくなら下げる。</p>
     </section>
 
     <section>
