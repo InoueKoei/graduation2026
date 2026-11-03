@@ -14,7 +14,7 @@ const now = () => performance.now() / 1000;
 // ================================================================ 設定（この端末に覚えておく）
 
 const STORE = 'yomare.settings.v1';
-const S = { ...DEFAULTS, corners: null, cameraId: '', calib: false };
+const S = { ...DEFAULTS, corners: null, cameraId: '', rotate: 0, calib: false };
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch {}
 S.calib = false;
 function save() {
@@ -67,6 +67,36 @@ async function listCameras() {
   });
 }
 $('camSel').onchange = e => openCamera(e.target.value);
+
+// ================================================================ 映像の向き
+
+// カメラを横向きや逆さに据えても、白い面と同じ向きで見られるように、映像を 90° 単位で（時計回りに）回す。
+// ここから先はすべて「回したあとの映像」の座標で扱う。四隅も、OCR へ渡す切り出しも
+const frameW = () => S.rotate % 180 ? video.videoHeight : video.videoWidth;
+const frameH = () => S.rotate % 180 ? video.videoWidth : video.videoHeight;
+
+// 回したあとの映像を、w×h に描く
+function drawFrame(g, w, h) {
+  const turned = S.rotate % 180 !== 0;
+  g.save();
+  g.translate(w / 2, h / 2);
+  g.rotate(S.rotate * Math.PI / 180);
+  g.drawImage(video, -(turned ? h : w) / 2, -(turned ? w : h) / 2, turned ? h : w, turned ? w : h);
+  g.restore();
+}
+
+// 向きを変えても、合わせた四隅はそのまま白い面の四隅を指すように、同じだけ回す。
+// 時計回りに 90° 回すと、映像の (x, y) は (1 - y, x) へ移る
+function setRotate(deg) {
+  for (let k = ((deg - S.rotate) / 90 + 4) % 4; k > 0; k--) {
+    if (S.corners) S.corners = S.corners.map(([x, y]) => [1 - y, x]);
+  }
+  S.rotate = deg;
+  save();
+  onVideoSize();
+}
+$('rotSel').value = String(S.rotate);
+$('rotSel').onchange = e => setRotate(+e.target.value);
 
 // ================================================================ 四隅 → 射影変換
 
@@ -121,10 +151,10 @@ const hist = new Uint32Array(256);
 function onVideoSize() {
   if (!video.videoWidth) return;
   small.width = SMALL_W;
-  small.height = Math.round(SMALL_W * video.videoHeight / video.videoWidth);
+  small.height = Math.round(SMALL_W * frameH() / frameW());
   const cam = $('cam');
   cam.width = 960;
-  cam.height = Math.round(960 * video.videoHeight / video.videoWidth);
+  cam.height = Math.round(960 * frameH() / frameW());
   if (!S.corners) S.corners = [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]];
   rebuild();
 }
@@ -149,9 +179,9 @@ function rebuild() {
 
 function rebuildLut() {
   if (!video.videoWidth || !S.corners) return;
-  Hm = homography(S.corners.map(([x, y]) => [x * video.videoWidth, y * video.videoHeight]));
+  Hm = homography(S.corners.map(([x, y]) => [x * frameW(), y * frameH()]));
   lut = new Int32Array(gw * gh).fill(-1);
-  const kx = small.width / video.videoWidth, ky = small.height / video.videoHeight;
+  const kx = small.width / frameW(), ky = small.height / frameH();
   placeArea = 0;
   for (let y = zone.y0; y < zone.y1; y++) {
     for (let x = zone.x0; x < zone.x1; x++) {
@@ -170,7 +200,7 @@ function rebuildLut() {
 // paused のあいだ（絵文字が置く場の上にある）は、動かない塊の記録を更新しない。
 // 中央へ飛ぶ形の道筋（quiet）にかかる塊も同じ
 function detect(t, paused) {
-  sctx.drawImage(video, 0, 0, small.width, small.height);
+  drawFrame(sctx, small.width, small.height);
   const px = sctx.getImageData(0, 0, small.width, small.height).data;
   hist.fill(0);
   bin.fill(0); label.fill(0); partMask.fill(0); glabel.fill(0);
@@ -533,7 +563,7 @@ async function read(tr, g) {
   const m = Math.round(Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.25) + 4;
   const q = [[b.x0 - m, b.y0 - m], [b.x1 + 1 + m, b.y0 - m], [b.x1 + 1 + m, b.y1 + 1 + m], [b.x0 - m, b.y1 + 1 + m]];
   const pts = q.map(([x, y]) => project(x / gw, y / gh));
-  const vw = video.videoWidth, vh = video.videoHeight;
+  const vw = frameW(), vh = frameH();
   const sx = Math.max(0, Math.floor(Math.min(...pts.map(p => p[0]))));
   const sy = Math.max(0, Math.floor(Math.min(...pts.map(p => p[1]))));
   const ex = Math.min(vw, Math.ceil(Math.max(...pts.map(p => p[0]))));
@@ -542,7 +572,7 @@ async function read(tr, g) {
   // 同じ瞬間の映像から、切り出し（OCR 用）と、残す形（白い面用）の両方を取る。
   // 同じフレームで複数のまとまりを読ませることがあるので、切り出しはまとまりごとに別のキャンバス
   full.width = vw; full.height = vh;
-  fctx.drawImage(video, 0, 0);
+  drawFrame(fctx, vw, vh);
   const crop = document.createElement('canvas');
   crop.width = ex - sx; crop.height = ey - sy;
   crop.getContext('2d').drawImage(full, sx, sy, ex - sx, ey - sy, 0, 0, ex - sx, ey - sy);
@@ -699,9 +729,9 @@ function renderState(t) {
 const camCtx = $('cam').getContext('2d');
 function drawCam(det) {
   const c = $('cam'), W = c.width, H = c.height;
-  camCtx.drawImage(video, 0, 0, W, H);
+  drawFrame(camCtx, W, H);
   if (!Hm) return;
-  const k = W / video.videoWidth;
+  const k = W / frameW();
   const P = (u, v) => project(u, v).map(z => z * k);
   const poly = (pts, stroke, dash, width = 2) => {
     camCtx.save();
