@@ -52,6 +52,12 @@
   #log li { padding: 2px 0; border-top: 1px dashed var(--line); display: flex; gap: 10px; }
   #log li time { color: var(--sub); }
   #log li.miss b { color: var(--sub); font-weight: 400; }
+  #kept { list-style: none; padding: 0; margin: 8px 0 0; max-height: 260px; overflow: auto; font-variant-numeric: tabular-nums; }
+  #kept li { padding: 4px 0; border-top: 1px dashed var(--line); display: flex; gap: 10px; align-items: center; }
+  #kept li time { color: var(--sub); }
+  #kept li b { flex: 1; }
+  #kept li button { padding: 2px 10px; }
+  #kept .thumb { width: auto; height: 28px; border-radius: 0; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 8px 8px; }
   .hint { color: var(--sub); font-size: 12px; margin: 6px 0 0; }
   .warn { color: #b44; }
 </style>
@@ -153,6 +159,13 @@
       <div id="lastRead" class="hint">まだ読ませていない</div>
       <img id="crop" alt="" hidden>
       <ul id="log"></ul>
+    </section>
+
+    <section>
+      <h2>残した字 — PNG に書き出す</h2>
+      <div class="row"><button id="keptAll" disabled>全部書き出す</button></div>
+      <ul id="kept"></ul>
+      <p class="hint">地は透明、字は読んだ向きに起こしてある。ファイル名は「語_月日時分秒」（残した時刻）。この画面を開き直すと一覧は消える。</p>
     </section>
   </div>
 </main>

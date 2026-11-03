@@ -51,7 +51,10 @@ func readImage(_ data: Data) -> [String: Any] {
         guard let c = o.topCandidates(1).first else { continue }
         let s = c.string.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty { continue }
-        lines.append(["text": s, "conf": c.confidence])
+        // 行の四隅（左上・右上・右下・左下。正規化、左下原点）。字の向きのまま返るので、逆さに読んだ行は
+        // 左上が画像の右下に来る。白い面で見出しを「読んだ向き」に回すのに使う
+        let q = [o.topLeft, o.topRight, o.bottomRight, o.bottomLeft].flatMap { [Double($0.x), Double($0.y)] }
+        lines.append(["text": s, "conf": c.confidence, "quad": q])
         text += s
         confSum += c.confidence
     }

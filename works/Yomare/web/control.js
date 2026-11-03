@@ -132,6 +132,15 @@ function project(u, v) {
   return [(h[0] * u + h[1] * v + h[2]) / w, (h[3] * u + h[4] * v + h[5]) / w];
 }
 
+// project の逆。カメラ映像の画素 (x, y) → 白い面の正規化座標 (u, v)。3×3 の逆行列（余因子）で解く
+function unproject(x, y) {
+  const [a, b, c, d, e, f, g, h] = Hm;
+  const u = (e - f * h) * x + (c * h - b) * y + (b * f - c * e);
+  const v = (f * g - d) * x + (a - c * g) * y + (c * d - a * f);
+  const w = (d * h - e * g) * x + (b * g - a * h) * y + (a * e - b * d);
+  return [u / w, v / w];
+}
+
 // ================================================================ 検出の格子
 
 const SMALL_W = 960;          // 毎フレームの検出はこの幅に縮めた映像で行う
@@ -542,6 +551,7 @@ function step(det, t, dt) {
         },
       });
       log(tr.text, '残した');
+      keep(tr);
     }
   }
 }
@@ -592,6 +602,7 @@ async function read(tr, g) {
   if (tr.name !== 'reading') return;    // 読んでいるあいだに動かされた
 
   const text = res.ok ? (res.text || '') : '';
+  const turn = text ? readTurn(res, sx, sy, crop.width, crop.height) : 0;
   if (!text) {
     tr.name = 'unread';
     log('', res.ok ? `${res.ms}ms` : 'エラー');
@@ -599,10 +610,11 @@ async function read(tr, g) {
     return;
   }
   tr.name = 'read'; tr.text = text; tr.readT = now();
-  log(text, `確信度 ${(+res.conf).toFixed(2)} ・ ${res.ms}ms`);
+  tr.shape = shape; tr.turn = turn;   // 残すときに書き出し用にも取っておく
+  log(text, `確信度 ${(+res.conf).toFixed(2)} ・ ${res.ms}ms` + (turn ? ` ・ 向き ${turn * 90}°` : ''));
   $('lastRead').textContent = `「${text}」（${crop.width}×${crop.height}px を渡した）`;
   ch.postMessage({
-    type: 'read', id, text, gw, gh, mask: gridMask, shape,
+    type: 'read', id, text, turn, gw, gh, mask: gridMask, shape,
     bbox: { x0: b.x0 / gw, y0: b.y0 / gh, x1: (b.x1 + 1) / gw, y1: (b.y1 + 1) / gh },
   });
 
@@ -615,6 +627,19 @@ async function read(tr, g) {
     }
     lastEmoji[text] = t;
   }
+}
+
+// 読んだ向き。いちばん長い行の四隅から、白い面の上でのベースライン（左下→右下）の向きを出し、
+// 90° 単位に丸める（0 = 正位置、1 = 時計回りに 90°、2 = 逆さ、3 = 反時計回りに 90°）。
+// Vision は回った字の行も字の向きのまま四隅を返す。少しの傾きは返り方が揃わないので、テーブルの四辺に丸める
+function readTurn(res, sx, sy, cw, cht) {
+  const l = (res.lines || []).filter(l => l.quad).sort((a, b) => b.text.length - a.text.length)[0];
+  if (!l) return 0;   // 四隅を返さない古いサーバ
+  const q = l.quad;
+  const at = (x, y) => unproject(sx + x * cw, sy + (1 - y) * cht);   // Vision の座標は左下原点
+  const [u0, v0] = at(q[6], q[7]), [u1, v1] = at(q[4], q[5]);
+  const a = Math.atan2(v1 - v0, u1 - u0);
+  return ((Math.round(a / (Math.PI / 2)) % 4) + 4) % 4;
 }
 
 // 残す形。格子より細かく、元の解像度の映像から白い面の向きに写し直して二値にする。
@@ -654,6 +679,75 @@ function showCrop(blob) {
   $('crop').src = cropUrl;
   $('crop').hidden = false;
 }
+
+// ================================================================ 残した字を書き出す
+
+// バナーなどに使うため、残した形を PNG にして手元に保存できるようにする。
+// 形は白い面へ送ったものと同じ（読まれた瞬間の映像を二値にしたもの）。地は透明、色は残した形と同じ。
+// 向かいや横から組んだ字も読めるように、読んだ向きに起こす。ファイル名は「語_月日時分秒」（残した時刻）
+const KEPT_MAX = 60;
+const kept = [];   // { text, at, canvas }
+
+function keep(tr) {
+  if (!tr.shape) return;
+  kept.unshift({ text: tr.text, at: new Date(), canvas: shapePng(tr.shape, tr.turn || 0) });
+  if (kept.length > KEPT_MAX) kept.pop();
+  renderKept();
+}
+
+function shapePng({ w, h, data }, turn) {
+  const src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  const g = src.getContext('2d');
+  const img = g.createImageData(w, h);
+  const n = parseInt(S.ink.slice(1), 16);
+  for (let i = 0; i < w * h; i++) {
+    if (!data[i]) continue;
+    img.data.set([(n >> 16) & 255, (n >> 8) & 255, n & 255, 255], i * 4);
+  }
+  g.putImageData(img, 0, 0);
+  // 読んだ向きの逆に回して起こす。まわりに少し余白を足す
+  const pad = Math.round(Math.max(w, h) * 0.04);
+  const side = turn % 2 === 1;
+  const out = document.createElement('canvas');
+  out.width = (side ? h : w) + pad * 2; out.height = (side ? w : h) + pad * 2;
+  const o = out.getContext('2d');
+  o.translate(out.width / 2, out.height / 2);
+  o.rotate(-turn * Math.PI / 2);
+  o.drawImage(src, -w / 2, -h / 2);
+  return out;
+}
+
+function pngName(k) {
+  const d = k.at, p = x => String(x).padStart(2, '0');
+  const stamp = p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  return `${k.text.replace(/[\\/:*?"<>|]/g, '_')}_${stamp}.png`;
+}
+
+function savePng(k) {
+  k.canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = pngName(k);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, 'image/png');
+}
+
+function renderKept() {
+  $('kept').replaceChildren(...kept.map(k => {
+    const li = document.createElement('li');
+    li.innerHTML = '<time></time><b></b><button>PNG</button>';
+    li.querySelector('time').textContent = k.at.toTimeString().slice(0, 8);
+    li.querySelector('b').textContent = k.text;
+    k.canvas.className = 'thumb';
+    li.insertBefore(k.canvas, li.querySelector('b'));
+    li.querySelector('button').onclick = () => savePng(k);
+    return li;
+  }));
+  $('keptAll').disabled = !kept.length;
+}
+$('keptAll').onclick = () => kept.forEach((k, i) => setTimeout(() => savePng(k), i * 250));   // 続けて落とすとブラウザに止められるので少し間を空ける
 
 function log(text, note) {
   const li = document.createElement('li');

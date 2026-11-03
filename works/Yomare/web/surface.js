@@ -111,6 +111,7 @@ function startReading(m) {
     t0: now(),
     glowCanvas: maskCanvas(m.mask, m.gw, m.gh, S.glow),
     shape: m.shape,       // 読まれた瞬間の形（0/1、正方形の向き）
+    turn: m.turn || 0,    // 読んだ向き（時計回りに 90° 単位）
     bbox: m.bbox,         // 正規化座標
     fading: 0,
   });
@@ -177,6 +178,7 @@ function fix(id) {
   const ph = Math.random() * Math.PI * 2;
   bodies.push({
     text: reading.text,
+    turn: reading.turn,
     parts: splitParts(reading.shape, S.ink),
     from: { x: b.x0, y: b.y0, w: w0, h: h0 },     // 置かれていた場所と大きさ
     w: w0 * k, h: h0 * k,                          // 塊の中での大きさ
@@ -351,11 +353,19 @@ function drawBodies(t) {
       const py = ay + dy * e + dx / len * bulge;
       ctx.drawImage(p.canvas, px, py, aw + (bw - aw) * e, ah + (bh - ah) * e);
     }
-    // 見出しは縮みきる手前から出る
+    // 見出しは縮みきる手前から出る。字を読んだ向きに回し、その向きから見て字の上に置く
+    // （逆さに組まれた字なら、見出しも逆さで字の下＝向かいの席から見て上に出る）
     const ha = clamp01((sz.s - 0.7) / 0.3) * (1 - sz.fade);
     if (ha > 0) {
+      const ang = (b.turn || 0) * Math.PI / 2;
+      const ux = Math.sin(ang), uy = -Math.cos(ang);   // 読んだ向きでの「上」
+      const reach = Math.abs(ux) * w / 2 + Math.abs(uy) * h / 2 + head * 0.25;
       ctx.globalAlpha = ha;
-      ctx.fillText(b.text, cx, cy - h / 2 - head * 0.25);
+      ctx.save();
+      ctx.translate(cx + ux * reach, cy + uy * reach);
+      ctx.rotate(ang);
+      ctx.fillText(b.text, 0, 0);
+      ctx.restore();
     }
   }
   ctx.restore();
