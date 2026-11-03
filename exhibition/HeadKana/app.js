@@ -15,6 +15,7 @@ $('speech-status').textContent=speechAvailable?'「音声テスト」で音を�
 if(!speechAvailable)speechButton.textContent='読み上げ非対応';
 const SERVICE='9f6c0001-4b68-4b3a-9c87-df6f1da60001',NOTIFY='9f6c0002-4b68-4b3a-9c87-df6f1da60001',SNAPSHOT='9f6c0003-4b68-4b3a-9c87-df6f1da60001',SELECTION='9f6c0004-4b68-4b3a-9c87-df6f1da60001';
 const decoder=new BleFrameDecoder(),usbDecoder=new DialSerialDecoder(),doc=new KanaDocument();
+const lcdGlyphs=new LcdGlyphSender(data=>writeUSB(data));
 let device=null,notification=null,selectionCharacteristic=null,selectionToSend=HOME_INDEX,selectionSent=-1,selectionSending=false,connected=false,ready=false,demo=false,lastSampleAt=0,lastTelemetryAt=0,lastEventId=0,legacy=false,deviceMode='dial',transport='none',serialPort=null,serialReader=null;
 const RANGE_KEY='headkana-motion-range';
 function savedRange(){
@@ -133,8 +134,15 @@ function renderTypePreview(){
   const token=++fontPreviewToken;
   void fontCatalog.load(draft.fontId,draft.fontWeight).then(refreshRotationBodies).catch(()=>{if(token===fontPreviewToken)$('type-preview-label').textContent='この書体を読み込めませんでした。別の書体を選んでください';});
 }
+// Pushing the font knob jumps to another dial candidate at random.
+function randomFont(){
+  const count=typeFonts().length;if(count<2)return;
+  const current=((typeControls.fontIndex%count)+count)%count;
+  typeControls.fontIndex=(current+1+Math.floor(Math.random()*(count-1)))%count;
+  applyTypeStyle();render();
+}
 function confirmDial(group){
-  if(dialPattern.studio){if(group===0)act({type:'confirm',selectionIndex:dialPattern.selected});else{applyTypeStyle();render();}return;}
+  if(dialPattern.studio){if(group===0)act({type:'confirm',selectionIndex:dialPattern.selected});else randomFont();return;}
   if(dialPattern.single){if(group===0)act({type:'confirm',selectionIndex:dialPattern.selected});return;}
   if(dialAssignments.mode==='split'){act({type:'confirm',selectionIndex:dialState.positions[group]});return;}
   if(group===0){act({type:'confirm',selectionIndex:dialAssignments.leftIndex});return;}
@@ -314,7 +322,7 @@ function render(){
   renderDials();updateModeView();
   $('selection-position').textContent=`${doc.selected+1} / ${KANA.length}`;
   const runs=doc.composition;
-  updateCandidatePreview();textOutput.publish();
+  updateCandidatePreview();textOutput.publish();updateLcdGlyph();
   text.replaceChildren(...runs.map(r=>{const span=document.createElement('span');span.textContent=r.text;span.className=r.size>1?'emphasis':'';Object.assign(span.style,rotatedRunStyle(r));return span;}));
   if(!runs.length){const p=document.createElement('span');p.id='placeholder';p.textContent=deviceMode==='dial'?'ダイヤルを短押しして文字を追加':'頷くか、赤ボタンで文字を追加';text.append(p);}
   count.textContent=`${doc.length} / 96文字`;
@@ -381,6 +389,7 @@ function acceptDial(s){
     if(dialPattern.studio){typeControls.feed(s,typeFonts().length);applyTypeStyle();}
     doc.choose(s.selected);
     if(s.confirm)confirmDial(0);
+    if(s.fontConfirm)confirmDial(1);
   }else{
     if(!dialState.sync(s.positions,s.pressedMask))dialState.observe(s.selected);
     dialAssignments.sync(dialState.positions);
@@ -414,6 +423,7 @@ function receiveNotification(event){
 }
 let protocol=0;
 function disconnected(){
+  $('encoder-swap-control').hidden=true;lcdGlyphs.disable();
   dialAssignments.rebase();
   if(transport==='usb')return;
   transport='none';
@@ -456,7 +466,11 @@ async function readUSB(port){
   try{
     while(serialPort===port){
       const {value,done}=await reader.read();if(done)break;
-      for(const state of usbDecoder.push(textDecoder.decode(value,{stream:true})))acceptDial(state);
+      for(const state of usbDecoder.push(textDecoder.decode(value,{stream:true}))){
+        if(state.type==='encoder-swap')showEncoderSwap(state.swapped);
+        else if(state.type==='lcd-glyph'){if(state.size>0&&state.size<=240){lcdGlyphs.enable(state.size);render();}}
+        else acceptDial(state);
+      }
     }
   }catch(error){if(serialPort===port)console.warn('USB serial:',error.message);}
   finally{
@@ -468,6 +482,27 @@ async function readUSB(port){
     }
   }
 }
+// Dial boards from v2.5 report @SWAP and take 'E' / 'e'; older boards never report, so the control stays hidden.
+// Writes go out one at a time so a command never lands inside an LCD image.
+let usbWriteChain=Promise.resolve();
+function writeUSB(data){
+  const job=usbWriteChain.then(async()=>{
+    const writer=serialPort?.writable?.getWriter();if(!writer)return;
+    try{await writer.write(typeof data==='string'?new TextEncoder().encode(data):data);}finally{writer.releaseLock();}
+  });
+  usbWriteChain=job.catch(()=>{});return job;
+}
+// From v2.7 the board reports @GLYPHSET and keeps the 46 kana in the input's font and weight.
+function updateLcdGlyph(){
+  if(transport!=='usb'||!dialPattern.studio)return;
+  const run=candidateRun(),fontId=dialAssignments.style.fontId;
+  lcdGlyphs.update(dialPattern.selected,run,()=>Promise.all([fontCatalog.load(fontId,run.fontWeight),document.fonts.load(`${run.fontWeight} 100px ${run.fontFamily}`,run.text)]));
+}
+function showEncoderSwap(swapped){$('encoder-swap-control').hidden=false;$('encoder-swap').checked=swapped;$('encoder-swap').disabled=false;}
+$('encoder-swap').addEventListener('change',e=>{
+  $('encoder-swap').disabled=true;
+  void writeUSB(e.target.checked?'E':'e').catch(()=>{$('encoder-swap').disabled=false;$('encoder-swap-status').textContent='ダイヤル基板に送れませんでした';});
+});
 async function stopUSB(reset=true){
   const port=serialPort,reader=serialReader;serialPort=null;serialReader=null;
   try{await reader?.cancel();}catch{}try{reader?.releaseLock();}catch{}try{await port?.close();}catch{}
@@ -484,6 +519,7 @@ usbButton.addEventListener('click',async()=>{
     await port.open({baudRate:115200});
     serialPort=port;usbDecoder.reset();dialAssignments.rebase();dialPattern.beginConnection();typeControls.reset();transport='usb';protocol=3;deviceMode='dial';legacy=false;connected=true;ready=true;lastSampleAt=performance.now();
     usbButton.textContent='USBを切断';usbButton.disabled=false;bleButton.disabled=true;updateConnection();render();void readUSB(port);
+    void writeUSB('?').catch(()=>{});
   }catch(error){
     if(port&&port!==serialPort)try{await port.close();}catch{}
     transport='none';disconnected();

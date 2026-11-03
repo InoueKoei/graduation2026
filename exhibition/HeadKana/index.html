@@ -83,6 +83,7 @@ details{border:1px solid #e4e7eb;border-radius:12px;padding:16px 20px;background
 <section class="selection" aria-labelledby="selection-title">
 <h2 id="selection-title">今選択中の文字（あ〜ん）</h2>
 <div class="pattern-control"><label for="dial-pattern">機器パターン</label><select id="dial-pattern"><option value="auto">自動認識</option><option value="dual">2ダイヤル</option><option value="single">1ダイヤル＋丸型LCD</option><option value="studio">文字＋フォント＋スライダー</option></select><span id="pattern-status" role="status">接続すると自動認識します</span></div>
+<div class="pattern-control" id="encoder-swap-control" hidden><label><input id="encoder-swap" type="checkbox"> メインとサブのエンコーダーを入れ替える</label><span id="encoder-swap-status" role="status">サブ（GP26/15/14）でかなを選び、メイン（GP6/7/8）でフォントを選びます。設定はダイヤル基板に保存されます</span></div>
 <div class="dial-custom-bar"><label for="right-role">右ダイヤルの役割</label><select id="right-role"><option value="split">かなを分割（今まで通り）</option><option value="weight">ウェイト</option><option value="font">フォント</option><option value="size">文字サイズ</option><option value="symbols">文字・記号</option></select></div>
 <details class="dial-custom-settings"><summary>右ダイヤルの候補をカスタム</summary>
 <p class="subtle">かな分割以外では、左ダイヤルで「あ〜ん」すべてを選びます。右は回してプレビュー、KEYで確定。装飾は直前の1文字と、その後に入力する文字へ適用します。</p>
@@ -165,6 +166,7 @@ details{border:1px solid #e4e7eb;border-radius:12px;padding:16px 20px;background
 <script src="core-link.js"></script>
 <script src="rotation.js"></script>
 <script src="output-sync.js"></script>
+<script src="lcd-glyph.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
