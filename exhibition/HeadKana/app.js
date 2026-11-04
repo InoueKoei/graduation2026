@@ -45,13 +45,15 @@ function savedDialOptions(){
 }
 const dialAssignments=new DialAssignments(fontCatalog.fonts,savedDialOptions());
 let wheelSignature='',fontPreviewToken=0;
-const rotationClock=new LetterRotation();
+const rotationClock=new LetterRotation(),ROTATE_INPUT_KEY='headkana-rotate-input';
+// When off, the letter being chosen stands still and is entered upright.
+let rotateInput=true;try{rotateInput=localStorage.getItem(ROTATE_INPUT_KEY)!=='0';}catch{}
 function rotatedRunStyle(run){return {...runStyle(run),...rotationStyle(run)};}
-function inputStyle(){return {...committedStyle(),rotationDeg:rotationClock.angle()};}
+function inputStyle(){return {...committedStyle(),rotationDeg:rotateInput?rotationClock.angle():0};}
 let candidateVisible=true,candidateSignature='';
 function candidateRun(){
   const index=deviceMode==='dial'?(dialPattern.full?dialPattern.selected:dialAssignments.mode==='split'?dialState.positions[0]:dialAssignments.leftIndex):doc.selected;
-  return {text:KANA[index],...committedStyle(),...rotationClock.live(),size:1,pending:true};
+  return {text:KANA[index],...committedStyle(),...(rotateInput?rotationClock.live():{rotationDeg:0}),size:1,pending:true};
 }
 function updateCandidatePreview(){
   const signature=JSON.stringify(candidateRun());
@@ -72,6 +74,8 @@ const textOutput=new TextOutputPublisher(outputRuns,async (runs,sent)=>{
   return result;
 });
 const OUTPUT_INVERT_KEY='headkana-output-invert';
+$('rotate-input').checked=rotateInput;
+$('rotate-input').addEventListener('change',e=>{rotateInput=e.target.checked;try{localStorage.setItem(ROTATE_INPUT_KEY,rotateInput?'1':'0');}catch{}render();});
 function updateOutputLink(){$('open-output').href='output.html?source='+encodeURIComponent(textOutput.id)+($('output-invert').checked?'&invert=1':'');}
 try{$('output-invert').checked=localStorage.getItem(OUTPUT_INVERT_KEY)==='1';}catch{}
 $('output-invert').addEventListener('change',e=>{try{localStorage.setItem(OUTPUT_INVERT_KEY,e.target.checked?'1':'0');}catch{}updateOutputLink();});
