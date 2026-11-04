@@ -41,8 +41,9 @@ async function loadKanaLines() {
 
 /**
  * 参照ポーズを読み込む。
- * @returns {Promise<{poses:Object, lines:Object, pending:string[]}>}
- *   poses[字]   = 正規化座標（同じ字が何度も登録されていれば最後のもの）
+ * @returns {Promise<{poses:Object, samples:Object, lines:Object, pending:string[]}>}
+ *   samples[字] = その字の登録すべて（古い → 新しい）。判定はこの全部を手本にし、いちばん近い1回で比べる
+ *   poses[字]   = いちばん新しい登録（体型合わせの基準や、字の数を数えるのに使う）
  *   lines[字]   = 一筆書き記述（kana_lines の線）
  *   pending     = 線の一覧には載っているが、まだ座標が登録されていない字
  */
@@ -50,21 +51,23 @@ export async function loadReferencePoses() {
   const [rows, kanaLines] = await Promise.all([(await store).loadRows(), loadKanaLines()]);
 
   const poses = {};
+  const samples = {};
   const lines = {};
   for (const row of rows) {
     // 線の一覧に載っている字だけで判定する
     if (!kanaLines.has(row.letter)) continue;
     poses[row.letter] = row.points;
+    (samples[row.letter] ??= []).push(row.points);
     lines[row.letter] = kanaLines.get(row.letter);
   }
 
   const pending = [...kanaLines.keys()].filter((letter) => !poses[letter]);
-  return { poses, lines, pending };
+  return { poses, samples, lines, pending };
 }
 
 /**
  * 1字ぶんの参照ポーズ（座標）を登録する。線は保存しない（線は kana_lines だけが持つ）。
- * 撮り直すと行が増え、読み込みでは同じ字の最後の行が使われる。
+ * 撮り直すと行が増え、判定ではその字の登録が全部手本になる（要らない回は「登録した姿勢」のページで消す）。
  */
 export async function savePose(letter, points) {
   return (await store).saveRow({ letter, points });

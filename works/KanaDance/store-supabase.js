@@ -43,6 +43,13 @@ export async function loadLines() {
   return new Map(data.map((r) => [r.letter, r.strokes ?? []]));
 }
 
+/** 登録を1行消す（登録した姿勢のページから、要らない回を消すとき） */
+export async function deleteRow(id) {
+  const supabase = await getClient();
+  const { error } = await supabase.from('poses').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** 1字ぶんの参照ポーズを登録する */
 export async function saveRow(row) {
   const supabase = await getClient();
