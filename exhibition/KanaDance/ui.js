@@ -40,6 +40,8 @@ export const settings = {
   videoOpacity: APP_CONFIG.videoOpacity,
   poseOpacity: APP_CONFIG.poseOpacity,
   recordPhotoOpacity: APP_CONFIG.recordPhotoOpacity,
+  /** シャッターで写したものを PNG でも書き出すか（off / photo / ink） */
+  recordExport: APP_CONFIG.recordExport,
   /** 判定に使うポーズの組（config.js の POSE_SETS のキー） */
   poseSet: initialPoseSet(),
   ...APP_CONFIG.blend,
@@ -178,6 +180,7 @@ export function syncFrameSize(w, h) {
 const FIT_KEY = 'kanadance.fitMode';
 const SETTINGS_KEY = 'kanadance.exhibition.settings.v1';
 const PANEL_KEY = 'kanadance.exhibition.panelOpen';
+const EXPORT_KEY = 'kanadance.exhibition.recordExport';
 
 /**
  * 幅 1920 の舞台を窓の幅いっぱいに縮める。高さは CSS が窓に合わせ、余り・不足は映像の高さで吸収する
@@ -276,6 +279,18 @@ export function bindControls({
       onPoseSetChange?.();
     });
   }
+
+  // 記録の書き出し（素材集めのときだけ入れる）。選んだものは覚えておく
+  const exportSelect = document.getElementById('record-export');
+  try {
+    const saved = localStorage.getItem(EXPORT_KEY);
+    if (saved && [...exportSelect.options].some((o) => o.value === saved)) settings.recordExport = saved;
+  } catch { /* 既定のまま */ }
+  exportSelect.value = settings.recordExport;
+  exportSelect.addEventListener('change', () => {
+    settings.recordExport = exportSelect.value;
+    try { localStorage.setItem(EXPORT_KEY, settings.recordExport); } catch { /* 任意 */ }
+  });
 
   loadSliderValues();
   for (const { id, key, scale, format, apply } of CONTROLS) {
