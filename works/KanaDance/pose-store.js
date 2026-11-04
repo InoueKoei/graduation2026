@@ -3,7 +3,8 @@
 //
 //  字と座標・字と線は別々に持つ。
 //    座標 … 保存先（Supabase／ローカル）の行。登録モードで撮ると1行増える
-//    線   … pose-sets/kana-lines.json（身振りスケッチのスケッチ帳から書き出す）
+//    線   … Supabase の kana_lines（身振りスケッチ sketch/ が書く）。
+//            読めないとき（表が無い・USB 版でネットが無い）は pose-sets/kana-lines.json の控えを使う
 //  2つは字で突き合わせるだけ。
 //  呼ぶ側（script.js）は { poses, lines } を受け取るだけで、どちらも知らなくてよい。
 // ============================================================
@@ -18,25 +19,31 @@ const store = RUNTIME.backend === 'local'
   ? import('./store-local.js')
   : import('./store-supabase.js');
 
-let kanaLines = null;
-
 /**
- * 字と線の対応（kana-lines.json の lines）を読む。1字1件。
+ * 字と線の対応を読む。1字1件。読み込みのたびに取り直すので、スケッチで保存した線は読み直すだけで効く。
+ * 保存先が表を持っていればそれ（Supabase の kana_lines）、無ければ・読めなければ kana-lines.json の控え。
  * @returns {Promise<Map<string,string[]>>} 字 → 線
  */
 async function loadKanaLines() {
-  if (kanaLines) return kanaLines;
+  const s = await store;
+  if (s.loadLines) {
+    try {
+      const lines = await s.loadLines();
+      if (lines.size) return lines;
+    } catch (err) {
+      console.warn(`字と線の表を読めないので控え（${KANA_LINES_URL}）を使います:`, err.message);
+    }
+  }
   const res = await fetch(KANA_LINES_URL, { cache: 'no-store' });
   if (!res.ok) throw new Error(`字と線の一覧を読めません（${KANA_LINES_URL}: ${res.status}）`);
-  kanaLines = new Map(Object.entries((await res.json()).lines ?? {}));
-  return kanaLines;
+  return new Map(Object.entries((await res.json()).lines ?? {}));
 }
 
 /**
  * 参照ポーズを読み込む。
  * @returns {Promise<{poses:Object, lines:Object, pending:string[]}>}
  *   poses[字]   = 正規化座標（同じ字が何度も登録されていれば最後のもの）
- *   lines[字]   = 一筆書き記述（kana-lines.json の線）
+ *   lines[字]   = 一筆書き記述（kana_lines の線）
  *   pending     = 線の一覧には載っているが、まだ座標が登録されていない字
  */
 export async function loadReferencePoses() {
@@ -56,7 +63,7 @@ export async function loadReferencePoses() {
 }
 
 /**
- * 1字ぶんの参照ポーズ（座標）を登録する。線は保存しない（線は kana-lines.json だけが持つ）。
+ * 1字ぶんの参照ポーズ（座標）を登録する。線は保存しない（線は kana_lines だけが持つ）。
  * 撮り直すと行が増え、読み込みでは同じ字の最後の行が使われる。
  */
 export async function savePose(letter, points) {

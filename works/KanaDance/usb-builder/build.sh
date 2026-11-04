@@ -57,7 +57,7 @@ for f in index.html style.css sumi-tokens.css config.js pose-matcher.js pose-his
          renderer.js ui.js script.js pose-store.js store-local.js body-calibration.js; do
   cp "$SRC/$f" "$OUT/app/$f"
 done
-# 新ポーズの字と線の結び方の一覧（既定の組が使う）
+# 字と線の対応の控え（下の 4. で Supabase の kana_lines から取り直す）
 mkdir -p "$OUT/app/pose-sets"
 cp "$SRC/pose-sets/"*.json "$OUT/app/pose-sets/"
 # store-supabase.js は入れない。ローカル版では読まれないうえ、
@@ -150,6 +150,38 @@ print('      %d 件（%s）' % (len(rows), ''.join(sorted({r['letter'] for r in 
   fi
 else
   echo "[4/6] poses.json は既にあるので触りません（取り直すなら --refresh-poses）"
+fi
+
+# 字と線の表（kana_lines）を控えに書き出す。USB 版はネットが無いので、これを読んで判定する。
+# 取れなければリポジトリの pose-sets/kana-lines.json（上でコピー済み）のまま。
+LINES_JSON="$OUT/app/pose-sets/kana-lines.json"
+CREDS=$(python3 - "$SRC/runtime-config.js" <<'PYEOF'
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+block = s[s.index('supabase:'):]
+url = re.search(r"url:\s*'([^']+)'", block).group(1)
+key = re.search(r"anonKey:\s*'([^']+)'", block).group(1)
+print(url); print(key)
+PYEOF
+)
+SB_URL=$(echo "$CREDS" | sed -n 1p)
+SB_KEY=$(echo "$CREDS" | sed -n 2p)
+if curl -fsSL -m 60 -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+     "$SB_URL/rest/v1/kana_lines?select=letter,strokes&order=letter.asc" -o "$LINES_JSON.new"; then
+  python3 -c "
+import json, sys
+from datetime import datetime
+rows = json.load(open(sys.argv[1], encoding='utf-8'))
+if not rows: sys.exit('      kana_lines が空なので、リポジトリの控えのまま')
+out = {'_meta': {'purpose': 'KanaDance の字と線の対応（USB 版の控え）', 'source': 'Supabase kana_lines', 'exportedAt': datetime.now().strftime('%Y-%m-%d %H:%M')},
+       'lines': {r['letter']: r['strokes'] for r in rows}}
+json.dump(out, open(sys.argv[2], 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+print('      字と線 %d 字（%s）' % (len(rows), ''.join(r['letter'] for r in rows)))
+" "$LINES_JSON.new" "$LINES_JSON" || true
+  rm -f "$LINES_JSON.new"
+else
+  echo "      字と線の表を取得できませんでした。リポジトリの控えのまま"
+  rm -f "$LINES_JSON.new"
 fi
 
 # ── 5. Python を同梱 ───────────────────────────────────────
