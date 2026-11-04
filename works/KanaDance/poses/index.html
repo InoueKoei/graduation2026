@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>登録した姿勢 — KanaDance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<style>
+/* 登録した座標（Supabase poses）を字ごとの棒人間で並べ、線（kana_lines）を重ねる。
+   色は身振りスケッチ（../sketch/）と同じ。全部の札を同じ縮尺で描くので、字どうしの大きさも比べられる */
+:root {
+  --paper: #f4f4f1;
+  --surface: #fbfbf9;
+  --ink: #1c1c1a;
+  --ink-2: #5a5a55;
+  --ink-3: #8e8e88;
+  --rule: #d9d9d3;
+  --bone: #bdbdb6;
+  --shu: #c43d25;
+  --shu-ink: #a8321d;
+  --f-sans: "Zen Kaku Gothic New", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121211; --surface: #1a1a18; --ink: #ecece6; --ink-2: #b2b2ab; --ink-3: #7a7a73;
+    --rule: #2f2f2c; --bone: #4c4c47; --shu: #f2694c; --shu-ink: #ff8a70;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--f-sans); font-size: 14px; line-height: 1.7;
+  padding: 20px 16px 48px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+h1 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: .06em; }
+header p { margin: 0; color: var(--ink-2); font-size: 13px; }
+a { color: var(--shu-ink); }
+
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.bar label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.bar select, .bar input[type="number"] { font: inherit; font-size: 13px; height: 30px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.bar input[type="number"] { width: 68px; font-family: var(--f-mono); }
+.summary { font-size: 13px; color: var(--ink-2); }
+.summary b { color: var(--ink); font-family: var(--f-mono); font-weight: 500; }
+.status { font-size: 13px; color: var(--shu-ink); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.card {
+  font: inherit; color: inherit; text-align: left;
+  display: grid; grid-template-rows: auto auto; gap: 2px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 6px 8px 8px; cursor: pointer;
+}
+.card:hover { border-color: var(--ink-3); }
+.card:focus-visible { outline: 2px solid var(--shu); outline-offset: 2px; }
+.card.pending { border-style: dashed; cursor: default; background: transparent; }
+.card.close { border-color: var(--shu); }
+.card svg { width: 100%; height: auto; display: block; }
+.card .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.card .kana { font-size: 22px; font-weight: 700; line-height: 1.2; }
+.card .meta { font-size: 11px; color: var(--ink-3); font-family: var(--f-mono); }
+.card .near { font-size: 12px; color: var(--ink-2); }
+.card.close .near { color: var(--shu-ink); font-weight: 700; }
+.card .near .err { font-family: var(--f-mono); }
+
+/* SVG（作図の座標系は 肩幅 = 1、腰が原点、y 下向き。画面と同じく鏡像） */
+.bone { stroke: var(--bone); stroke-width: .07; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.bone.old { stroke-width: .04; opacity: .45; }
+.headc { stroke: var(--bone); stroke-width: .07; fill: var(--surface); }
+.glyph { stroke: var(--ink); stroke-width: .22; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.joint { fill: var(--ink-2); }
+
+/* 詳細（札を押すと開く） */
+dialog {
+  width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 16px;
+  background: var(--paper); color: var(--ink);
+}
+dialog::backdrop { background: rgba(0, 0, 0, .35); }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 240px); gap: 16px; align-items: start; }
+@media (max-width: 640px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+.detail svg { width: 100%; height: auto; display: block; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+.detail h2 { margin: 0; font-size: 40px; font-weight: 900; line-height: 1.1; }
+.detail h3 { margin: 12px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--ink-3); }
+.detail ol, .detail ul { margin: 0; padding-left: 1.2em; font-size: 13px; }
+.detail code { font-family: var(--f-mono); font-size: 12px; }
+.detail .mono { font-family: var(--f-mono); }
+.detail .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.btn { font: inherit; font-size: 13px; font-weight: 700; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+.hint { margin: 0; font-size: 12px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>登録した姿勢</h1>
+    <p>登録モードで撮った座標（いちばん新しい1回）を字ごとに描き、線を重ねる。<a href="../">KanaDance</a> ・ <a href="../sketch/">身振りスケッチ</a></p>
+  </header>
+
+  <div class="bar">
+    <label><input type="checkbox" id="showLines" checked> 線を重ねる</label>
+    <label><input type="checkbox" id="showOld"> 前の登録も薄く重ねる</label>
+    <label>並び
+      <select id="order">
+        <option value="kana">五十音</option>
+        <option value="near">取り違えやすい順</option>
+      </select>
+    </label>
+    <label>近いとみなす誤差 <input type="number" id="closeTol" min="0" max="3" step="0.05" value="0.4"></label>
+  </div>
+  <p class="summary" id="summary">読み込み中…</p>
+  <p class="status" id="status" hidden></p>
+  <p class="hint">誤差は KanaDance の判定と同じ測り方（部位ごとのずれの平均。肩幅 = 1）。「近い字」はその字の姿勢をとったとき次に近い字で、誤差が小さいほど取り違えやすい。</p>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<dialog id="dialog">
+  <div class="detail">
+    <div id="detailFigure"></div>
+    <div>
+      <h2 id="detailKana"></h2>
+      <h3>線</h3>
+      <ol id="detailLines"></ol>
+      <h3>近い字</h3>
+      <ol id="detailNear"></ol>
+      <h3>登録</h3>
+      <ul id="detailRows"></ul>
+      <div class="actions">
+        <a class="btn" id="detailSketch" href="../sketch/">身振りスケッチで開く</a>
+        <button class="btn" type="button" id="detailClose">閉じる</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script type="module">
+import { loadRows, loadLines } from '../store-supabase.js';
+import { matchLetter, resolvePoint } from '../pose-matcher.js';
+
+const $ = (id) => document.getElementById(id);
+
+// 棒人間の骨（部位名は登録座標のキー）。腰の左右は持っていないので、腰から膝へ直接つなぐ
+const BONES = [
+  ['neck', 'head'],
+  ['l_shoulder', 'r_shoulder'],
+  ['l_shoulder', 'l_elbow', 'l_hand'],
+  ['r_shoulder', 'r_elbow', 'r_hand'],
+  ['waist', 'neck'],
+  ['waist', 'l_knee', 'l_leg'],
+  ['waist', 'r_knee', 'r_leg'],
+];
+
+/** 画面（KanaDance の映像）と同じ向きにする：映像は鏡像なので x を反転 */
+const view = (p) => ({ x: -p.x, y: p.y });
+const f = (n) => n.toFixed(3);
+const polyline = (pts, cls) => `<polyline class="${cls}" points="${pts.map((p) => `${f(p.x)},${f(p.y)}`).join(' ')}"/>`;
+
+function figure(points, { lines, old = [], viewBox }) {
+  let s = '';
+  for (const o of old) {
+    for (const bone of BONES) {
+      const pts = bone.map((n) => o[n]).filter(Boolean).map(view);
+      if (pts.length > 1) s += polyline(pts, 'bone old');
+    }
+  }
+  for (const bone of BONES) {
+    const pts = bone.map((n) => points[n]).filter(Boolean).map(view);
+    if (pts.length > 1) s += polyline(pts, 'bone');
+  }
+  if (points.head) { const h = view(points.head); s += `<circle class="headc" cx="${f(h.x)}" cy="${f(h.y)}" r=".28"/>`; }
+  if (lines) {
+    for (const line of lines) {
+      const pts = line.split('-').map((t) => resolvePoint(t, points)).filter(Boolean).map(view);
+      if (pts.length > 1) s += polyline(pts, 'glyph');
+    }
+  }
+  return `<svg viewBox="${viewBox}" role="img">${s}</svg>`;
+}
+
+/** 全部の姿勢が収まる共通の枠。札ごとに縮尺を変えないので、手足の広がりを字どうしで比べられる */
+function commonViewBox(poses) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of poses) {
+    for (const v of Object.values(p)) {
+      const q = view(v);
+      minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x);
+      minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y);
+    }
+  }
+  if (!Number.isFinite(minX)) return '-4 -5 8 10';
+  const pad = 0.5;
+  return `${f(minX - pad)} ${f(minY - pad)} ${f(maxX - minX + pad * 2)} ${f(maxY - minY + pad * 2)}`;
+}
+
+const when = (iso) => iso
+  ? new Date(iso).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  : '—';
+
+// ── 読み込み ────────────────────────────────────────────────
+let state = null;
+
+async function load() {
+  try {
+    const [rows, lines] = await Promise.all([loadRows(), loadLines()]);
+    // 字ごとの登録（古い → 新しい）。判定に使うのは最後の1回
+    const history = {};
+    for (const row of rows) (history[row.letter] ??= []).push(row);
+    const latest = Object.fromEntries(Object.entries(history).map(([l, rs]) => [l, rs[rs.length - 1].points]));
+
+    // 判定に使う字（線がある字）どうしで、いちばん近い字を測る。KanaDance の判定と同じ範囲
+    const judged = Object.fromEntries(Object.entries(latest).filter(([l]) => lines.has(l)));
+    const ranking = {};
+    for (const [l, pose] of Object.entries(judged)) {
+      ranking[l] = Object.entries(judged)
+        .filter(([k]) => k !== l)
+        .map(([k, ref]) => ({ letter: k, error: matchLetter(pose, { [k]: ref }).error }))
+        .sort((a, b) => a.error - b.error);
+    }
+    const letters = [...new Set([...lines.keys(), ...Object.keys(history)])].sort();
+    state = { history, latest, lines, ranking, letters, viewBox: commonViewBox(Object.values(latest)) };
+    render();
+  } catch (err) {
+    $('summary').textContent = '';
+    $('status').hidden = false;
+    $('status').textContent = `読み込めません: ${err.message}`;
+  }
+}
+
+// ── 描画 ────────────────────────────────────────────────────
+function render() {
+  const { history, latest, lines, ranking, letters, viewBox } = state;
+  const tol = parseFloat($('closeTol').value) || 0;
+  const showLines = $('showLines').checked;
+  const showOld = $('showOld').checked;
+
+  const judged = letters.filter((l) => latest[l] && lines.has(l));
+  const pending = letters.filter((l) => !latest[l] && lines.has(l));
+  const noLines = letters.filter((l) => latest[l] && !lines.has(l));
+  const close = judged.filter((l) => ranking[l][0] && ranking[l][0].error < tol);
+  $('summary').innerHTML =
+    `判定に使う字 <b>${judged.length}</b> / 線のある字 <b>${lines.size}</b>` +
+    `　未登録 <b>${pending.length}</b>${pending.length ? `（${pending.join('')}）` : ''}` +
+    `　近い字がある <b>${close.length}</b>` +
+    (noLines.length ? `　線の無い登録 <b>${noLines.length}</b>（${noLines.join('')}。判定に使わない）` : '');
+
+  let order = [...letters];
+  if ($('order').value === 'near') {
+    const key = (l) => ranking[l]?.[0]?.error ?? Infinity;
+    order.sort((a, b) => key(a) - key(b));
+  }
+
+  $('grid').innerHTML = order.map((l) => {
+    if (!latest[l]) {
+      return `<div class="card pending"><div class="head"><span class="kana">${l}</span><span class="meta">未登録</span></div></div>`;
+    }
+    const rows = history[l];
+    const near = ranking[l]?.[0];
+    const isClose = near && near.error < tol;
+    const old = showOld ? rows.slice(0, -1).map((r) => r.points) : [];
+    const nearText = !lines.has(l)
+      ? '線が無いので判定に使わない'
+      : near ? `近い字 ${near.letter} <span class="err">${near.error.toFixed(2)}</span>` : '比べる字が無い';
+    return `<button type="button" class="card${isClose ? ' close' : ''}" data-letter="${l}" aria-label="${l}の詳細">
+      ${figure(latest[l], { lines: showLines ? lines.get(l) : null, old, viewBox })}
+      <div class="head"><span class="kana">${l}</span><span class="meta">${rows.length} 回・${when(rows[rows.length - 1].created_at)}</span></div>
+      <div class="near">${nearText}</div>
+    </button>`;
+  }).join('');
+}
+
+function openDetail(l) {
+  const { history, latest, lines, ranking, viewBox } = state;
+  const rows = history[l];
+  $('detailKana').textContent = l;
+  $('detailFigure').innerHTML = figure(latest[l], { lines: lines.get(l), old: rows.slice(0, -1).map((r) => r.points), viewBox });
+  $('detailLines').innerHTML = (lines.get(l) ?? []).map((s) => `<li><code>${s}</code></li>`).join('') || '<li>線が無い</li>';
+  $('detailNear').innerHTML = (ranking[l] ?? []).slice(0, 3)
+    .map((n) => `<li>${n.letter} <span class="mono">${n.error.toFixed(2)}</span></li>`).join('') || '<li>—</li>';
+  $('detailRows').innerHTML = rows.slice().reverse()
+    .map((r, i) => `<li><span class="mono">id ${r.id}</span>・${when(r.created_at)}${i === 0 ? '（判定に使う）' : ''}</li>`).join('');
+  $('detailSketch').href = `../sketch/?k=${encodeURIComponent(l)}`;
+  $('dialog').showModal();
+}
+
+$('grid').addEventListener('click', (e) => {
+  const card = e.target.closest('button.card');
+  if (card) openDetail(card.dataset.letter);
+});
+$('detailClose').addEventListener('click', () => $('dialog').close());
+$('dialog').addEventListener('click', (e) => { if (e.target === $('dialog')) $('dialog').close(); });
+for (const id of ['showLines', 'showOld', 'order', 'closeTol']) {
+  $(id).addEventListener(id === 'closeTol' ? 'input' : 'change', () => state && render());
+}
+
+load();
+</script>
+</body>
+</html>

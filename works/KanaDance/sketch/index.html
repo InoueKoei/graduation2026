@@ -458,7 +458,12 @@ $('copyAll').addEventListener('click', () => { if (!book.length) { $('copyStatus
 /* ---------- 起動：立ち姿だけ、画はなし ---------- */
 setMode('trace');
 renderBook();
-loadBook();
+// ?k=字 で開かれたら（登録した姿勢の一覧から来たとき）その字を開く
+loadBook().then(() => {
+  const k = new URLSearchParams(location.search).get('k');
+  const i = book.findIndex((b) => b.kana === k);
+  if (i >= 0) openSheet(i);
+});
 </script>
 </body>
 </html>
