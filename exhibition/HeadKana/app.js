@@ -99,8 +99,22 @@ function renderTypeControls(){
   $('type-size').disabled=$('type-weight').disabled=connected&&!demo;
   void fontCatalog.load(dialAssignments.style.fontId,style.fontWeight).then(refreshRotationBodies).catch(()=>{$('type-current').textContent='書体の読み込みに失敗しました';});
 }
-const SIZE_STEP_KEY='headkana-size-step';
+const SIZE_STEP_KEY='headkana-size-step',SIZE_RANGE_KEY='headkana-size-range';
 try{const step=Number(localStorage.getItem(SIZE_STEP_KEY));if(Number.isInteger(step)&&step>=1&&step<=200)typeControls.sizeStep=step;}catch{}
+try{const r=JSON.parse(localStorage.getItem(SIZE_RANGE_KEY));if(Number.isInteger(r?.min)&&Number.isInteger(r?.max)&&r.min>=4&&r.max<=2000&&r.min<r.max){typeControls.sizeMin=r.min;typeControls.sizeMax=r.max;}}catch{}
+function showSizeRange(){
+  $('size-min').value=typeControls.sizeMin;$('size-max').value=typeControls.sizeMax;
+  const {sizeMin:min,sizeMax:max}=typeControls;$('size-range-hint').textContent=`${min}〜${max}px（中央で約${Math.round(min+(max-min)*0.75)}px）`;
+}
+showSizeRange();
+// Smallest and largest size the slider reaches; the two never cross.
+for(const id of ['size-min','size-max'])$(id).addEventListener('change',()=>{
+  let min=Math.round(Number($('size-min').value))||typeControls.sizeMin,max=Math.round(Number($('size-max').value))||typeControls.sizeMax;
+  min=Math.min(1999,Math.max(4,min));max=Math.min(2000,Math.max(5,max));
+  if(min>=max){if(id==='size-min')max=Math.min(2000,min+1);else min=Math.max(4,max-1);}
+  typeControls.sizeMin=min;typeControls.sizeMax=max;try{localStorage.setItem(SIZE_RANGE_KEY,JSON.stringify({min,max}));}catch{}
+  showSizeRange();applyTypeStyle();render();
+});
 $('size-step').value=typeControls.sizeStep;
 $('size-step').addEventListener('change',e=>{
   const step=Math.min(200,Math.max(1,Math.round(Number(e.target.value))||1));
