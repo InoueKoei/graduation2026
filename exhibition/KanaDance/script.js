@@ -203,6 +203,8 @@ function takeShot() {
     video: ui.video,
     width: ui.canvas.width,
     height: ui.canvas.height,
+    exportMode: ui.settings.recordExport,
+    photoOpacity: ui.settings.recordPhotoOpacity,
   });
   ui.showShutter(Boolean(ok));
 }
