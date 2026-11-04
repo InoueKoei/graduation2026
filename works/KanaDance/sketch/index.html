@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>身振りスケッチ — KanaDance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: 左に大きな作図面（全身の13点）、右に道具の列（操作 → 下絵 → 画 → スケッチ帳 → 書き出し） */
+:root {
+  --paper: #f4f4f1;
+  --surface: #fbfbf9;
+  --ink: #1c1c1a;
+  --ink-2: #5a5a55;
+  --ink-3: #8e8e88;
+  --rule: #d9d9d3;
+  --bone: #bdbdb6;
+  --shu: #c43d25;
+  --shu-ink: #a8321d;
+  --f-sans: "Zen Kaku Gothic New", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121211; --surface: #1a1a18; --ink: #ecece6; --ink-2: #b2b2ab; --ink-3: #7a7a73;
+    --rule: #2f2f2c; --bone: #4c4c47; --shu: #f2694c; --shu-ink: #ff8a70;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--f-sans); font-size: 14px; line-height: 1.7;
+  padding: 20px 16px 48px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+h1 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: .06em; }
+header p { margin: 0; color: var(--ink-2); font-size: 13px; }
+header a { color: var(--shu-ink); }
+.tool { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .tool { grid-template-columns: minmax(0, 1fr); } }
+
+.board { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; position: relative; }
+#cv { display: block; width: 100%; height: auto; max-height: calc(100vh - 120px); touch-action: none; user-select: none; -webkit-user-select: none; }
+.board .hud { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: var(--ink-3); pointer-events: none; }
+
+.panel { display: grid; gap: 16px; min-width: 0; }
+.group { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.group:first-child { border-top: 0; padding-top: 0; }
+.group h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--ink-3); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--shu); border-radius: 999px; overflow: hidden; }
+.seg button { font: inherit; font-size: 14px; font-weight: 700; padding: 6px 16px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--shu); color: #fff; }
+.btn { font: inherit; font-size: 13px; font-weight: 700; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); }
+.btn.quiet { border-color: var(--rule); background: transparent; color: var(--ink-2); font-weight: 500; }
+.btn:disabled { opacity: .4; cursor: default; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+input[type="text"] { font: inherit; font-size: 16px; height: 34px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; }
+#ghostChar { width: 64px; text-align: center; font-weight: 700; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--shu); outline-offset: 2px; }
+.hint { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+.strokes { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.strokes li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.strokes .n { font-family: var(--f-mono); font-size: 12px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--paper); display: inline-grid; place-items: center; }
+.strokes code { font-family: var(--f-mono); font-size: 13px; overflow-wrap: anywhere; }
+.strokes .x { font: inherit; font-size: 12px; border: 0; background: none; color: var(--ink-3); cursor: pointer; padding: 2px 6px; }
+.strokes li.none { display: block; color: var(--ink-3); font-size: 13px; }
+
+.book { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.sheet { position: relative; font: inherit; color: inherit; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 2px 2px 4px; cursor: pointer; display: grid; justify-items: center; }
+.sheet svg { width: 100%; height: auto; display: block; }
+.sheet b { font-size: 15px; line-height: 1.1; }
+.sheet .del { position: absolute; top: 0; right: 2px; font-size: 12px; color: var(--ink-3); border: 0; background: none; cursor: pointer; padding: 2px 4px; }
+.book-empty { font-size: 12px; color: var(--ink-3); grid-column: 1 / -1; }
+pre { margin: 0; font-family: var(--f-mono); font-size: 12px; line-height: 1.6; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; overflow: auto; max-height: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.status { font-size: 12px; color: var(--ink-3); }
+.status.error { color: var(--shu-ink); }
+
+/* SVG */
+.bone { stroke: var(--bone); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.head { stroke: var(--bone); stroke-width: 2.2; fill: var(--surface); }
+.ground { stroke: var(--rule); stroke-width: 1.5; }
+.glyph { stroke: var(--ink); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.glyph.live { stroke: var(--shu); }
+.rubber { stroke: var(--shu); stroke-width: 2; stroke-dasharray: 4 4; fill: none; }
+.pt { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.6; cursor: grab; }
+.pt.used { fill: var(--ink); stroke: var(--ink); }
+.pt.hot { stroke: var(--shu); stroke-width: 2.6; }
+.trace .pt { cursor: crosshair; }
+.lbl { font-family: var(--f-mono); font-size: 8px; fill: var(--ink-3); pointer-events: none; }
+.ghost-glyph { font-family: var(--f-sans); font-weight: 500; fill: var(--ink); opacity: .09; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.badge circle { fill: var(--ink); }
+.badge text { font-family: var(--f-mono); font-size: 8px; fill: var(--paper); text-anchor: middle; dominant-baseline: central; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>身振りスケッチ</h1>
+    <p>全身の13点を動かして構え、点から点へなぞって画を引く。字を決めて保存すると、<a href="../">KanaDance</a> の線になる（読み直すだけで反映）。</p>
+  </header>
+
+  <div class="tool">
+    <div class="board">
+      <svg id="cv" viewBox="-130 -150 260 270" role="application" aria-label="作図面"></svg>
+      <div class="hud" id="hud"></div>
+    </div>
+
+    <div class="panel">
+      <div class="group">
+        <h2>操作</h2>
+        <div class="row">
+          <div class="seg" role="group" aria-label="操作の切り替え">
+            <button type="button" id="mMove" aria-pressed="false">動かす</button>
+            <button type="button" id="mTrace" aria-pressed="true">なぞる</button>
+          </div>
+          <label class="chk"><input type="checkbox" id="chain" checked> 先の関節もついてくる</label>
+        </div>
+        <p class="hint">動かす：点をドラッグ。なぞる：点を押したまま次の点へ通すと一画になる。キーは M／T で切り替え、⌘Z で一画戻す。</p>
+      </div>
+
+      <div class="group">
+        <h2>下絵</h2>
+        <div class="row">
+          <input type="text" id="ghostChar" maxlength="2" value="" placeholder="字" aria-label="下絵の字">
+          <label class="chk"><input type="checkbox" id="ghostOn" checked> 下絵を重ねる</label>
+          <label class="chk"><input type="checkbox" id="labelsOn" checked> 点の名前</label>
+        </div>
+        <div class="row">
+          <button class="btn quiet" type="button" id="resetPose">立ち姿に戻す</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>画</h2>
+        <ol class="strokes" id="strokes"></ol>
+        <div class="row">
+          <button class="btn quiet" type="button" id="undo">一画戻す</button>
+          <button class="btn quiet" type="button" id="clearStrokes">画を全部消す</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>スケッチ帳</h2>
+        <div class="row">
+          <button class="btn" type="button" id="save">この身振りを保存</button>
+          <span class="status" id="saveStatus"></span>
+        </div>
+        <div class="book" id="book"></div>
+        <p class="hint">保存先は Supabase の kana_lines（1字1行）。同じ字を保存すると上書きになる。KanaDance はここから線を読む。</p>
+      </div>
+
+      <div class="group">
+        <h2>書き出し（KanaDance の線記述）</h2>
+        <pre id="out"></pre>
+        <div class="row">
+          <button class="btn ghost" type="button" id="copyOne">いまの字をコピー</button>
+          <button class="btn quiet" type="button" id="copyAll">スケッチ帳を全部コピー</button>
+          <span class="status" id="copyStatus"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { RUNTIME } from '../runtime-config.js';
+
+/* ============================================================
+   身体モデル（腰 W を原点、y は下向き。単位は肩幅の 1/36）
+   ============================================================ */
+const BODY = { hip: 10 };
+const PTS = ['H', 'LS', 'RS', 'LE', 'RE', 'LH', 'RH', 'W', 'LK', 'RK', 'LL', 'RL'];   // N は両肩の中点
+const CHILDREN = { LS: ['LE', 'LH'], LE: ['LH'], RS: ['RE', 'RH'], RE: ['RH'], LK: ['LL'], RK: ['RL'] };
+const STAND = {
+  H: [0, -80], LS: [-18, -60], RS: [18, -60], LE: [-24, -32], RE: [24, -32], LH: [-28, -6], RH: [28, -6],
+  W: [0, 0], LK: [-12, 42], RK: [12, 42], LL: [-13, 84], RL: [13, 84],
+};
+
+/* ---------- 状態 ---------- */
+const sq = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+const clone = o => JSON.parse(JSON.stringify(o));
+let pts = clone(STAND);
+let strokes = [];
+let mode = 'trace';
+let drag = null;     // { key, last } 動かす中
+let live = null;     // { path:[...], cursor:[x,y] } なぞる中
+let hot = null;
+let ghostKana = '';
+const $ = id => document.getElementById(id);
+const cv = $('cv');
+
+const withN = P => ({ ...P, N: [(P.LS[0] + P.RS[0]) / 2, (P.LS[1] + P.RS[1]) / 2] });
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+function resolve(tok, P) { const m = tok.match(/^\[(\w+)_(\w+)\]$/); return m ? mid(P[m[1]], P[m[2]]) : P[tok]; }
+const tokens = s => s.split('-');
+const f1 = n => n.toFixed(1);
+const poly = a => a.map(p => `${f1(p[0])},${f1(p[1])}`).join(' ');
+
+/* ---------- 描画 ---------- */
+function bodyMarkup(P) {
+  const g = Math.max(P.LL[1], P.RL[1], P.LK[1], P.RK[1]);
+  let s = `<line class="ground" x1="-125" y1="${f1(g)}" x2="125" y2="${f1(g)}"/>`;
+  s += `<polyline class="bone" points="${poly([P.W, P.N])}"/><polyline class="bone" points="${poly([P.LS, P.RS])}"/>`;
+  s += `<polyline class="bone" points="${poly([P.LS, P.LE, P.LH])}"/><polyline class="bone" points="${poly([P.RS, P.RE, P.RH])}"/>`;
+  s += `<polyline class="bone" points="${poly([P.LL, P.LK, [P.W[0] - BODY.hip, P.W[1]], [P.W[0] + BODY.hip, P.W[1]], P.RK, P.RL])}"/>`;
+  s += `<circle class="head" cx="${f1(P.H[0])}" cy="${f1(P.H[1])}" r="9"/>`;
+  return s;
+}
+function ghostMarkup(P, ch) {
+  if (!ch) return '';
+  const xs = PTS.map(k => P[k][0]), ys = PTS.map(k => P[k][1]);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return `<text class="ghost-glyph" font-size="100" transform="translate(${f1(cx)} ${f1(cy)}) scale(${(Math.max(w, 60) / 88).toFixed(3)} ${(Math.max(h, 60) / 88).toFixed(3)})">${ch.replace(/[<&>]/g, '')}</text>`;
+}
+function strokesMarkup(P, list) {
+  return list.map(st => `<polyline class="glyph" points="${poly(tokens(st).map(t => resolve(t, P)))}"/>`).join('');
+}
+function render() {
+  const P = withN(pts);
+  const used = new Set(strokes.flatMap(st => tokens(st)).filter(t => !t.startsWith('[')));
+  if (live) live.path.forEach(k => used.add(k));
+  let s = bodyMarkup(P);
+  if ($('ghostOn').checked) s += ghostMarkup(P, ghostKana);
+  s += strokesMarkup(P, strokes);
+  if (live) {
+    const path = live.path.map(k => P[k]);
+    if (path.length > 1) s += `<polyline class="glyph live" points="${poly(path)}"/>`;
+    if (live.cursor) s += `<line class="rubber" x1="${f1(path[path.length - 1][0])}" y1="${f1(path[path.length - 1][1])}" x2="${f1(live.cursor[0])}" y2="${f1(live.cursor[1])}"/>`;
+  }
+  // 書き順の番号
+  strokes.forEach((st, i) => {
+    const a = resolve(tokens(st)[0], P), b = resolve(tokens(st)[1], P);
+    const dx = a[0] - b[0], dy = a[1] - b[1], L = Math.hypot(dx, dy) || 1;
+    s += `<g class="badge"><circle cx="${f1(a[0] + dx / L * 10)}" cy="${f1(a[1] + dy / L * 10)}" r="5.4"/><text x="${f1(a[0] + dx / L * 10)}" y="${f1(a[1] + dy / L * 10)}">${i + 1}</text></g>`;
+  });
+  // 中点（線に使われているもの）
+  for (const st of strokes) for (const t of tokens(st)) if (t.startsWith('[')) { const p = resolve(t, P); s += `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="3" style="fill:var(--surface);stroke:var(--ink);stroke-width:1.5"/>`; }
+  // 点（N は目印として小さく、つかめる）
+  for (const k of [...PTS, 'N']) {
+    const p = P[k], r = k === 'N' ? 3 : 4.4;
+    s += `<circle class="pt${used.has(k) ? ' used' : ''}${hot === k ? ' hot' : ''}" cx="${f1(p[0])}" cy="${f1(p[1])}" r="${r}"/>`;
+    if ($('labelsOn').checked) {
+      const side = k.startsWith('L') ? -1 : 1;
+      s += `<text class="lbl" x="${f1(p[0] + side * 7)}" y="${f1(p[1] - 5)}" text-anchor="${side < 0 ? 'end' : 'start'}">${k}</text>`;
+    }
+  }
+  cv.innerHTML = s;
+  cv.classList.toggle('trace', mode === 'trace');
+  renderPanel();
+}
+
+function renderPanel() {
+  $('strokes').innerHTML = strokes.length
+    ? strokes.map((st, i) => `<li><span class="n">${i + 1}</span><code>${st}</code><button class="x" type="button" data-del="${i}" aria-label="${i + 1}画目を消す">消す</button></li>`).join('')
+    : '<li class="none">まだ画がない。「なぞる」で点から点へドラッグする。</li>';
+  $('out').textContent = exportOne();
+  $('undo').disabled = !strokes.length;
+  $('clearStrokes').disabled = !strokes.length;
+  $('hud').textContent = mode === 'trace' ? 'なぞる：点を押して次の点へ通す' : '動かす：点をドラッグ';
+}
+
+/* ---------- 入力 ---------- */
+function toSvg(e) {
+  const pt = cv.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(cv.getScreenCTM().inverse());
+  return [q.x, q.y];
+}
+function nearest(p, radius, except) {
+  const P = withN(pts);
+  let best = null, bd = radius * radius;
+  for (const k of [...PTS, 'N']) {
+    if (k === except) continue;
+    const d = sq(P[k], p);
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+const grabRadius = () => { const m = cv.getScreenCTM(); return Math.max(9, 18 / (m ? m.a : 1)); };
+
+cv.addEventListener('pointerdown', e => {
+  const p = toSvg(e), k = nearest(p, grabRadius());
+  if (!k) return;
+  e.preventDefault();
+  cv.setPointerCapture(e.pointerId);
+  if (mode === 'move') drag = { key: k, last: p };
+  else live = { path: [k], cursor: p };
+  render();
+});
+cv.addEventListener('pointermove', e => {
+  const p = toSvg(e);
+  if (drag) {
+    const dx = p[0] - drag.last[0], dy = p[1] - drag.last[1];
+    const keys = drag.key === 'N' ? ['LS', 'RS', 'LE', 'LH', 'RE', 'RH', 'H'] : [drag.key, ...($('chain').checked ? (CHILDREN[drag.key] || []) : [])];
+    for (const k of keys) pts[k] = [pts[k][0] + dx, pts[k][1] + dy];
+    drag.last = p;
+    render();
+  } else if (live) {
+    const last = live.path[live.path.length - 1];
+    const k = nearest(p, grabRadius() * .8, last);
+    // 直前の点に戻ったときは、戻ったぶんを取り消せる
+    if (k && live.path.length > 1 && k === live.path[live.path.length - 2]) live.path.pop();
+    else if (k) live.path.push(k);
+    live.cursor = p;
+    render();
+  } else {
+    const k = nearest(p, grabRadius());
+    if (k !== hot) { hot = k; render(); }
+  }
+});
+function endPointer() {
+  if (live) {
+    if (live.path.length > 1) strokes.push(live.path.join('-'));
+    live = null;
+  }
+  drag = null;
+  render();
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', () => { live = null; drag = null; render(); });
+cv.addEventListener('pointerleave', () => { if (!drag && !live && hot) { hot = null; render(); } });
+
+function setMode(m) {
+  mode = m;
+  $('mMove').setAttribute('aria-pressed', String(m === 'move'));
+  $('mTrace').setAttribute('aria-pressed', String(m === 'trace'));
+  render();
+}
+$('mMove').addEventListener('click', () => setMode('move'));
+$('mTrace').addEventListener('click', () => setMode('trace'));
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, select, textarea')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); strokes.pop(); render(); return; }
+  if (e.key === 'm' || e.key === 'M') setMode('move');
+  if (e.key === 't' || e.key === 'T') setMode('trace');
+});
+$('strokes').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { strokes.splice(+b.dataset.del, 1); render(); } });
+$('undo').addEventListener('click', () => { strokes.pop(); render(); });
+$('clearStrokes').addEventListener('click', () => { strokes = []; render(); });
+$('ghostChar').addEventListener('input', e => { ghostKana = toKatakana(e.target.value.trim().slice(0, 1)); render(); });
+$('ghostOn').addEventListener('change', render);
+$('labelsOn').addEventListener('change', render);
+$('resetPose').addEventListener('click', () => { pts = clone(STAND); render(); });
+
+function toKatakana(ch) {
+  if (!ch) return '';
+  const c = ch.codePointAt(0);
+  return c >= 0x3041 && c <= 0x3096 ? String.fromCodePoint(c + 0x60) : ch;
+}
+
+/* ---------- スケッチ帳（Supabase の kana_lines。1字1行で、KanaDance がそのまま読む） ---------- */
+let book = [];       // [{ kana, pts, strokes, at }]（五十音順）
+let client = null;
+const say = (m, error = false) => { $('saveStatus').textContent = m; $('saveStatus').classList.toggle('error', error); };
+
+async function getClient() {
+  if (client) return client;
+  const { createClient } = await import(RUNTIME.supabaseClient);
+  client = createClient(RUNTIME.supabase.url, RUNTIME.supabase.anonKey);
+  return client;
+}
+
+/** 行 → スケッチ。作図用の点が無い行（線だけ入れた字）は立ち姿で開く */
+const fromRow = r => ({ kana: r.letter, pts: r.sketch && PTS.every(k => r.sketch[k]) ? r.sketch : clone(STAND), strokes: r.strokes ?? [], at: r.updated_at });
+
+async function loadBook() {
+  try {
+    const { data, error } = await (await getClient())
+      .from('kana_lines').select('letter, strokes, sketch, updated_at').order('letter');
+    if (error) throw error;
+    book = data.map(fromRow);
+  } catch (err) {
+    say(`スケッチ帳を読めません: ${err.message}`, true);
+  }
+  renderBook();
+}
+
+function thumb(item) {
+  const P = withN(item.pts);
+  return `<svg viewBox="-110 -140 220 240" aria-hidden="true">${bodyMarkup(P)}${strokesMarkup(P, item.strokes)}</svg>`;
+}
+function renderBook() {
+  $('book').innerHTML = book.length
+    ? book.map((it, i) => `<div class="sheet" role="button" tabindex="0" data-open="${i}" aria-label="${it.kana}を開く">${thumb(it)}<b>${it.kana}</b><button class="del" type="button" data-rm="${i}" aria-label="${it.kana}を消す">×</button></div>`).join('')
+    : '<span class="book-empty">まだ何も保存していない。</span>';
+}
+
+$('save').addEventListener('click', async () => {
+  const kana = ghostKana;
+  if (!kana) { say('下絵の欄に字を入れてから保存してください', true); return; }
+  $('save').disabled = true;
+  try {
+    const row = { letter: kana, strokes: strokes.slice(), sketch: clone(pts), updated_at: new Date().toISOString() };
+    const { error } = await (await getClient()).from('kana_lines').upsert(row, { onConflict: 'letter' });
+    if (error) throw error;
+    say(`「${kana}」を保存しました`);
+    await loadBook();
+  } catch (err) {
+    say(`保存できませんでした: ${err.message}`, true);
+  } finally {
+    $('save').disabled = false;
+  }
+});
+$('book').addEventListener('click', async e => {
+  const rm = e.target.closest('[data-rm]');
+  if (rm) {
+    // 消すと戻せない（KanaDance の判定からも外れる）ので、2回押しで確定する
+    if (!rm.dataset.armed) {
+      rm.dataset.armed = '1'; rm.textContent = '消す';
+      setTimeout(() => { if (rm.isConnected) { delete rm.dataset.armed; rm.textContent = '×'; } }, 3000);
+      return;
+    }
+    const it = book[+rm.dataset.rm];
+    if (!it) return;
+    try {
+      const { error } = await (await getClient()).from('kana_lines').delete().eq('letter', it.kana);
+      if (error) throw error;
+      say(`「${it.kana}」を消しました`);
+      await loadBook();
+    } catch (err) { say(`消せませんでした: ${err.message}`, true); }
+    return;
+  }
+  const op = e.target.closest('[data-open]');
+  if (op) openSheet(+op.dataset.open);
+});
+$('book').addEventListener('keydown', e => { const op = e.target.closest('[data-open]'); if (op && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openSheet(+op.dataset.open); } });
+function openSheet(i) {
+  const it = book[i]; if (!it) return;
+  pts = clone(it.pts); strokes = it.strokes.slice(); ghostKana = it.kana; $('ghostChar').value = ghostKana;
+  render();
+}
+
+/* ---------- 書き出し ---------- */
+const lineOf = (kana, list) => `  ${kana || '？'}: [${list.map(s => `'${s}'`).join(', ')}],`;
+function exportOne() { return lineOf(ghostKana, strokes); }
+function exportAll() {
+  const lines = book.map(b => lineOf(b.kana, b.strokes)).join('\n');
+  const poses = book.map(b => `  ${b.kana}: ${JSON.stringify(Object.fromEntries(PTS.map(k => [k, b.pts[k].map(v => Math.round(v))])))},`).join('\n');
+  return `// 身振りスケッチ：線（KanaDance の線記述）\nexport const SKETCH_KANA_LINES = Object.freeze({\n${lines}\n});\n\n// 姿勢（腰 W を原点、単位は肩幅の 1/36、y は下向き）\nexport const SKETCH_KANA_POSES = {\n${poses}\n};`;
+}
+function copy(text) {
+  const done = m => { $('copyStatus').textContent = m; };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents($('out')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); done('選択しました。⌘C でコピーしてください'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done('コピーしました'), fallback);
+  else fallback();
+}
+$('copyOne').addEventListener('click', () => copy(exportOne()));
+$('copyAll').addEventListener('click', () => { if (!book.length) { $('copyStatus').textContent = 'スケッチ帳が空です'; return; } $('out').textContent = exportAll(); copy(exportAll()); });
+
+/* ---------- 起動：立ち姿だけ、画はなし ---------- */
+setMode('trace');
+renderBook();
+loadBook();
+</script>
+</body>
+</html>

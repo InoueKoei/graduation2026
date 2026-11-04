@@ -28,14 +28,16 @@ python3 -m http.server 8000
 | 表 | 中身 | 置き場所 | 直すとき |
 |---|---|---|---|
 | **字と座標** | 字・正規化座標・登録時刻 | Supabase `poses`（USB 版は `data/poses.json`） | 登録モードで撮る。撮り直すと行が増え、**同じ字の最後の行**が使われる |
-| **字と線** | 字 → 一筆書きの線 | `pose-sets/kana-lines.json` | 身振りスケッチ（https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug ）のスケッチ帳で引き、書き出して置き換える |
+| **字と線** | 字 → 一筆書きの線（と作図用の仮の姿勢） | Supabase `kana_lines`（1字1行） | **身振りスケッチ（`works/KanaDance/sketch/`）で引いて保存するだけ**。KanaDance は読み直せば反映する |
 
 - 判定に使うのは**線の表に載っている字だけ**。線はあるのにまだ撮っていない字は、パネルに「未登録」として並ぶ
-- 線の表は1字1件。スケッチ帳に同じ字が2件あるときは、KanaDance から取り込んだ手本（KD）より**自分で引いたもの**を採る
+- 線の表は1字1行。同じ字を保存すると上書きになる。スケッチ帳の × で消すと、その字は判定からも外れる
 - 登録で保存するのは座標だけ。Supabase の `lines` 列は読みも書きもしない（列が残っていても動きに関係しない）
 - 2026-10-31 22:40 より前の登録（旧ポーズ・手首足首で撮った分）は Supabase から消した。登録時刻で組を分ける仕組みも外した
 - 線だけ直したいときは撮り直さなくてよい。ポーズそのものを変えたときだけ撮り直す
-- works と exhibition に同じ `kana-lines.json` がある。線を直したら両方を置き換える
+- `pose-sets/kana-lines.json` は**控え**。`kana_lines` が読めないとき（表が無い・ネットが無い）だけ使う。USB 版は `build.sh` がビルドのときに `kana_lines` から書き出す
+- 表を作る SQL は `works/KanaDance/supabase/kana_lines.sql`（Supabase の SQL エディタで1回流す）。`poses` と同じく公開キーで読み書きできる
+- 以前の身振りスケッチ（claude.ai のアーティファクト https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug ）は、外の Supabase に書けないので手で同期していた。道具ごとこちらへ移した
 - 以前は、2つを結ぶ紐付け表（`linkage_20261031.json` と、身振りスケッチ側の `poses`。行 id・座標・線を1件にまとめたもの）も持っていた。
   コピーが何か所にもできて食い違ったのでやめた。最後の中身は `pose-sets/archive/sketch-poses-linkage_20261104.json` に控えてある
 
@@ -379,7 +381,9 @@ runtime-config.js … 実行環境の設定（保存先・MediaPipe の取得元
 pose-store.js   … 参照ポーズを読み込む層（保存先の選択と、座標と線の突き合わせ）
 store-supabase.js … Supabase の行の読み書き
 store-local.js  … 同梱 Python サーバの行の読み書き
-pose-sets/      … 字と線の表（kana-lines.json）。archive/ に使わなくなった登録と紐付け表の控え
+pose-sets/      … 字と線の控え（kana-lines.json。kana_lines が読めないときだけ使う）。archive/ に使わなくなった登録と紐付け表の控え
+sketch/         … 身振りスケッチ（字と線を引いて kana_lines に保存する作図ページ）
+supabase/       … kana_lines を作る SQL
 usb-builder/    … USB 版を作るための道具（build.sh・server.py・起動 .bat）※USB には入れない
 pose-matcher.js … 正規化・照合・線トークンの解決（純粋関数）
 pose-history.js … 直近数秒のポーズを溜め、等間隔の鍵フレームを補間して取り出す

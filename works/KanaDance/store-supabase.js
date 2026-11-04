@@ -3,7 +3,7 @@
 //  クライアントは動的 import で取る。ローカル版ではこのファイルごと読まれないので、
 //  ネットの無い環境で Supabase を取りに行ってしまうことがない。
 //
-//  ここは「行をそのまま渡す」「行を1つ足す」だけ。
+//  ここは「行をそのまま渡す」「行を1つ足す」「字と線の表を渡す」だけ。
 //  線との突き合わせ（判定に使う字の絞り込み）は pose-store.js が決める。
 // ============================================================
 
@@ -30,6 +30,17 @@ export async function loadRows() {
     .order('id', { ascending: true });
   if (error) throw error;
   return data;
+}
+
+/**
+ * 字と線の表（kana_lines）を読む。身振りスケッチ（sketch/）が書く。
+ * @returns {Promise<Map<string,string[]>>} 字 → 線
+ */
+export async function loadLines() {
+  const supabase = await getClient();
+  const { data, error } = await supabase.from('kana_lines').select('letter, strokes');
+  if (error) throw error;
+  return new Map(data.map((r) => [r.letter, r.strokes ?? []]));
 }
 
 /** 1字ぶんの参照ポーズを登録する */
