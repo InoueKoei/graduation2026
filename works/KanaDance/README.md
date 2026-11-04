@@ -35,6 +35,7 @@ python3 -m http.server 8000
 - 登録で保存するのは座標だけ。Supabase の `lines` 列は読みも書きもしない（列が残っていても動きに関係しない）
 - 2026-10-31 22:40 より前の登録（旧ポーズ・手首足首で撮った分）は Supabase から消した。登録時刻で組を分ける仕組みも外した
 - 線だけ直したいときは撮り直さなくてよい。ポーズそのものを変えたときだけ撮り直す
+- 撮った座標は `works/KanaDance/poses/`（登録した姿勢）で見られる。字ごとの棒人間に線を重ね、次に近い字と誤差（判定と同じ測り方）を出す。誤差が小さい字どうしは取り違えやすいので、撮り直すかポーズを変える目安にする
 - `pose-sets/kana-lines.json` は**控え**。`kana_lines` が読めないとき（表が無い・ネットが無い）だけ使う。USB 版は `build.sh` がビルドのときに `kana_lines` から書き出す
 - 表を作る SQL は `works/KanaDance/supabase/kana_lines.sql`（Supabase の SQL エディタで1回流す）。`poses` と同じく公開キーで読み書きできる
 - 以前の身振りスケッチ（claude.ai のアーティファクト https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug ）は、外の Supabase に書けないので手で同期していた。道具ごとこちらへ移した
@@ -383,6 +384,7 @@ store-supabase.js … Supabase の行の読み書き
 store-local.js  … 同梱 Python サーバの行の読み書き
 pose-sets/      … 字と線の控え（kana-lines.json。kana_lines が読めないときだけ使う）。archive/ に使わなくなった登録と紐付け表の控え
 sketch/         … 身振りスケッチ（字と線を引いて kana_lines に保存する作図ページ）
+poses/          … 登録した姿勢（poses の座標を字ごとの棒人間で並べ、線と「取り違えやすい字」を見る）
 supabase/       … kana_lines を作る SQL
 usb-builder/    … USB 版を作るための道具（build.sh・server.py・起動 .bat）※USB には入れない
 pose-matcher.js … 正規化・照合・線トークンの解決（純粋関数）

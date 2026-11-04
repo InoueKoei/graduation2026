@@ -87,6 +87,7 @@ python3 -m http.server 8000
 - 登録で保存するのは座標だけ。Supabase の `lines` 列は読みも書きもしない（列が残っていても動きに関係しない）
 - 2026-10-31 22:40 より前の登録（旧ポーズ・手首足首で撮った分）は Supabase から消した。登録時刻で組を分ける仕組みも外した
 - 線だけ直したいときは撮り直さなくてよい。ポーズそのものを変えたときだけ撮り直す
+- 撮った座標は `works/KanaDance/poses/`（登録した姿勢）で見られる。字ごとの棒人間に線を重ね、次に近い字と誤差（判定と同じ測り方）を出す。誤差が小さい字どうしは取り違えやすいので、撮り直すかポーズを変える目安にする
 - `pose-sets/kana-lines.json` は**控え**。`kana_lines` が読めないとき（表が無い・ネットが無い）だけ使う。USB 版は `build.sh` がビルドのときに `kana_lines` から書き出す
 - 表を作る SQL は `works/KanaDance/supabase/kana_lines.sql`（Supabase の SQL エディタで1回流す）。`poses` と同じく公開キーで読み書きできる
 - 以前の身振りスケッチ（claude.ai のアーティファクト https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug ）は、外の Supabase に書けないので手で同期していた。道具ごとこちらへ移した
