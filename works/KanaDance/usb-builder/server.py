@@ -240,10 +240,9 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(letter, str) or not letter or not isinstance(points, dict):
             return self._send(400, "letter と points が要ります")
 
+        # 線は持たない（線は app/pose-sets/kana-lines.json だけが持つ）
         row = {"letter": letter, "points": points}
-        if isinstance(record.get("lines"), list):
-            row["lines"] = record["lines"]
-        # 登録時刻。Supabase の created_at と同じ形にして、旧／新ポーズの切り分けに使う
+        # 登録時刻。Supabase の created_at と同じ形にしておく（同じ字は後から足した行が使われる）
         row["created_at"] = datetime.now(timezone.utc).isoformat()
 
         try:

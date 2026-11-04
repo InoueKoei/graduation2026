@@ -5,7 +5,7 @@
 //  画面は Figma のフレーム pose（幅 1920）で組み、窓の幅いっぱいに縮める。
 // ============================================================
 
-import { APP_CONFIG, POSE_SETS, DEFAULT_POSE_SET } from './config.js';
+import { APP_CONFIG } from './config.js';
 
 export const video = document.getElementById('webcam');
 export const canvas = document.getElementById('output_canvas');
@@ -15,8 +15,6 @@ const statusEl = document.getElementById('status');
 const registerUi = document.getElementById('register-ui');
 const kanaInput = document.getElementById('kana-input');
 const registerBtn = document.getElementById('register-btn');
-/** 選んでいる組に登録できるか（締め切り済みの組では false） */
-let registerAvailable = true;
 const currentChar = document.getElementById('current-char');
 const shapeCount = document.getElementById('shape-count');
 const panel = document.getElementById('panel');
@@ -25,16 +23,6 @@ const shutterBtn = document.getElementById('shutter-btn');
 const flash = document.getElementById('flash');
 
 /** UI から調整できる値。描画ループはここを毎フレーム読む */
-// 組の構成を変えたらキーも改める（前の選択が残って新しい既定に切り替わらない、を防ぐ）
-const POSE_SET_KEY = 'kanadance.poseSet.v2';
-function initialPoseSet() {
-  try {
-    const saved = localStorage.getItem(POSE_SET_KEY);
-    if (saved && POSE_SETS[saved]) return saved;
-  } catch { /* 読めなければ既定 */ }
-  return DEFAULT_POSE_SET;
-}
-
 export const settings = {
   matchThreshold: APP_CONFIG.matchThreshold,
   videoOpacity: APP_CONFIG.videoOpacity,
@@ -42,8 +30,6 @@ export const settings = {
   recordPhotoOpacity: APP_CONFIG.recordPhotoOpacity,
   /** シャッターで写したものを PNG でも書き出すか（off / photo / ink） */
   recordExport: APP_CONFIG.recordExport,
-  /** 判定に使うポーズの組（config.js の POSE_SETS のキー） */
-  poseSet: initialPoseSet(),
   ...APP_CONFIG.blend,
 };
 
@@ -133,24 +119,17 @@ export function setCalibrated(on) {
   document.getElementById('reset-cal-btn').hidden = !on;
 }
 
-/** 登録ボタンを使えるかどうか。締め切り済みの組では押せなくする */
-export function setRegisterAvailable(ok, reason = '') {
-  registerAvailable = ok;
-  registerBtn.disabled = !ok;
-  registerBtn.title = reason;
-}
-
 /**
- * ポーズの組の状況を出す。新ポーズはまだ撮っていない字があるので、
+ * 登録の状況を出す。線はあるのにまだ撮っていない字があるので、
  * どこまで判定に使えるかと、残りがどれかを見えるようにする。
  */
-export function setPoseSetInfo({ label, ready, pending }) {
-  const el = document.getElementById('pose-set-info');
+export function setKanaInfo({ ready, pending }) {
+  const el = document.getElementById('kana-info');
   if (!el) return;
   const total = ready.length + pending.length;
   el.textContent = pending.length
-    ? `${label}：${ready.length} / ${total} 字を判定に使用。未登録 ${pending.length} 字（${pending.join('')}）`
-    : `${label}：${ready.length} 字を判定に使用`;
+    ? `${ready.length} / ${total} 字を判定に使用。未登録 ${pending.length} 字（${pending.join('')}）`
+    : `${ready.length} 字を判定に使用`;
 }
 
 /** 1 フレームに描いた形の枚数（調整の負荷めやす） */
@@ -242,7 +221,7 @@ function setPanelOpen(open) {
  * @param {() => void} onShutter                         シャッター（ボタン・Space・Enter）
  */
 export function bindControls({
-  onRegister, onPoseSetChange, onShutter, onClearRecords,
+  onRegister, onShutter, onClearRecords,
   onCalibrate, onCancelCalibration, onResetCalibration,
 }) {
   shutterBtn.addEventListener('click', () => onShutter?.());
@@ -260,25 +239,6 @@ export function bindControls({
   document.getElementById('calibrate-btn').addEventListener('click', () => onCalibrate?.());
   document.getElementById('cal-cancel-btn').addEventListener('click', () => onCancelCalibration?.());
   document.getElementById('reset-cal-btn').addEventListener('click', () => onResetCalibration?.());
-
-  // ポーズの組の切り替え（旧／新）。選んだ組は覚えておく
-  const poseSetSelect = document.getElementById('pose-set');
-  if (poseSetSelect) {
-    poseSetSelect.replaceChildren(...Object.entries(POSE_SETS).map(([key, set]) => {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = set.label;
-      return opt;
-    }));
-    poseSetSelect.value = settings.poseSet;
-    // 組が1つしか無いときは切り替えを出さない（登録状況の行だけ残す）
-    poseSetSelect.closest('.ctrl').hidden = Object.keys(POSE_SETS).length < 2;
-    poseSetSelect.addEventListener('change', () => {
-      settings.poseSet = poseSetSelect.value;
-      try { localStorage.setItem(POSE_SET_KEY, settings.poseSet); } catch { /* 任意 */ }
-      onPoseSetChange?.();
-    });
-  }
 
   // 記録の書き出し（素材集めのときだけ入れる）。選んだものは覚えておく
   const exportSelect = document.getElementById('record-export');
@@ -329,7 +289,7 @@ export function bindControls({
     try {
       await onRegister(letter);
     } finally {
-      registerBtn.disabled = !registerAvailable; // 送信が終わっても、締め切り済みなら押せないまま
+      registerBtn.disabled = false;
     }
   });
 

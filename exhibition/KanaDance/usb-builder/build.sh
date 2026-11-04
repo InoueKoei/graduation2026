@@ -138,7 +138,7 @@ PYEOF
   SB_URL=$(echo "$CREDS" | sed -n 1p)
   SB_KEY=$(echo "$CREDS" | sed -n 2p)
   if curl -fsSL -m 60 -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-       "$SB_URL/rest/v1/poses?select=letter,points,lines" -o "$POSES.new"; then
+       "$SB_URL/rest/v1/poses?select=letter,points,created_at&order=id.asc" -o "$POSES.new"; then
     python3 -c "
 import json, sys
 rows = json.load(open(sys.argv[1], encoding='utf-8'))

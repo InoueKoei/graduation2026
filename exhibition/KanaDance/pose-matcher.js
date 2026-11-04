@@ -3,7 +3,7 @@
 //  MediaPipe に依存しない純粋関数だけを置く（テストしやすさ優先）。
 // ============================================================
 
-import { LANDMARK_SETS, POSE_REF, SHORTCUTS, DERIVED_POINTS } from './config.js';
+import { LANDMARKS, POSE_REF, SHORTCUTS, DERIVED_POINTS } from './config.js';
 
 const round3 = (n) => parseFloat(n.toFixed(3));
 
@@ -11,10 +11,10 @@ const round3 = (n) => parseFloat(n.toFixed(3));
  * ランドマークを「腰中心・肩幅スケール」で正規化した部位辞書に変換する。
  * これにより立ち位置やカメラ距離が変わっても同じ字形は同じ座標になる。
  * @param {Array<{x:number,y:number}>} landmarks
- * @param {Object} [indices] 部位名 → ランドマーク番号（LANDMARK_SETS のどれか。手足の取り方が変わる）
+ * @param {Object} [indices] 部位名 → ランドマーク番号
  * @returns {Object} 部位名 → {x,y}（waist は原点 {0,0}）
  */
-export function normalizePose(landmarks, indices = LANDMARK_SETS.tip) {
+export function normalizePose(landmarks, indices = LANDMARKS) {
   const waistX = (landmarks[POSE_REF.hipL].x + landmarks[POSE_REF.hipR].x) / 2;
   const waistY = (landmarks[POSE_REF.hipL].y + landmarks[POSE_REF.hipR].y) / 2;
   const scale = Math.hypot(
@@ -43,7 +43,7 @@ export function normalizePose(landmarks, indices = LANDMARK_SETS.tip) {
  * ランドマークを canvas ピクセル座標の部位辞書に変換する（描画用）。
  * @returns {Object} 部位名 → {x,y}（ピクセル）
  */
-export function toPixelPoints(landmarks, width, height, indices = LANDMARK_SETS.tip) {
+export function toPixelPoints(landmarks, width, height, indices = LANDMARKS) {
   const pts = {};
   for (const [name, idx] of Object.entries(indices)) {
     pts[name] = { x: landmarks[idx].x * width, y: landmarks[idx].y * height };
