@@ -22,7 +22,7 @@ class DialPatternState {
 if(typeof module!=='undefined')module.exports={DialPatternState,DIAL_PATTERN_NAMES};
 
 class TypeDialControls {
-  constructor(){this.reset();this.fontIndex=0;this.sizeRaw=77;this.weightRaw=1536;this.sizeStep=1;this.sizeMin=12;this.sizeMax=600;}
+  constructor(){this.reset();this.fontIndex=0;this.sizeRaw=77;this.weightRaw=1536;this.sizeMin=12;this.sizeMax=600;}
   reset(){this.previousCounter=null;}
   feed(state,count){
     if(this.previousCounter!==null){
@@ -36,9 +36,9 @@ class TypeDialControls {
     this.fontIndex=((this.fontIndex%fonts.length)+fonts.length)%fonts.length;
     const font=fonts[this.fontIndex],wanted=100+800*this.weightRaw/4095;
     const fontWeight=font.weights.reduce((a,b)=>Math.abs(b-wanted)<Math.abs(a-wanted)?b:a);
-    // The slider runs sizeMin–sizeMax px, faster near the small end, and snaps to multiples of sizeStep px (1 = every pixel).
-    const min=this.sizeMin,max=this.sizeMax,size=min+(max-min)*(1-Math.pow(1-this.sizeRaw/4095,2)),step=this.sizeStep>=1?this.sizeStep:1;
-    return {fontId:font.id,fontWeight,fontSize:Math.min(max,Math.max(min,Math.round(size/step)*step))};
+    // The slider runs sizeMin–sizeMax px, faster near the small end.
+    const min=this.sizeMin,max=this.sizeMax;
+    return {fontId:font.id,fontWeight,fontSize:Math.round(min+(max-min)*(1-Math.pow(1-this.sizeRaw/4095,2)))};
   }
 }
 if(typeof module!=='undefined')module.exports.TypeDialControls=TypeDialControls;
