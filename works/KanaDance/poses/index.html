@@ -80,7 +80,7 @@ a { color: var(--shu-ink); }
 
 /* 詳細（札を押すと開く） */
 dialog {
-  width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
   border: 1px solid var(--rule); border-radius: 8px; padding: 16px;
   background: var(--paper); color: var(--ink);
 }
@@ -94,6 +94,14 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .detail code { font-family: var(--f-mono); font-size: 12px; }
 .detail .mono { font-family: var(--f-mono); }
 .detail .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+/* 登録ごとの図（同じ字を何度も撮ったとき、撮るたびの違いを並べて見る） */
+.regs-head { margin: 16px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--ink-3); }
+.regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.reg { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px 6px; font-size: 11px; color: var(--ink-2); }
+.reg.used { border-color: var(--ink); }
+.reg svg { width: 100%; height: auto; display: block; }
+.reg .mono { font-family: var(--f-mono); }
+.reg b { color: var(--ink); }
 .btn { font: inherit; font-size: 13px; font-weight: 700; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
 .hint { margin: 0; font-size: 12px; color: var(--ink-3); }
 </style>
@@ -132,14 +140,14 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
       <ol id="detailLines"></ol>
       <h3>近い字</h3>
       <ol id="detailNear"></ol>
-      <h3>登録</h3>
-      <ul id="detailRows"></ul>
       <div class="actions">
         <a class="btn" id="detailSketch" href="../sketch/">身振りスケッチで開く</a>
         <button class="btn" type="button" id="detailClose">閉じる</button>
       </div>
     </div>
   </div>
+  <p class="regs-head" id="regsHead"></p>
+  <div class="regs" id="detailRegs"></div>
 </dialog>
 
 <script type="module">
@@ -285,8 +293,14 @@ function openDetail(l) {
   $('detailLines').innerHTML = (lines.get(l) ?? []).map((s) => `<li><code>${s}</code></li>`).join('') || '<li>線が無い</li>';
   $('detailNear').innerHTML = (ranking[l] ?? []).slice(0, 3)
     .map((n) => `<li>${n.letter} <span class="mono">${n.error.toFixed(2)}</span></li>`).join('') || '<li>—</li>';
-  $('detailRows').innerHTML = rows.slice().reverse()
-    .map((r, i) => `<li><span class="mono">id ${r.id}</span>・${when(r.created_at)}${i === 0 ? '（判定に使う）' : ''}</li>`).join('');
+  // 登録ごとの図（新しい順）。判定に使う最新の1回とのずれも、判定と同じ測り方で出す
+  const used = latest[l];
+  $('regsHead').textContent = `登録 ${rows.length} 回（新しい順）`;
+  $('detailRegs').innerHTML = rows.slice().reverse().map((r, i) => `<div class="reg${i === 0 ? ' used' : ''}">
+      ${figure(r.points, { lines: lines.get(l), viewBox })}
+      <div><span class="mono">id ${r.id}</span>・${when(r.created_at)}</div>
+      <div>${i === 0 ? '<b>判定に使う</b>' : `最新とのずれ <span class="mono">${matchLetter(r.points, { [l]: used }).error.toFixed(2)}</span>`}</div>
+    </div>`).join('');
   $('detailSketch').href = `../sketch/?k=${encodeURIComponent(l)}`;
   $('dialog').showModal();
 }
