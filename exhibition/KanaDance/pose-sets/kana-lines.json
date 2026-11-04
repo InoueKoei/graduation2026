@@ -1,0 +1,198 @@
+{
+ "_meta": {
+  "purpose": "KanaDance の字と線の対応（字 → 一筆書きの線）。判定に使う字もこの一覧で決まる",
+  "source": "アーティファクト「身振りスケッチ」のスケッチ帳（DB コレクション sketches）",
+  "artifactUrl": "https://claude.ai/artifact/QjDLJ7joViV3WpuqnJRuug",
+  "exportedAt": "2026-11-04 (JST)",
+  "rule": "1字1件。スケッチ帳に同じ字が2件あるときは、KanaDance から取り込んだ手本（KD）より自分で引いたものを採る",
+  "coords": "座標はここには無い。Supabase poses（登録モードで撮った行）を字で突き合わせる"
+ },
+ "lines": {
+  "ア": [
+   "LH-RE-RH",
+   "W-LK-LL"
+  ],
+  "イ": [
+   "LH-N-RH",
+   "N-LL"
+  ],
+  "ウ": [
+   "LE-RE",
+   "LE-LH",
+   "H-[LE_RE]",
+   "RE-RK-LL"
+  ],
+  "エ": [
+   "LH-N-RH",
+   "LK-W-RK",
+   "N-W"
+  ],
+  "オ": [
+   "LH-RH",
+   "H-N-RL",
+   "N-LL"
+  ],
+  "カ": [
+   "N-W-LL",
+   "RH-RE-RK-RL"
+  ],
+  "キ": [
+   "H-W-RL",
+   "LH-RH",
+   "LK-LL"
+  ],
+  "ク": [
+   "H-RE-RH",
+   "RE-RS-LL"
+  ],
+  "ケ": [
+   "H-LH",
+   "LS-RH",
+   "RE-RL"
+  ],
+  "コ": [
+   "RH-RE-LE-LH"
+  ],
+  "サ": [
+   "LL-RH",
+   "LE-LH",
+   "H-RL"
+  ],
+  "シ": [
+   "LH-LE",
+   "RH-RE",
+   "W-LK-LL"
+  ],
+  "ス": [
+   "LH-RS-W-LL",
+   "W-RL"
+  ],
+  "セ": [
+   "LH-RE-RH",
+   "H-LK-LL"
+  ],
+  "ソ": [
+   "LH-LE",
+   "H-LL"
+  ],
+  "タ": [
+   "H-LS-LH",
+   "LS-RS-RL",
+   "LK-LL"
+  ],
+  "チ": [
+   "LE-RE",
+   "LK-RK",
+   "[LE_RE]-W-LL"
+  ],
+  "ツ": [
+   "LH-LE",
+   "RH-RE",
+   "W-LK-LL"
+  ],
+  "テ": [
+   "LH-RH",
+   "LL-RK-LK",
+   "RK-RL"
+  ],
+  "ト": [
+   "H-W-LL",
+   "W-LH"
+  ],
+  "ナ": [
+   "LH-RH",
+   "H-N",
+   "H-N-W-LL"
+  ],
+  "ニ": [
+   "LH-RH",
+   "LL-RL"
+  ],
+  "ヌ": [
+   "LH-RS-LL",
+   "RH-RL"
+  ],
+  "ネ": [
+   "LH-N-RS-RE-RH",
+   "RE-LL",
+   "RE-RL",
+   "H-LS"
+  ],
+  "ノ": [
+   "RH-LH"
+  ],
+  "ハ": [
+   "LS-LE-LL",
+   "RS-RE-RL"
+  ],
+  "ヒ": [
+   "H-N-W-RL",
+   "N-RH"
+  ],
+  "フ": [
+   "LH-RS-LL"
+  ],
+  "ヘ": [
+   "LH-N-RL"
+  ],
+  "ホ": [
+   "LH-LE-LS-N-RS-RE-RH",
+   "H-N-W",
+   "LK-LL",
+   "RK-RL"
+  ],
+  "マ": [
+   "LH-RS-RH",
+   "LK-RH-LL"
+  ],
+  "ミ": [
+   "LE-LH",
+   "RH-RE",
+   "LK-LL"
+  ],
+  "ム": [
+   "H-LK-LL"
+  ],
+  "メ": [
+   "LH-W-RL",
+   "RH-W-LL"
+  ],
+  "モ": [
+   "LE-H-LH",
+   "H-N-LK-LL",
+   "RH-RE"
+  ],
+  "ヤ": [
+   "LH-RE-RH",
+   "H-LL"
+  ],
+  "ユ": [
+   "LH-N-W",
+   "LK-W-RK"
+  ],
+  "ヨ": [
+   "LH-LS",
+   "RH-RE",
+   "LL-LK",
+   "LS-RE-LK"
+  ],
+  "ラ": [
+   "LE-RE",
+   "LH-RH-LL"
+  ],
+  "リ": [
+   "RE-RH",
+   "RS-W-LL"
+  ],
+  "ル": [
+   "RH-LK-LL",
+   "H-W-RK-RL"
+  ],
+  "レ": [
+   "LH-W-RL"
+  ],
+  "ロ": [
+   "LE-RE-RL-LL-LE"
+  ]
+ }
+}

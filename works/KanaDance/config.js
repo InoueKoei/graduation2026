@@ -56,7 +56,7 @@ export const APP_CONFIG = Object.freeze({
   limits: { bufferMs: 4000, maxKeyframes: 48 },
 });
 
-/** 手足以外の部位（MediaPipe Pose のランドマーク番号）。どの組でも同じ */
+/** 手足以外の部位（MediaPipe Pose のランドマーク番号） */
 const BODY_LANDMARKS = {
   head: 0,
   l_shoulder: 11, r_shoulder: 12,
@@ -65,18 +65,11 @@ const BODY_LANDMARKS = {
 };
 
 /**
- * 手と足をどこで取るか。
- *   joint … 手首（15/16）・足首（27/28）。2026-10-31 22:40 JST より前の登録はすべてこれ
- *   tip   … 人差し指（19/20）・つま先（31/32）。線が指先・つま先まで伸びる
- *
- * 登録したときと同じ定義で比べないと、「いまの姿勢は指先、登録は手首」と
- * 比べる位置が食い違ってしまう。なのでポーズの組ごとにどちらで撮ったかを持たせる
- * （POSE_SETS の landmarks）。指先は手首より揺れやすく、つま先は画面の外に出やすい。
+ * 姿勢推定で取る部位（MediaPipe Pose のランドマーク番号）。
+ * 手は人差し指（19/20）、足はつま先（31/32）で取り、線が指先・つま先まで伸びる。
+ * 指先は手首より揺れやすく、つま先は画面の外に出やすい。
  */
-export const LANDMARK_SETS = Object.freeze({
-  joint: Object.freeze({ ...BODY_LANDMARKS, l_hand: 15, r_hand: 16, l_leg: 27, r_leg: 28 }),
-  tip: Object.freeze({ ...BODY_LANDMARKS, l_hand: 19, r_hand: 20, l_leg: 31, r_leg: 32 }),
-});
+export const LANDMARKS = Object.freeze({ ...BODY_LANDMARKS, l_hand: 19, r_hand: 20, l_leg: 31, r_leg: 32 });
 
 /** 腰＝左右の腰の中点、スケール基準＝両肩間の距離 */
 export const POSE_REF = Object.freeze({ hipL: 23, hipR: 24, shoulderL: 11, shoulderR: 12 });
@@ -103,45 +96,13 @@ export const SHORTCUTS = Object.freeze({
 });
 
 /**
- * 既定の一筆書き。DB に lines が無い字はこれを使う。
+ * 字と線の対応（字 → 一筆書きの線）。身振りスケッチのスケッチ帳から書き出す。
+ * 判定に使う字もこの一覧に載っている字に限る。座標（Supabase の行）とは字で突き合わせるだけ。
  *   "LH-RH"      … 左手→右手を結ぶ
  *   "[LH_RH]-W"  … 左手と右手の中点→腰
  *   "RE-RK-RL"   … 右肘→右膝→右足（連続線）
  */
-export const DEFAULT_KANA_LINES = Object.freeze({
-  ア: ['LH-RH', 'H-W', 'W-LL'],
-  イ: ['H-W', 'RE-W', 'W-RL'],
-  サ: ['LH-RH', '[LH_RH]-W', 'RE-RK-RL'],
-});
-
-/**
- * ポーズの組。同じ Supabase の poses テーブルに複数の時期の登録が混在しているので、
- * 登録時刻で切り分けて、どの組で判定するかを選べるようにする。
- * 2026-10-31 22:40 JST より前の登録（旧ポーズ、手首足首で撮った新ポーズ 26字）は使わない。
- * 手首足首の26字は pose-sets/archive/wrist-ankle_20261031.json に控えてある。
- *
- *   since / until … この時刻の範囲に登録された行だけを判定に使う（ISO 8601）
- *   linkage       … 字と線の結び方（strokes）の一覧。あれば行の lines より優先し、
- *                   判定に使う字もこの一覧に載っている字に限る
- *   prefer        … linkage に同じ字が複数ある（未決の）とき、どちらの source を採るか
- *   landmarks     … 手足をどこで取ったか（LANDMARK_SETS のキー）。判定も描画もこれで取る
- *
- * until が決まっている組は締め切り済み。そこへ登録すると、時刻は次の組に入るのに
- * 部位の取り方は前の組のまま、という食い違った行ができるので、登録は受け付けない。
- */
-export const POSE_SETS = Object.freeze({
-  tip: {
-    label: '新ポーズ（指先・つま先、10/31 22:40〜）',
-    since: '2026-10-31T22:40:00+09:00',
-    until: null,
-    landmarks: 'tip',
-    linkage: './pose-sets/linkage_20261031.json',
-    prefer: { ト: 'sketch', ヨ: 'sketch' },
-  },
-});
-
-/** 起動時に使う組 */
-export const DEFAULT_POSE_SET = 'tip';
+export const KANA_LINES_URL = './pose-sets/kana-lines.json';
 
 /**
  * 体型合わせ（体験の最初に、正面を向いてイのポーズで静止してもらう）。
