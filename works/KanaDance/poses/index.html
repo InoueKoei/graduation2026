@@ -102,6 +102,11 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .reg svg { width: 100%; height: auto; display: block; }
 .reg .mono { font-family: var(--f-mono); }
 .reg b { color: var(--ink); }
+.reg .row { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.reg .rm { font: inherit; font-size: 11px; border: 1px solid var(--rule); border-radius: 999px; background: transparent; color: var(--ink-2); padding: 0 8px; height: 22px; cursor: pointer; }
+.reg .rm.armed { border-color: var(--shu); color: var(--shu-ink); font-weight: 700; }
+.reg .rm:disabled { opacity: .4; cursor: progress; }
+.detail-status { font-size: 12px; color: var(--shu-ink); min-height: 1.4em; margin: 6px 0 0; }
 .btn { font: inherit; font-size: 13px; font-weight: 700; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
 .hint { margin: 0; font-size: 12px; color: var(--ink-3); }
 </style>
@@ -110,7 +115,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 <div class="wrap">
   <header>
     <h1>登録した姿勢</h1>
-    <p>登録モードで撮った座標（いちばん新しい1回）を字ごとに描き、線を重ねる。<a href="../">KanaDance</a> ・ <a href="../sketch/">身振りスケッチ</a></p>
+    <p>登録モードで撮った座標を字ごとに描き、線を重ねる。札の図はいちばん新しい1回。判定は同じ字の登録を全部使う。<a href="../">KanaDance</a> ・ <a href="../sketch/">身振りスケッチ</a></p>
   </header>
 
   <div class="bar">
@@ -126,7 +131,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
   </div>
   <p class="summary" id="summary">読み込み中…</p>
   <p class="status" id="status" hidden></p>
-  <p class="hint">誤差は KanaDance の判定と同じ測り方（部位ごとのずれの平均。肩幅 = 1）。「近い字」はその字の姿勢をとったとき次に近い字で、誤差が小さいほど取り違えやすい。</p>
+  <p class="hint">誤差は KanaDance の判定と同じ測り方（部位ごとのずれの平均。肩幅 = 1）。判定は同じ字の登録を全部手本にし、いちばん近い1回で比べる。「近い字」は、その字のどれかの登録と他の字のどれかの登録がいちばん近づくときの字と誤差で、小さいほど取り違えやすい。要らない回は札を押して詳細から消せる。</p>
 
   <div class="grid" id="grid"></div>
 </div>
@@ -147,12 +152,13 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
     </div>
   </div>
   <p class="regs-head" id="regsHead"></p>
+  <p class="detail-status" id="detailStatus"></p>
   <div class="regs" id="detailRegs"></div>
 </dialog>
 
 <script type="module">
-import { loadRows, loadLines } from '../store-supabase.js';
-import { matchLetter, resolvePoint } from '../pose-matcher.js';
+import { loadRows, loadLines, deleteRow } from '../store-supabase.js';
+import { poseError, resolvePoint } from '../pose-matcher.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -224,13 +230,16 @@ async function load() {
     for (const row of rows) (history[row.letter] ??= []).push(row);
     const latest = Object.fromEntries(Object.entries(history).map(([l, rs]) => [l, rs[rs.length - 1].points]));
 
-    // 判定に使う字（線がある字）どうしで、いちばん近い字を測る。KanaDance の判定と同じ範囲
-    const judged = Object.fromEntries(Object.entries(latest).filter(([l]) => lines.has(l)));
+    // 判定に使う字（線がある字）どうしで、いちばん近い字を測る。KanaDance の判定と同じ範囲。
+    // 判定は登録を全部手本にするので、2つの字の登録どうしでいちばん近づく組の誤差をその2字の近さとする
+    const samples = Object.fromEntries(Object.entries(history)
+      .filter(([l]) => lines.has(l)).map(([l, rs]) => [l, rs.map((r) => r.points)]));
+    const closest = (as, bs) => Math.min(...as.flatMap((a) => bs.map((b) => poseError(a, b))));
     const ranking = {};
-    for (const [l, pose] of Object.entries(judged)) {
-      ranking[l] = Object.entries(judged)
+    for (const [l, mine] of Object.entries(samples)) {
+      ranking[l] = Object.entries(samples)
         .filter(([k]) => k !== l)
-        .map(([k, ref]) => ({ letter: k, error: matchLetter(pose, { [k]: ref }).error }))
+        .map(([k, theirs]) => ({ letter: k, error: closest(mine, theirs) }))
         .sort((a, b) => a.error - b.error);
     }
     const letters = [...new Set([...lines.keys(), ...Object.keys(history)])].sort();
@@ -293,14 +302,19 @@ function openDetail(l) {
   $('detailLines').innerHTML = (lines.get(l) ?? []).map((s) => `<li><code>${s}</code></li>`).join('') || '<li>線が無い</li>';
   $('detailNear').innerHTML = (ranking[l] ?? []).slice(0, 3)
     .map((n) => `<li>${n.letter} <span class="mono">${n.error.toFixed(2)}</span></li>`).join('') || '<li>—</li>';
-  // 登録ごとの図（新しい順）。判定に使う最新の1回とのずれも、判定と同じ測り方で出す
-  const used = latest[l];
-  $('regsHead').textContent = `登録 ${rows.length} 回（新しい順）`;
+  // 登録ごとの図（新しい順）。判定には全部使う。いちばん新しい1回とのずれを、判定と同じ測り方で出す
+  const newest = latest[l];
+  $('regsHead').textContent = `登録 ${rows.length} 回（新しい順。判定には全部使う）`;
+  $('detailStatus').textContent = '';
   $('detailRegs').innerHTML = rows.slice().reverse().map((r, i) => `<div class="reg${i === 0 ? ' used' : ''}">
       ${figure(r.points, { lines: lines.get(l), viewBox })}
       <div><span class="mono">id ${r.id}</span>・${when(r.created_at)}</div>
-      <div>${i === 0 ? '<b>判定に使う</b>' : `最新とのずれ <span class="mono">${matchLetter(r.points, { [l]: used }).error.toFixed(2)}</span>`}</div>
+      <div class="row">
+        <span>${i === 0 ? '<b>いちばん新しい</b>' : `新しい回とのずれ <span class="mono">${poseError(r.points, newest).toFixed(2)}</span>`}</span>
+        <button type="button" class="rm" data-id="${r.id}" aria-label="id ${r.id} の登録を消す">消す</button>
+      </div>
     </div>`).join('');
+  openLetter = l;
   $('detailSketch').href = `../sketch/?k=${encodeURIComponent(l)}`;
   $('dialog').showModal();
 }
@@ -310,6 +324,29 @@ $('grid').addEventListener('click', (e) => {
   if (card) openDetail(card.dataset.letter);
 });
 $('detailClose').addEventListener('click', () => $('dialog').close());
+
+// 登録を消す。戻せないので2回押しで確定する。消したら読み直し、その字に登録が残っていれば詳細を開き直す
+let openLetter = null;
+$('detailRegs').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.rm');
+  if (!btn) return;
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = 'もう一度で消す';
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = '消す'; } }, 3000);
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await deleteRow(Number(btn.dataset.id));
+    await load();
+    if (state?.history[openLetter]) openDetail(openLetter);
+    else $('dialog').close();
+  } catch (err) {
+    btn.disabled = false;
+    $('detailStatus').textContent = `消せませんでした: ${err.message}`;
+  }
+});
 $('dialog').addEventListener('click', (e) => { if (e.target === $('dialog')) $('dialog').close(); });
 for (const id of ['showLines', 'showOld', 'order', 'closeTol']) {
   $(id).addEventListener(id === 'closeTol' ? 'input' : 'change', () => state && render());

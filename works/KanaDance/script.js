@@ -26,7 +26,7 @@ const calibration = new BodyCalibration(BODY_CALIBRATION);
 
 // ── 状態 ────────────────────────────────────────────────────
 let poseLandmarker = null;
-let references = { poses: {}, lines: {}, pending: [] };
+let references = { poses: {}, samples: {}, lines: {}, pending: [] };
 let latestNormalized = null;   // 直近フレームの正規化ポーズ（登録に使う）
 let lastVideoTime = -1;
 // 直近に一致した字。動いている最中は一致が外れやすいので、
@@ -179,9 +179,11 @@ function drawDetection(now) {
 
 /** 判定に使う登録ポーズを作り直す（倍率が無ければそのまま） */
 function applyCalibration() {
+  // 同じ字の登録は全部手本にする（字 → 姿勢の配列）。照合はそのうちいちばん近い1回で比べる
+  const { samples } = references;
   activeRefs = ratios
-    ? Object.fromEntries(Object.entries(references.poses).map(([l, p]) => [l, rescalePose(p, ratios)]))
-    : references.poses;
+    ? Object.fromEntries(Object.entries(samples).map(([l, ps]) => [l, ps.map((p) => rescalePose(p, ratios))]))
+    : samples;
 }
 
 function startCalibration() {
@@ -227,7 +229,7 @@ async function reloadReferences() {
       pending: references.pending,
     });
   } catch (err) {
-    references = { poses: {}, lines: {}, pending: [] };
+    references = { poses: {}, samples: {}, lines: {}, pending: [] };
     applyCalibration();
     ui.setError(`参照ポーズを読み込めません（判別不可・登録は可能）: ${err.message}`);
   }

@@ -60,7 +60,8 @@ export function toPixelPoints(landmarks, width, height, indices = LANDMARKS) {
 /**
  * 現在ポーズに最も近い参照字を返す。閾値を超えて遠ければ null。
  * @param {Object} current 正規化済み現在ポーズ
- * @param {Object} references 字 → 正規化済み参照ポーズ
+ * @param {Object} references 字 → 正規化済み参照ポーズ、またはその配列（同じ字の登録を全部手本にするとき）。
+ *   配列なら、そのうちいちばん近い1回との誤差をその字の誤差とする
  * しきい値判定は呼び出し側で行う（誤差を UI に出して調整できるようにするため）。
  * @returns {{letter: string|null, error: number}} 最も近い字とその平均誤差（該当なしは {null, Infinity}）
  */
@@ -68,23 +69,29 @@ export function matchLetter(current, references) {
   let best = null;
   let minError = Infinity;
 
-  for (const [letter, ref] of Object.entries(references)) {
-    let total = 0;
-    let count = 0;
-    for (const part in ref) {
-      if (current[part] && ref[part]) {
-        total += Math.hypot(current[part].x - ref[part].x, current[part].y - ref[part].y);
-        count++;
+  for (const [letter, refs] of Object.entries(references)) {
+    for (const ref of Array.isArray(refs) ? refs : [refs]) {
+      const avg = poseError(current, ref);
+      if (avg < minError) {
+        minError = avg;
+        best = letter;
       }
-    }
-    if (count === 0) continue;
-    const avg = total / count;
-    if (avg < minError) {
-      minError = avg;
-      best = letter;
     }
   }
   return { letter: best, error: minError };
+}
+
+/** 2つの姿勢の誤差（両方にある部位のずれの平均）。比べる部位が無ければ Infinity */
+export function poseError(a, b) {
+  let total = 0;
+  let count = 0;
+  for (const part in b) {
+    if (a[part] && b[part]) {
+      total += Math.hypot(a[part].x - b[part].x, a[part].y - b[part].y);
+      count++;
+    }
+  }
+  return count ? total / count : Infinity;
 }
 
 /**
