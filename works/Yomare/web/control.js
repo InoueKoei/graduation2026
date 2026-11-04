@@ -14,7 +14,10 @@ const now = () => performance.now() / 1000;
 // ================================================================ 設定（この端末に覚えておく）
 
 const STORE = 'yomare.settings.v1';
-const S = { ...DEFAULTS, corners: null, cameraId: '', rotate: 0, emoji: null, calib: false };
+const S = {
+  ...DEFAULTS, corners: null, cameraId: '', rotate: 0, emoji: null, calib: false,
+  printOn: false, printReadPx: 40, printTimePx: 20, printInvert: false, printFlip: false,
+};
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch {}
 // 絵文字の対応表は、操作画面で一度でも変えたらこの端末に覚えたものを使う。まだなら emoji.js のまま
 if (!S.emoji) S.emoji = { ...WORDS };
@@ -750,9 +753,12 @@ const kept = [];   // { text, at, canvas }
 
 function keep(tr) {
   if (!tr.shape) return;
-  kept.unshift({ text: tr.text, at: new Date(), canvas: shapePng(tr.shape, tr.turn || 0) });
+  const k = { text: tr.text, at: new Date(), canvas: shapePng(tr.shape, tr.turn || 0), print: '' };
+  kept.unshift(k);
   if (kept.length > KEPT_MAX) kept.pop();
+  if (S.printOn) printKept(k);
   renderKept();
+  renderPrintPreview();
 }
 
 function shapePng({ w, h, data }, turn) {
@@ -797,17 +803,255 @@ function savePng(k) {
 function renderKept() {
   $('kept').replaceChildren(...kept.map(k => {
     const li = document.createElement('li');
-    li.innerHTML = '<time></time><b></b><button>PNG</button>';
+    li.innerHTML = '<time></time><b></b><span class="hint"></span><button class="png">PNG</button><button class="print">印刷</button>';
     li.querySelector('time').textContent = k.at.toTimeString().slice(0, 8);
     li.querySelector('b').textContent = k.text;
+    li.querySelector('.hint').textContent = PRINT_VIEW[k.print] ?? k.print;
     k.canvas.className = 'thumb';
     li.insertBefore(k.canvas, li.querySelector('b'));
-    li.querySelector('button').onclick = () => savePng(k);
+    li.querySelector('.png').onclick = () => savePng(k);
+    li.querySelector('.print').onclick = () => printKept(k, true);
     return li;
   }));
   $('keptAll').disabled = !kept.length;
 }
 $('keptAll').onclick = () => kept.forEach((k, i) => setTimeout(() => savePng(k), i * 250));   // 続けて落とすとブラウザに止められるので少し間を空ける
+
+// ================================================================ Atom Printer（USB）
+
+// 残した字を、USB でつないだ ATOM Printer へ送る。字（残した形を読んだ向きに起こしたもの）・読み・時刻を1枚に。
+// ATOM には KanaDance Printer の USB 用ファーム（KanaDanceUSB）が入っている前提で、その手順で話す：
+//   KD? → KDUSB1 ／ KDPRINT <uuid> <幅> <高さ> <バイト数> <crc32> → KDREADY → 二値の画像 → KDDONE
+// 画像は幅 384 ドット・高さ 512 行まで。1 が黒、左端が最上位ビット。
+// ブラウザの Web Serial で話すので、Chrome で開くこと（localhost なら使える）
+const PAPER_W = 384;
+const printer = { port: null, writer: null, reader: null, lines: [], queue: Promise.resolve() };
+const PRINT_VIEW = { '': '', queued: '印刷待ち', printing: '印刷中', done: '印刷した' };
+
+function setPrinterState(text, bad) {
+  $('printState').textContent = text;
+  $('printState').classList.toggle('warn', !!bad);
+}
+
+// 選んだことのあるポートを開き、ATOM が USB 用ファームで答えるかを確かめる。ask なら選ぶ画面を出す
+async function openPrinter(ask) {
+  if (!('serial' in navigator)) throw new Error('このブラウザは USB シリアル（Web Serial）が使えない。Chrome で開く');
+  if (printer.port) return;
+  let port = (await navigator.serial.getPorts())[0];
+  if (!port && ask) port = await navigator.serial.requestPort();
+  if (!port) throw new Error('プリンターのポートをまだ選んでいない。チェックを入れ直して選ぶ');
+  setPrinterState('つないでいる…');
+  await port.open({ baudRate: 115200 });
+  printer.port = port;
+  printer.writer = port.writable.getWriter();
+  readPrinter(port);
+  // 開いた拍子に ATOM が再起動することがあるので、起ききるまで何度か聞く
+  for (let i = 0; i < 4; i++) {
+    printer.lines.length = 0;
+    await printer.writer.write(new TextEncoder().encode('KD?\n'));
+    try { await expectLine(l => l.startsWith('KDUSB1'), 1500); setPrinterState('つながった（KDUSB1）'); return; } catch {}
+  }
+  await closePrinter();
+  throw new Error('ATOM から返事がない。USB 用ファーム（KanaDanceUSB）か、ほかのアプリがポートを使っていないかを確かめる');
+}
+
+async function closePrinter() {
+  const { port, writer, reader } = printer;
+  printer.port = printer.writer = printer.reader = null;
+  try { await reader?.cancel(); } catch {}
+  try { writer?.releaseLock(); } catch {}
+  try { await port?.close(); } catch {}
+}
+
+// ATOM からの行を読み続ける
+async function readPrinter(port) {
+  const reader = port.readable.getReader();
+  printer.reader = reader;
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      for (let k; (k = buf.indexOf('\n')) >= 0; buf = buf.slice(k + 1)) printer.lines.push(buf.slice(0, k).trim());
+      if (buf.length > 8192) buf = '';
+    }
+  } catch {}
+  try { reader.releaseLock(); } catch {}
+  if (printer.port === port) {   // こちらから閉じたのではない（ケーブルが抜けた）
+    await closePrinter();
+    setPrinterState('プリンターとの接続が切れた。つなぎ直したら、チェックを入れ直す', true);
+  }
+}
+
+function expectLine(match, ms) {
+  const until = performance.now() + ms;
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      while (printer.lines.length) {
+        const l = printer.lines.shift();
+        if (l.startsWith('KDERR')) return reject(new Error(`ATOM が受け付けなかった（${l}）`));
+        if (match(l)) return resolve(l);
+      }
+      if (performance.now() > until) return reject(new Error('ATOM の返事を待ちきれなかった'));
+      setTimeout(check, 30);
+    };
+    check();
+  });
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (const b of bytes) c = CRC_TABLE[(c ^ b) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// 1枚ぶんの絵。上から、字・読み・時刻。読みと時刻の大きさは操作画面で決める（0 なら出さない）。
+// 時刻も絵として刷る。いまの USB 用ファームは画像しか受け付けないので、文字で送るにはファームの書き換えが要る。
+// 白黒の反転と上下の反転（180°）も選べる。高さはファームの上限 512 行に収める
+function receipt(k) {
+  const pad = 16, gap = 12, maxW = PAPER_W - pad * 2;
+  const readPx = S.printReadPx, timePx = S.printTimePx;
+  const textH = (readPx ? gap + Math.ceil(readPx * 1.25) : 0) + (timePx ? gap + Math.ceil(timePx * 1.25) : 0);
+  const maxH = Math.min(300, 512 - pad * 2 - textH);
+  const src = k.canvas;
+  const s = Math.min(maxW / src.width, maxH / src.height);
+  const w = Math.max(1, Math.round(src.width * s)), h = Math.max(1, Math.round(src.height * s));
+  // 形は残した色に関わらず黒一色にする
+  const ink = document.createElement('canvas');
+  ink.width = w; ink.height = h;
+  const ig = ink.getContext('2d');
+  ig.drawImage(src, 0, 0, w, h);
+  ig.globalCompositeOperation = 'source-in';
+  ig.fillStyle = '#000'; ig.fillRect(0, 0, w, h);
+
+  const H = pad + h + textH + pad;
+  const c = document.createElement('canvas');
+  c.width = PAPER_W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, PAPER_W, H);
+  if (S.printFlip) { g.translate(PAPER_W, H); g.rotate(Math.PI); }
+  g.drawImage(ink, (PAPER_W - w) / 2, pad);
+  g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'top';
+  let y = pad + h;
+  // 幅に収まらなければ縮める
+  const line = (text, px, weight) => {
+    y += gap;
+    g.font = `${weight} ${px}px "Hiragino Sans", sans-serif`;
+    const tw = g.measureText(text).width;
+    const fit = tw > maxW ? Math.floor(px * maxW / tw) : px;
+    if (fit !== px) g.font = `${weight} ${fit}px "Hiragino Sans", sans-serif`;
+    g.fillText(text, PAPER_W / 2, y + (px - fit) / 2);
+    y += Math.ceil(px * 1.25);
+  };
+  if (readPx) line(k.text, readPx, 600);
+  if (timePx) {
+    const d = k.at, p = x => String(x).padStart(2, '0');
+    line(`${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`, timePx, 400);
+  }
+
+  // 二値にする。刷られる絵そのものを見本にも使えるよう、キャンバスも白黒に描き直す
+  const img = g.getImageData(0, 0, PAPER_W, H);
+  const px = img.data;
+  const bits = new Uint8Array(PAPER_W / 8 * H);
+  for (let i = 0; i < PAPER_W * H; i++) {
+    const black = (px[i * 4] < 128) !== S.printInvert;
+    if (black) bits[i >> 3] |= 0x80 >> (i & 7);
+    px[i * 4] = px[i * 4 + 1] = px[i * 4 + 2] = black ? 0 : 255;
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.putImageData(img, 0, 0);
+  return { width: PAPER_W, height: H, bits, canvas: c };
+}
+
+// 見本。いちばん新しく残した字で、まだ無ければ「見本」という字で描く
+let sampleKept = null;
+function renderPrintPreview() {
+  let k = kept[0];
+  if (!k) {
+    if (!sampleKept) {
+      const c = document.createElement('canvas');
+      c.width = 220; c.height = 110;
+      const g = c.getContext('2d');
+      g.fillStyle = '#000'; g.font = '700 96px "Hiragino Sans", sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('見本', 110, 58);
+      sampleKept = { text: 'みほん', at: new Date(), canvas: c };
+    }
+    k = sampleKept;
+  }
+  const { canvas } = receipt(k);
+  const view = $('printPreview');
+  view.width = canvas.width; view.height = canvas.height;
+  view.getContext('2d').drawImage(canvas, 0, 0);
+  $('printSize').textContent = `${canvas.width}×${canvas.height} ドット`;
+}
+
+// 印刷は1枚ずつ順に送る（同時に何語か残ることがある）
+function printKept(k, ask) {
+  k.print = 'queued';
+  renderKept();
+  renderPrintPreview();
+  printer.queue = printer.queue.then(async () => {
+    k.print = 'printing'; renderKept();
+    try {
+      await openPrinter(ask);
+      const { width, height, bits } = receipt(k);
+      const job = crypto.randomUUID();
+      printer.lines.length = 0;
+      await printer.writer.write(new TextEncoder().encode(
+        `KDPRINT ${job} ${width} ${height} ${bits.length} ${crc32(bits).toString(16).padStart(8, '0')}\n`));
+      const r = await expectLine(l => l.startsWith('KDREADY') || l.startsWith('KDDONE'), 5000);
+      if (r !== `KDDONE ${job}`) {
+        if (r !== `KDREADY ${job}`) throw new Error(`ATOM の返事が合わない（${r}）`);
+        await printer.writer.write(bits);
+        await expectLine(l => l === `KDDONE ${job}`, 45000);
+      }
+      k.print = 'done';
+      setPrinterState(`「${k.text}」を印刷した`);
+    } catch (e) {
+      k.print = '印刷できず';
+      setPrinterState(`「${k.text}」を印刷できなかった：${e.message || e}`, true);
+    }
+    renderKept();
+  });
+}
+
+$('printOn').checked = !!S.printOn;
+$('printOn').onchange = async e => {
+  S.printOn = e.target.checked;
+  save();
+  if (!S.printOn) { setPrinterState('印刷しない'); return; }
+  try { await openPrinter(true); }
+  catch (err) {
+    S.printOn = e.target.checked = false;   // ポートを選ばなかった・つながらない
+    save();
+    setPrinterState(err.name === 'NotFoundError' ? 'ポートを選ばなかった' : err.message, true);
+  }
+};
+if (S.printOn) openPrinter(false).catch(err => setPrinterState(err.message, true));
+else setPrinterState('印刷しない');
+
+function printLayout() {
+  $('printReadVal').textContent = S.printReadPx ? `${S.printReadPx}px` : '出さない';
+  $('printTimeVal').textContent = S.printTimePx ? `${S.printTimePx}px` : '出さない';
+  renderPrintPreview();
+}
+for (const [id, key] of [['printRead', 'printReadPx'], ['printTime', 'printTimePx']]) {
+  $(id).value = S[key];
+  $(id).oninput = e => { S[key] = +e.target.value; save(); printLayout(); };
+}
+for (const [id, key] of [['printInvert', 'printInvert'], ['printFlip', 'printFlip']]) {
+  $(id).checked = S[key];
+  $(id).onchange = e => { S[key] = e.target.checked; save(); printLayout(); };
+}
+printLayout();
 
 function log(text, note) {
   const li = document.createElement('li');

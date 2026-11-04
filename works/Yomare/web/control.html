@@ -63,6 +63,8 @@
   #kept li time { color: var(--sub); }
   #kept li b { flex: 1; }
   #kept li button { padding: 2px 10px; }
+  #kept li .hint { margin: 0; }
+  #printPreview { width: 192px; border: 1px solid var(--line); border-radius: 0; image-rendering: pixelated; }
   #kept .thumb { width: auto; height: 28px; border-radius: 0; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 8px 8px; }
   .hint { color: var(--sub); font-size: 12px; margin: 6px 0 0; }
   .warn { color: #b44; }
@@ -175,6 +177,28 @@
       <div id="lastRead" class="hint">まだ読ませていない</div>
       <img id="crop" alt="" hidden>
       <ul id="log"></ul>
+    </section>
+
+    <section>
+      <h2>Atom Printer — 残したら印刷する</h2>
+      <div class="row"><label><input type="checkbox" id="printOn"> 残した字を印刷する（字・読み・時刻）</label></div>
+      <p class="hint" id="printState"></p>
+      <div class="row">
+        <label for="printRead">読みの大きさ</label>
+        <input type="range" id="printRead" min="0" max="80" step="2">
+        <span class="num" id="printReadVal"></span>
+      </div>
+      <div class="row">
+        <label for="printTime">時刻の大きさ</label>
+        <input type="range" id="printTime" min="0" max="40" step="1">
+        <span class="num" id="printTimeVal"></span>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="printInvert"> 白黒を反転</label>
+        <label><input type="checkbox" id="printFlip"> 上下を反転（180°）</label>
+      </div>
+      <div class="row"><canvas id="printPreview"></canvas><span class="hint" id="printSize"></span></div>
+      <p class="hint">USB でつないだ ATOM（KanaDance Printer の USB 用ファーム）へ送る。初めてチェックを入れると、ポートを選ぶ画面が出るので usbserial のものを選ぶ。Chrome でだけ動く。KanaDance Printer の server.py が同じポートを使っているあいだはつながらない。下の一覧の「印刷」で、1枚ずつ刷り直せる。</p>
     </section>
 
     <section>
