@@ -59,9 +59,9 @@
    "H-RL"
   ],
   "シ": [
-   "LH-LE",
    "RH-RE",
-   "W-LK-LL"
+   "LH-LE",
+   "W-LL"
   ],
   "ス": [
    "LH-RS-W-LL",
@@ -73,7 +73,7 @@
   ],
   "ソ": [
    "LH-LE",
-   "H-LL"
+   "RS-W-LL"
   ],
   "タ": [
    "H-LS-LH",
@@ -81,9 +81,9 @@
    "LK-LL"
   ],
   "チ": [
-   "LE-RE",
-   "LK-RK",
-   "[LE_RE]-W-LL"
+   "H-LE",
+   "RH-RE",
+   "H-N-W-LK-LL"
   ],
   "ツ": [
    "LH-LE",
