@@ -99,6 +99,14 @@ function renderTypeControls(){
   $('type-size').disabled=$('type-weight').disabled=connected&&!demo;
   void fontCatalog.load(dialAssignments.style.fontId,style.fontWeight).then(refreshRotationBodies).catch(()=>{$('type-current').textContent='書体の読み込みに失敗しました';});
 }
+const SIZE_STEP_KEY='headkana-size-step';
+try{const step=Number(localStorage.getItem(SIZE_STEP_KEY));if(Number.isInteger(step)&&step>=1&&step<=200)typeControls.sizeStep=step;}catch{}
+$('size-step').value=typeControls.sizeStep;
+$('size-step').addEventListener('change',e=>{
+  const step=Math.min(200,Math.max(1,Math.round(Number(e.target.value))||1));
+  typeControls.sizeStep=step;e.target.value=step;try{localStorage.setItem(SIZE_STEP_KEY,String(step));}catch{}
+  applyTypeStyle();render();
+});
 for(const [id,key] of [['type-size','sizeRaw'],['type-weight','weightRaw']])$(id).addEventListener('input',e=>{typeControls[key]=Number(e.target.value);applyTypeStyle();render();});
 function renderFontOptions(){
   $('dial-font-options').replaceChildren(...fontCatalog.fonts.map(font=>{
