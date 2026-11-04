@@ -35,6 +35,6 @@ select{font:inherit;color:#263d49;border:1px solid #cedcde;border-radius:8px;bac
 
 .type-sliders{margin:20px auto;max-width:560px;padding:18px;border-radius:12px;background:#f1f7f7;text-align:left}
 .type-sliders[hidden]{display:none}.type-sliders label{display:block;margin:10px 0;font-size:13px;color:#397b83}.type-sliders output{float:right;font-variant-numeric:tabular-nums}.type-sliders input{display:block;width:100%;margin:12px 0;accent-color:#397b83}.type-sliders p{font-size:12px;color:#697583;line-height:1.8}
-.type-sliders .size-step{display:flex;align-items:center;justify-content:space-between}.type-sliders .size-step span{display:inline-flex;align-items:center;gap:6px;color:#697583}.type-sliders .size-step input{display:inline-block;width:5.5em;margin:0;font:inherit;padding:6px 8px;border:1px solid #cedcde;border-radius:8px;color:#263d49;background:#fff}
+.type-sliders .size-range{display:flex;align-items:center;justify-content:space-between}.type-sliders .size-range span{display:inline-flex;align-items:center;gap:6px;color:#697583}.type-sliders .size-range input{display:inline-block;width:5.5em;margin:0;font:inherit;padding:6px 8px;border:1px solid #cedcde;border-radius:8px;color:#263d49;background:#fff}
 .type-lcd .dial-custom-bar,.type-lcd [data-action="both"]{display:none}
 .type-lcd .control-dial .dial-character{font-size:24px;max-width:150px;overflow-wrap:anywhere}
