@@ -73,8 +73,9 @@ details{border:1px solid #e4e7eb;border-radius:12px;padding:16px 20px;background
 <p class="subtle">ダイヤルで「あ〜ん」を入力し、頷きで直前の文字を変える。</p>
 <div class="nod-mapping"><span><b>1回</b>濁点 ゛</span><span><b>2回</b>半濁点 ゜</span><span><b>3回</b>小文字</span></div>
 <div class="core-actions"><button id="core-ble-connect">CoreS3 BLEで接続</button><button id="core-usb-connect">CoreS3 USBで接続</button><button id="core-recenter" disabled>基準姿勢を合わせる</button></div>
+<div class="pattern-control"><label for="nod-role">頷きの役割</label><select id="nod-role"><option value="confirm">文字を入力（確定）</option><option value="modifier">濁点・半濁点・小文字</option></select></div>
 <div class="nod-meter"><span>頷き <strong id="nod-progress" role="status">—</strong></span><span>角度 <strong id="core-pitch">—</strong></span></div>
-<p id="modifier-feedback" role="status">頷くたびに即反映。濁点 → 半濁点 → 小文字の順で切り替わります。</p>
+<p id="modifier-feedback" role="status"></p>
 <details class="core-options"><summary>使い方・画面で試す</summary>
 <p class="subtle">CoreS3を装着して正面で静止し、基準姿勢を合わせてください。大きく頷いて正面へ戻るたびに反映します。判定に必要な角度・速度を以前の2倍にしています。間隔を空けても同じ文字では順番が続き、4回目は濁点に戻ります。新しい文字を入力すると濁点から始まります。対応しない文字はそのままになります。</p>
 <div class="modifier-test"><button id="nod-test">頷きを1回試す</button></div>

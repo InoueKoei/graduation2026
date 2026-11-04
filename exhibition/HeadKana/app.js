@@ -201,13 +201,29 @@ void fontCatalog.readBakedFonts().then(count=>{
   renderFontOptions();dialAssignments.alignChoice();render();
 }).catch(()=>{});
 let coreTarget=null,coreReady=false;
-const coreCycle=new KanaModifierCycle();
+const coreCycle=new KanaModifierCycle(),NOD_ROLE_KEY='headkana-nod-role';
+// A nod either enters the kana being chosen (default) or cycles 濁点 → 半濁点 → 小文字 on the last one.
+let nodRole='confirm';try{if(localStorage.getItem(NOD_ROLE_KEY)==='modifier')nodRole='modifier';}catch{}
+const NOD_ROLE_HINTS={confirm:'頷くと、選択中の文字を入力します。',modifier:'頷くたびに即反映。濁点 → 半濁点 → 小文字の順で切り替わります。'};
+$('nod-role').value=nodRole;$('modifier-feedback').textContent=NOD_ROLE_HINTS[nodRole];
+$('nod-role').addEventListener('change',e=>{
+  nodRole=e.target.value==='modifier'?'modifier':'confirm';try{localStorage.setItem(NOD_ROLE_KEY,nodRole);}catch{}
+  coreTarget=null;coreCycle.reset();$('nod-progress').textContent='—';$('modifier-feedback').textContent=NOD_ROLE_HINTS[nodRole];
+});
+function nodConfirm(){
+  const before=doc.composition.length;
+  if(deviceMode==='dial')confirmDial(0);else act({type:'confirm'});
+  const added=doc.composition.length>before?doc.composition.at(-1).text:'';
+  $('nod-progress').textContent=added?`入力 · ${added}`:'—';
+  $('modifier-feedback').textContent=added?`頷きで「${added}」を入力しました`:'入力できませんでした（96文字まで）';
+}
 function coreAction(event){
   if(event.type==='reset'){coreTarget=null;coreCycle.reset();$('nod-progress').textContent='—';return;}
   if(event.type==='begin'){coreTarget=doc.composition.at(-1)||null;$('nod-progress').textContent='検出中';return;}
   if(event.type==='cancel'){$('nod-progress').textContent='—';coreTarget=null;return;}
   if(event.type==='nod'){
-    applyHeadNod(coreTarget);coreTarget=null;
+    if(nodRole==='confirm')nodConfirm();else applyHeadNod(coreTarget);
+    coreTarget=null;
   }
 }
 const headModifier=new HeadModifierInput(coreAction);
@@ -240,7 +256,7 @@ function acceptCoreSensor(sample){
 $('core-ble-connect').addEventListener('click',()=>coreLink.connectBLE());
 $('core-usb-connect').addEventListener('click',()=>coreLink.connectUSB());
 $('core-recenter').addEventListener('click',()=>{headModifier.recenter();coreReady=false;$('core-status').textContent='正面で約0.5秒静止してください';});
-$('nod-test').addEventListener('click',()=>applyHeadNod(doc.composition.at(-1)));
+$('nod-test').addEventListener('click',()=>{if(nodRole==='confirm')nodConfirm();else applyHeadNod(doc.composition.at(-1));});
 setInterval(()=>{
   if(coreLink.connected&&performance.now()-coreLink.lastAt>800&&coreReady){coreReady=false;headModifier.recenter();$('core-status').textContent='CoreS3の受信待ち';}
 },250);
@@ -359,7 +375,7 @@ function act(event){
   if(event.type==='erase'){const result=doc.erase();render();log(result?(deviceMode==='dial'?'長押し：1文字削除':'横振り：1文字削除'):'消す文字がありません');}
   if(event.type==='clear'){
     doc.clear();hideCandidatePreview();coreTarget=null;coreCycle.reset();$('nod-progress').textContent='—';
-    $('modifier-feedback').textContent='次の文字は濁点から始まります';
+    $('modifier-feedback').textContent=nodRole==='modifier'?'次の文字は濁点から始まります':NOD_ROLE_HINTS.confirm;
     render();log('すべての文字を消去');
   }
 }
