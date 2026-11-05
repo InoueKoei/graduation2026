@@ -1236,7 +1236,9 @@ function drawHist() {
   histCtx.fillStyle = '#7a786f';
   histCtx.textAlign = 'left'; histCtx.fillText('暗い', 4, 2);
   histCtx.textAlign = 'right'; histCtx.fillText('明るい', W - 4, 2);
-  $('thrVal').textContent = thr;
+  // 手で合わせる欄も、ドラッグや自動に合わせて動かす（打ち込んでいる最中の欄は書き換えない）
+  $('thr').value = thr;
+  if (document.activeElement !== $('thrNum')) $('thrNum').value = thr;
 
   // 地と部品の平均の差。小さすぎるなら閾値では分けられない
   let a = 0, an = 0, b = 0, bn = 0;
@@ -1282,15 +1284,36 @@ camEl.addEventListener('pointerup', () => {
 
 const histEl = $('hist');
 let histDrag = false;
+const clampThr = v => Math.round(Math.min(254, Math.max(1, v)));
 function setThrFromEvent(e) {
   const r = histEl.getBoundingClientRect();
-  S.threshold = Math.round(Math.min(254, Math.max(1, (e.clientX - r.left) / r.width * 255)));
+  S.threshold = clampThr((e.clientX - r.left) / r.width * 255);
 }
 histEl.addEventListener('pointerdown', e => { histDrag = true; histEl.setPointerCapture(e.pointerId); setThrFromEvent(e); });
 histEl.addEventListener('pointermove', e => { if (histDrag) setThrFromEvent(e); });
 histEl.addEventListener('pointerup', () => { histDrag = false; save(); });
 
 $('otsu').onclick = () => { const o = otsu(); if (o !== null) { S.threshold = o; save(); } };
+
+// 手で合わせる。ドラッグでは 1 刻みに合わせにくいので、スライダー・数字・±1 でも動かせる
+function setThr(v) {
+  if (!Number.isFinite(v)) return;
+  S.threshold = clampThr(v);
+  save();
+}
+$('thr').oninput = e => setThr(+e.target.value);
+$('thrNum').onchange = e => { setThr(+e.target.value); e.target.value = S.threshold; };
+$('thrNum').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
+$('thrDown').onclick = () => setThr(S.threshold - 1);
+$('thrUp').onclick = () => setThr(S.threshold + 1);
+// ヒストグラムに触れたあとは、左右の矢印でも 1 ずつ（Shift で 10 ずつ）動く
+histEl.tabIndex = 0;
+histEl.addEventListener('keydown', e => {
+  const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+  if (!d) return;
+  e.preventDefault();
+  setThr(S.threshold + d * (e.shiftKey ? 10 : 1));
+});
 function renderPolarity() { $('polarity').textContent = S.darkParts ? '部品は地より暗い' : '部品は地より明るい'; }
 $('polarity').onclick = () => { S.darkParts = !S.darkParts; renderPolarity(); save(); resetArrangement(); };
 

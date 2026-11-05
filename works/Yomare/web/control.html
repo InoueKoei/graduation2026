@@ -33,6 +33,7 @@
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
   .row label { color: var(--sub); }
   input[type=range] { flex: 1; min-width: 120px; }
+  .thr-num { font: inherit; width: 4.5em; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; text-align: right; font-variant-numeric: tabular-nums; }
   .num { font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
   .legend span { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; color: var(--sub); }
   .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -126,7 +127,13 @@
       <h2>閾値 — 線をドラッグして、2つの山のあいだに置く</h2>
       <canvas id="hist" width="512" height="110"></canvas>
       <div class="row">
-        <span>閾値 <b class="num" id="thrVal"></b></span>
+        <label for="thr">閾値</label>
+        <button id="thrDown" title="1 下げる">−</button>
+        <input type="range" id="thr" min="1" max="254" step="1">
+        <button id="thrUp" title="1 上げる">＋</button>
+        <input type="number" id="thrNum" min="1" max="254" step="1" class="thr-num">
+      </div>
+      <div class="row">
         <button id="otsu">自動で決める</button>
         <button id="polarity"></button>
       </div>
