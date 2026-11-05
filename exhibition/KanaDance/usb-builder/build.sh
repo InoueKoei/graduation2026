@@ -258,13 +258,16 @@ fi
 echo "[6/6] サーバと起動ファイル"
 cp "$HERE/server.py" "$OUT/server.py"
 cp "$HERE/KanaDance を起動.bat" "$OUT/KanaDance を起動.bat"
-cp "$HERE/README_USB.txt" "$OUT/はじめにお読みください.txt"
+# 名前に濁点・半濁点のかなを使わない。Mac は FAT32/exFAT に書くとき濁点を分けた形（NFD）にし、
+# Windows はそれを別の名前として扱うので、manifest.json の照合で「ありません」になる
+rm -f "$OUT/はじめにお読みください.txt"
+cp "$HERE/README_USB.txt" "$OUT/最初に読む.txt"
 
 # ── 7. コピー漏れを見つけるための一覧 ──────────────────────
 # フォルダを分けてコピーすると1つ抜けたり途中で切れたりしやすい。
 # server.py が起動時にこの一覧と突き合わせて、名指しで知らせる。
 python3 - "$OUT" <<'PYEOF'
-import json, os, sys
+import json, os, sys, unicodedata
 root = sys.argv[1]
 manifest = {}
 for base, dirs, files in os.walk(root):
@@ -274,6 +277,9 @@ for base, dirs, files in os.walk(root):
             continue
         full = os.path.join(base, name)
         rel = os.path.relpath(full, root).replace(os.sep, '/')
+        # NFC と NFD で形が変わる名前（濁点・半濁点のかな）は、USB に写すと Windows で見つからなくなる
+        if unicodedata.normalize('NFC', rel) != unicodedata.normalize('NFD', rel):
+            sys.exit('      ✗ 名前に濁点・半濁点のかながあります（USB で壊れる）: ' + rel)
         manifest[rel] = os.path.getsize(full)
 with open(os.path.join(root, 'manifest.json'), 'w', encoding='utf-8') as f:
     json.dump(manifest, f, ensure_ascii=False, indent=1, sort_keys=True)

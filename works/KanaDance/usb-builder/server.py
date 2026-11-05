@@ -23,8 +23,10 @@ import gzip
 import json
 import os
 import posixpath
+import socket
 import sys
 import threading
+import unicodedata
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -104,6 +106,19 @@ def save_poses(rows):
     os.replace(tmp, POSES_PATH)
 
 
+def find_file(rel):
+    """
+    manifest の名前でファイルを探す。Mac から USB に写すと、濁点のあるかなの名前が
+    分かれた形（NFD）で書かれることがあり、Windows ではまとまった形（NFC）と別名になる。
+    どちらの形でも見つかればよしとする。
+    """
+    for form in ("NFC", "NFD"):
+        full = os.path.join(HERE, unicodedata.normalize(form, rel).replace("/", os.sep))
+        if os.path.exists(full):
+            return full
+    return None
+
+
 def check_files():
     """
     manifest.json と突き合わせて、足りないファイルと途中で切れたファイルを見つける。
@@ -124,8 +139,8 @@ def check_files():
 
     problems = []
     for rel, size in sorted(expected.items()):
-        full = os.path.join(HERE, rel.replace("/", os.sep))
-        if not os.path.exists(full):
+        full = find_file(rel)
+        if full is None:
             problems.append((rel, "ありません"))
         else:
             actual = os.path.getsize(full)
@@ -141,6 +156,20 @@ def safe_path(url_path):
     if target != APP_DIR and not target.startswith(APP_DIR + os.sep):
         return None
     return target
+
+
+class Server(ThreadingHTTPServer):
+    """
+    Windows の SO_REUSEADDR は「使用中のポートにも重ねて入れる」意味になる。
+    そのままだと、起動を2回押したときに2つのサーバが同じ番号に重なり、どちらが答えるか分からなくなる。
+    なので Windows ではそれを使わず、ポートを独り占めする（使用中なら OSError になり、次の番号へ進める）。
+    """
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -277,12 +306,21 @@ def main():
         sys.exit(1)
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    url = "http://localhost:%d/" % PORT
 
-    try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    except OSError as err:
-        sys.exit("ポート %d を使えません（別のものが使っている可能性）: %s" % (PORT, err))
+    # 8000 が他のソフトに使われていることがある。止まらないよう、空いている番号を順に試す。
+    # （番号が変わると、ブラウザに覚えさせた調整の値はその番号のぶんだけ別になる）
+    httpd = None
+    for port in range(PORT, PORT + 10):
+        try:
+            httpd = Server(("127.0.0.1", port), Handler)
+            break
+        except OSError as err:
+            last_err = err
+    if httpd is None:
+        sys.exit("ポート %d〜%d を使えません（別のものが使っている可能性）: %s" % (PORT, PORT + 9, last_err))
+    url = "http://localhost:%d/" % port
+    if port != PORT:
+        print("  ポート %d は使われていたので %d で起動します。" % (PORT, port))
 
     print("")
     print("  KanaDance （ローカル版）")
