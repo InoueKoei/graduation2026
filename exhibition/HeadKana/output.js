@@ -56,6 +56,10 @@ window.addEventListener('pageshow',()=>mirror.request());
 // Black-and-white inversion comes from the control page (?invert=1); "i" flips it here and keeps it in the URL.
 const params=new URLSearchParams(location.search);
 document.documentElement.classList.toggle('invert',params.get('invert')==='1');
+// Enter enters the kana being chosen on the control page, like a short press of the dial.
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.repeat&&!e.isComposing&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();mirror.confirm();}
+});
 document.addEventListener('keydown',e=>{
   if(e.key!=='i'||e.metaKey||e.ctrlKey||e.altKey)return;
   const on=document.documentElement.classList.toggle('invert');
