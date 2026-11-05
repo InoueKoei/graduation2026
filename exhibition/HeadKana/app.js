@@ -74,6 +74,7 @@ const textOutput=new TextOutputPublisher(outputRuns,async (runs,sent)=>{
   return result;
 });
 const OUTPUT_INVERT_KEY='headkana-output-invert';
+textOutput.onConfirm=()=>confirmSelection();
 $('rotate-input').checked=rotateInput;
 $('rotate-input').addEventListener('change',e=>{rotateInput=e.target.checked;try{localStorage.setItem(ROTATE_INPUT_KEY,rotateInput?'1':'0');}catch{}render();});
 function updateOutputLink(){$('open-output').href='output.html?source='+encodeURIComponent(textOutput.id)+($('output-invert').checked?'&invert=1':'');}
@@ -225,9 +226,10 @@ $('nod-role').addEventListener('change',e=>{
   nodRole=e.target.value==='modifier'?'modifier':'confirm';try{localStorage.setItem(NOD_ROLE_KEY,nodRole);}catch{}
   coreTarget=null;coreCycle.reset();$('nod-progress').textContent='—';$('modifier-feedback').textContent=NOD_ROLE_HINTS[nodRole];
 });
+function confirmSelection(){if(deviceMode==='dial')confirmDial(0);else act({type:'confirm'});}
 function nodConfirm(){
   const before=doc.composition.length;
-  if(deviceMode==='dial')confirmDial(0);else act({type:'confirm'});
+  confirmSelection();
   const added=doc.composition.length>before?doc.composition.at(-1).text:'';
   $('nod-progress').textContent=added?`入力 · ${added}`:'—';
   $('modifier-feedback').textContent=added?`頷きで「${added}」を入力しました`:'入力できませんでした（96文字まで）';
