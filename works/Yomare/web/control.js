@@ -5,7 +5,7 @@
 // OCR へ渡すのはカメラ映像を矩形で切り出しただけの画像で、二値化したものではない。
 
 import { CHANNEL, PLACE, GATHER, inPlace, TIME, DEFAULTS } from './common.js';
-import { WORDS, FLOW } from './emoji.js';
+import { WORDS, FLOW, BOARD, boardSec } from './emoji.js';
 
 const $ = id => document.getElementById(id);
 const ch = new BroadcastChannel(CHANNEL);
@@ -16,6 +16,7 @@ const now = () => performance.now() / 1000;
 const STORE = 'yomare.settings.v1';
 const S = {
   ...DEFAULTS, corners: null, cameraId: '', rotate: 0, emoji: null, calib: false,
+  emojiForm: true,
   printOn: false, printReadPx: 40, printTimePx: 20, printInvert: false, printFlip: false,
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch {}
@@ -626,14 +627,17 @@ async function read(tr, g) {
   const e = S.emoji[text];
   if (e) {
     const t = now();
-    if (t - (lastEmoji[text] ?? -1e9) >= FLOW.COOLDOWN_SEC) flowEmoji(e);
+    if (t - (lastEmoji[text] ?? -1e9) >= FLOW.COOLDOWN_SEC) flowEmoji(e, text, turn);
     lastEmoji[text] = t;
   }
 }
 
-function flowEmoji(e) {
-  ch.postMessage({ type: 'emoji', ch: e });
-  pausedUntil = now() + FLOW.SEC + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
+// 電光掲示板にするなら、読んだ語と向きも送る（白い面が字をフォントで描いて粒の並びにする）
+// 掲示板の設定（粒の数・大きさ・速さ）も一緒に送るので、白い面は再読み込みしなくてよい
+function flowEmoji(e, text = '', turn = 0) {
+  const board = S.emojiForm && !!text;
+  ch.postMessage({ type: 'emoji', ch: e, text: board ? text : '', turn, board: S.board });
+  pausedUntil = now() + (board ? boardSec(text, S.board) : FLOW.SEC) + 0.3;   // 流れている絵文字を部品と取り違えないよう、そのあいだは見ない
 }
 
 // ================================================================ 絵文字の対応表
@@ -672,7 +676,7 @@ function renderEmoji() {
     chars.oninput = () => { r.chars = chars.value; commitEmoji(); };
     li.querySelector('.flow').onclick = () => {
       const g = graphemes(r.chars);
-      if (g.length) flowEmoji(g.length > 1 ? g : g[0]);
+      if (g.length) flowEmoji(g.length > 1 ? g : g[0], r.word.replace(/\s/g, ''));
     };
     li.querySelector('.del').onclick = () => { emojiRows.splice(i, 1); commitEmoji(); renderEmoji(); };
     return li;
@@ -691,6 +695,26 @@ $('emojiReset').onclick = () => {
   loadEmojiRows();
 };
 loadEmojiRows();
+$('emojiForm').checked = S.emojiForm;
+$('emojiForm').onchange = e => { S.emojiForm = e.target.checked; save(); };
+
+// 電光掲示板の調整。覚えていない値は emoji.js の初期値で埋める
+S.board = { ...BOARD, ...(S.board || {}) };
+const BOARD_VIEW = {
+  dots: v => `${v} × ${v}`, char: v => v.toFixed(2), gap: v => v.toFixed(2), speed: v => v.toFixed(2), fill: v => v.toFixed(2),
+};
+function renderBoard() {
+  for (const key in BOARD_VIEW) {
+    $(`board-${key}`).value = S.board[key];
+    $(`board-${key}-val`).textContent = BOARD_VIEW[key](S.board[key]);
+  }
+  $('boardSec').textContent = `「うし」で ${boardSec('うし', S.board).toFixed(1)} 秒、「くやしい」で ${boardSec('くやしい', S.board).toFixed(1)} 秒（このあいだカメラは見ない）`;
+}
+for (const key in BOARD_VIEW) {
+  $(`board-${key}`).oninput = e => { S.board[key] = +e.target.value; save(); renderBoard(); };
+}
+$('boardReset').onclick = () => { S.board = { ...BOARD }; save(); renderBoard(); };
+renderBoard();
 
 // 読んだ向き。いちばん長い行の四隅から、白い面の上でのベースライン（左下→右下）の向きを出し、
 // 90° 単位に丸める（0 = 正位置、1 = 時計回りに 90°、2 = 逆さ、3 = 反時計回りに 90°）。
