@@ -3,13 +3,13 @@
 //   read  … 読めた。部品のまわりに光を出す（保持するほど強くなる）
 //   clear … 動かされた。光を消す
 //   fix   … 置かれ続けた。組んだ形を中央へ移し、読まれた字を見出しにして塊に加える
-//   emoji … 特定の語。絵文字を流す
+//   emoji … 特定の語。絵文字を流す（text があれば、その語を電光掲示板のように絵文字の粒で流す）
 //
 // 白い面は窓の中央の正方形。外側は黒＝プロジェクターでは何も投げない。
 // 外周の帯が置く場、中央の円が集まる場。
 
 import { CHANNEL, GATHER, TIME, DEFAULTS } from './common.js';
-import { FLOW } from './emoji.js';
+import { FLOW, BOARD, boardSec } from './emoji.js';
 
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
@@ -24,6 +24,7 @@ let side = 0, ox = 0, oy = 0;   // 正方形の一辺と左上（画素）
 const readings = new Map();   // id → { text, t0, glowCanvas, shape, bbox, fading, flash }
 const bodies = [];    // 塊に加わった形
 const particles = [];
+const forms = [];     // 電光掲示板（読まれた語を絵文字の粒の字にして、1字ずつ上から流す）
 
 // 塊の決まり
 const HEAD_PX = 12;           // 見出しの大きさ（CSS px）
@@ -79,7 +80,7 @@ ch.onmessage = ({ data: m }) => {
     return;
   }
   if (m.type === 'fix') { fix(m.id); return; }
-  if (m.type === 'emoji') { spawnEmoji(m.ch); return; }
+  if (m.type === 'emoji') { if (m.text) spawnForm(m.ch, m.text, m.turn || 0, { ...BOARD, ...(m.board || {}) }); else spawnEmoji(m.ch); return; }
   if (m.type === 'wipe') { bodies.length = 0; return; }
 };
 
@@ -205,6 +206,99 @@ function spawnEmoji(e) {
       t0: t + Math.random() * 0.5,
     });
   }
+}
+
+// ---------------------------------------------------------------- 電光掲示板
+
+// 読まれた語を、絵文字の粒で書いた字にして、1字ずつ上から流す。電光掲示板のように、
+// 粒は格子の上を 1 マスずつ飛んで動く（灯っていない格子は描かない）。
+// 字は読んだ輪郭ではなくフォントで描く（絵文字の粒で書いた「字」として読めればよいので）。
+// 「上」は語を読んだ向きでの上。向かいの席から組んだ語は、向かいの席から見て上から流れてくる
+
+// 1字を縦横 n マスの格子に描き、塗られたマスを [列, 行] で返す
+function glyphDots(ch, n) {
+  const px = 12;
+  const c = new OffscreenCanvas(n * px, n * px);
+  const g = c.getContext('2d');
+  g.font = `800 ${n * px * 0.92}px "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(ch, c.width / 2, c.height / 2 + n * px * 0.04);
+  const d = g.getImageData(0, 0, c.width, c.height).data;
+  const dots = [];
+  for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) {
+    let k = 0;
+    for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) if (d[((r * px + y) * c.width + q * px + x) * 4 + 3] > 128) k++;
+    if (k > px * px * 0.35) dots.push([q, r]);
+  }
+  return dots;
+}
+
+// 絵文字は1種類・1つの大きさごとに一度だけ描いておき、あとは貼るだけにする（粒が数百になるので）
+const sprites = new Map();
+function sprite(ch, size) {
+  const key = `${ch}|${size}`;
+  let c = sprites.get(key);
+  if (!c) {
+    c = new OffscreenCanvas(Math.ceil(size * 1.3), Math.ceil(size * 1.3));
+    const g = c.getContext('2d');
+    g.font = `${size}px "Apple Color Emoji", sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(ch, c.width / 2, c.height / 2);
+    sprites.set(key, c);
+    if (sprites.size > 64) sprites.delete(sprites.keys().next().value);
+  }
+  return c;
+}
+
+// b は操作画面の調整（粒の数・大きさ・あいだ・速さ）
+function spawnForm(e, text, turn, b) {
+  const n = Math.round(b.dots);
+  const cell = b.char / n;
+  const gap = Math.round(b.gap / cell);              // 字と字のあいだ（マス）
+  const chars = [...new Intl.Segmenter('ja', { granularity: 'grapheme' }).segment(text)].map(x => x.segment);
+  // 1字目がいちばん下（先頭）、続く字はその上に並べる。行は語の上端を 0 として下向きに数える
+  const dots = [];
+  chars.forEach((c, i) => {
+    const top = -(i + 1) * n - i * gap;
+    for (const [q, r] of glyphDots(c, n)) {
+      dots.push({ q, r: top + r, ch: Array.isArray(e) ? e[(Math.random() * e.length) | 0] : e });
+    }
+  });
+  forms.push({ t0: now(), turn, cell, n, dots, speed: b.speed, fill: b.fill, sec: boardSec(text, b) });
+}
+
+function drawForms(t) {
+  if (!forms.length) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, side, side);
+  ctx.clip();
+  for (let i = forms.length - 1; i >= 0; i--) {
+    const f = forms[i];
+    const age = t - f.t0;
+    if (age > f.sec) { forms.splice(i, 1); continue; }
+    const a = f.turn * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a);
+    // 語の向きの (x, y)（中心が 0,0、下が読む人の手前）→ 白い面の画素
+    const at = (x, y) => [X(0.5 + x * ca - y * sa), Y(0.5 + x * sa + y * ca)];
+    const rows = Math.ceil(1 / f.cell);
+    const step = Math.floor(age * f.speed / f.cell);   // 1 マスずつ飛んで動く
+    const xOf = q => (q - f.n / 2 + 0.5) * f.cell;
+    const yOf = k => -0.5 + (k + 0.5) * f.cell;                   // 格子の k 段目（上の端が 0）
+
+    // 灯っている粒＝絵文字
+    const size = Math.max(4, Math.round(f.cell * f.fill * side));
+    for (const d of f.dots) {
+      const k = d.r + step;
+      if (k < 0 || k >= rows) continue;
+      const [px, py] = at(xOf(d.q), yOf(k));
+      const img = sprite(d.ch, size);
+      ctx.setTransform(1, 0, 0, 1, px, py);
+      ctx.rotate(a);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- 塊の動き
@@ -443,6 +537,7 @@ function frame() {
     drawGlow(t);
     drawBodies(t);
     drawParticles(t, dt);
+    drawForms(t);
   }
   requestAnimationFrame(frame);
 }

@@ -175,7 +175,15 @@
       <div class="row">
         <button id="emojiAdd">＋ 語を足す</button>
         <button id="emojiReset">emoji.js に戻す</button>
+        <label><input type="checkbox" id="emojiForm"> 電光掲示板のように流す</label>
       </div>
+      <div class="row"><label for="board-dots">粒の数（1字）</label><input type="range" id="board-dots" min="5" max="14" step="1"><span class="num" id="board-dots-val"></span></div>
+      <div class="row"><label for="board-fill">粒の大きさ</label><input type="range" id="board-fill" min="0.5" max="1.3" step="0.05"><span class="num" id="board-fill-val"></span></div>
+      <div class="row"><label for="board-char">1字の大きさ</label><input type="range" id="board-char" min="0.15" max="0.8" step="0.01"><span class="num" id="board-char-val"></span></div>
+      <div class="row"><label for="board-gap">字と字のあいだ</label><input type="range" id="board-gap" min="0" max="0.3" step="0.01"><span class="num" id="board-gap-val"></span></div>
+      <div class="row"><label for="board-speed">流れる速さ</label><input type="range" id="board-speed" min="0.2" max="1.5" step="0.05"><span class="num" id="board-speed-val"></span></div>
+      <div class="row"><button id="boardReset">電光掲示板を emoji.js の値に戻す</button></div>
+      <p class="hint" id="boardSec"></p>
       <p class="hint">語は完全一致（読まれた文字列そのまま。ひらがな・カタカナ・漢字・数字なんでもよい）。絵文字を2つ以上並べると、流れる粒ごとにその中から選ばれる。「流す」で白い面に試しに流せる。変えたものはすぐ効き、このブラウザに覚えておく。</p>
     </section>
 
